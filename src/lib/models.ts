@@ -65,8 +65,8 @@ export const AVAILABLE_MODELS = [
     displayName: 'Llama 4',
   },
   {
-    providerModelId: 'deepseek/deepseek-v3',
-    displayName: 'DeepSeek V3',
+    providerModelId: 'deepseek/deepseek-v3.2',
+    displayName: 'DeepSeek V3.2',
   },
 ] as const satisfies readonly ModelCatalogEntry[];
 

@@ -26,10 +26,12 @@ export default function App() {
           <Route path="/campaign/new" element={<CreateCampaign />} />
           <Route path="/campaign/:id" element={<CampaignDashboard />} />
 
-          {/* Participant Routes */}
-          <Route path="/vote/:campaignId" element={<ParticipantLanding />} />
-          <Route path="/vote/:campaignId/play" element={<VotingInterface />} />
-          <Route path="/vote/:campaignId/results" element={<PersonalResults />} />
+          {/* Participant Routes — `slug` is the public share slug
+              (unguessable 16-char base62). Internal campaign UUIDs
+              never appear in the URL. */}
+          <Route path="/vote/:slug" element={<ParticipantLanding />} />
+          <Route path="/vote/:slug/play" element={<VotingInterface />} />
+          <Route path="/vote/:slug/results" element={<PersonalResults />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

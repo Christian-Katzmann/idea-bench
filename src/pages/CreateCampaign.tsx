@@ -171,11 +171,29 @@ export default function CreateCampaign() {
     navigate,
   ]);
 
-  const handleLaunch = () => {
-    if (!campaign) return;
-    // Phase 2: navigate to the dashboard. Dashboard still reads from
-    // mocks until Phase 3 wires it to real data.
-    navigate(`/campaign/${campaign.id}`);
+  const [activateError, setActivateError] = useState<string | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
+
+  const handleLaunch = async () => {
+    if (!campaign || isActivating) return;
+    setActivateError(null);
+    setIsActivating(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/activate`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? `activate failed (${res.status})`);
+      }
+      navigate(`/campaign/${campaign.id}`);
+    } catch (err) {
+      setActivateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsActivating(false);
+    }
   };
 
   const slotValues: SlotEvent[] = Object.values(slots);
@@ -578,11 +596,17 @@ export default function CreateCampaign() {
                   Ready to launch
                 </h2>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  Campaign &quot;{name}&quot; is saved as a draft with{' '}
-                  {succeeded} successful generations
-                  {failed > 0 ? ` and ${failed} failures to review` : ''}. The
-                  dashboard has the share link once you open it.
+                  Campaign &quot;{name}&quot; is a draft with {succeeded}{' '}
+                  successful generations
+                  {failed > 0 ? ` and ${failed} failures to review` : ''}.
+                  Launch activates it and makes the share link live.
                 </p>
+                {activateError && (
+                  <div className="max-w-md mx-auto p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-start gap-2 text-left">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{activateError}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -613,9 +637,22 @@ export default function CreateCampaign() {
               ) : (
                 <Button
                   onClick={handleLaunch}
+                  disabled={isActivating || failed > 0}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  title={
+                    failed > 0
+                      ? 'Fix failed generations before launching'
+                      : undefined
+                  }
                 >
-                  Open dashboard
+                  {isActivating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />{' '}
+                      Activating...
+                    </>
+                  ) : (
+                    'Launch campaign'
+                  )}
                 </Button>
               )}
             </div>

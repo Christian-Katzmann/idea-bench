@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:api": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -40,6 +41,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.21",
     "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4.1.14",

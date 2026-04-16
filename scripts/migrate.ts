@@ -5,7 +5,10 @@
  *
  * Usage: `npm run db:migrate`
  */
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
+// Prefer .env.local (developer overrides), fall back to .env.
+loadDotenv({ path: '.env.local' });
+loadDotenv({ path: '.env' });
 import { drizzle } from 'drizzle-orm/neon-http';
 import { migrate } from 'drizzle-orm/neon-http/migrator';
 import { neon } from '@neondatabase/serverless';

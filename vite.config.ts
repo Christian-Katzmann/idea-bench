@@ -2,10 +2,15 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { viteApiPlugin } from './src/server/vite-api-plugin';
+import { config as loadDotenv } from 'dotenv';
+// Make .env.local available to API handlers loaded by the dev plugin.
+loadDotenv({ path: '.env.local' });
+loadDotenv({ path: '.env' });
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), viteApiPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

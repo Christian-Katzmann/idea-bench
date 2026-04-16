@@ -20,7 +20,7 @@ import {
   signParticipantCookie,
   verifyOperatorCookie,
   verifyParticipantCookie,
-} from './cookies';
+} from './cookies.js';
 
 export interface OperatorHandlerContext {
   /** Placeholder — there is exactly one operator; no identity to carry. */

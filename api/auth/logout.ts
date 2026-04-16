@@ -1,10 +1,11 @@
 import {
   OPERATOR_COOKIE_NAME,
   buildClearCookie,
-} from '../../src/server/auth/cookies';
+} from '../../src/server/auth/cookies.js';
+import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /** POST /api/auth/logout — clears the operator session cookie. */
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -16,3 +17,5 @@ export default async function handler(request: Request): Promise<Response> {
     },
   });
 }
+
+export default toVercelHandler(handler);

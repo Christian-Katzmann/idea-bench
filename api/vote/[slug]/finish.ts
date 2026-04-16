@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withParticipant } from '../../../src/server/auth/middleware';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withParticipant } from '../../../src/server/auth/middleware.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 
 /**
  * POST /api/vote/:slug/finish
@@ -10,7 +11,7 @@ import { withParticipant } from '../../../src/server/auth/middleware';
  * participant can still revisit /next if they want (which will
  * return done:true once all tournaments are complete).
  */
-export default withParticipant(async (request, ctx) => {
+export default toVercelHandler(withParticipant(async (request, ctx) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -46,7 +47,7 @@ export default withParticipant(async (request, ctx) => {
   }
 
   return json({ ok: true, finishedAt: new Date().toISOString() }, 200);
-});
+}));
 
 function extractSlug(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);

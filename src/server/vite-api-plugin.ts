@@ -167,9 +167,27 @@ export function viteApiPlugin(): Plugin {
           const mod = await server.ssrLoadModule(
             '/' + hit.filePath.replace(/\\/g, '/'),
           );
-          const handler = mod.default as
+          // In production, api/*.ts default exports are wrapped with
+          // toVercelHandler (see src/server/vercel-adapter.ts) so Vercel
+          // can call them with Node-style (req, res). Locally we want
+          // the raw Web-API handler back — the wrapper exposes it via
+          // `__webHandler`. Fall back to `default` for any file that
+          // still exports a raw Web handler.
+          const def = mod.default as unknown;
+          let handler:
             | ((request: Request) => Response | Promise<Response>)
             | undefined;
+          if (
+            def &&
+            typeof def === 'function' &&
+            '__webHandler' in def &&
+            typeof (def as { __webHandler?: unknown }).__webHandler ===
+              'function'
+          ) {
+            handler = (def as { __webHandler: typeof handler }).__webHandler;
+          } else if (typeof def === 'function') {
+            handler = def as typeof handler;
+          }
           if (typeof handler !== 'function') {
             res.statusCode = 500;
             res.end(`handler ${hit.filePath} has no default export function`);

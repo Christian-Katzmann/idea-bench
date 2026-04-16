@@ -1,8 +1,9 @@
 import { eq, and, countDistinct, count, inArray, sql } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withOperator } from '../../../src/server/auth/middleware';
-import { stabilityFor, type Stability } from '../../../src/lib/stability';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withOperator } from '../../../src/server/auth/middleware.js';
+import { stabilityFor, type Stability } from '../../../src/lib/stability.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 
 /**
  * GET /api/campaigns/:id
@@ -16,7 +17,7 @@ import { stabilityFor, type Stability } from '../../../src/lib/stability';
  * placeholder ratings on the demo campaign and new campaigns return an
  * empty leaderboard until voting + Phase 4 compute run.
  */
-export default withOperator(async (request: Request) => {
+export default toVercelHandler(withOperator(async (request: Request) => {
   if (request.method !== 'GET') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -141,7 +142,7 @@ export default withOperator(async (request: Request) => {
     },
     200,
   );
-});
+}));
 
 /**
  * Per-model win/loss/tie/game counts for a campaign. Derived from the

@@ -11,14 +11,14 @@
  * must not use it (validation happens at campaign creation).
  */
 import { eq, inArray } from 'drizzle-orm';
-import { getDb } from './db/client';
-import * as schema from './db/schema';
+import { getDb } from './db/client.js';
+import * as schema from './db/schema.js';
 import {
   computeBradleyTerry,
   votesToComparisons,
   type BTComparison,
   type BTOutput,
-} from './bradley-terry';
+} from './bradley-terry.js';
 
 const OVERALL = 'overall';
 

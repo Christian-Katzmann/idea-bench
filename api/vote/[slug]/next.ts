@@ -1,13 +1,14 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withParticipant } from '../../../src/server/auth/middleware';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withParticipant } from '../../../src/server/auth/middleware.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 import {
   nextBattle,
   sampleSeed,
   type BracketSeed,
   type TournamentVote,
-} from '../../../src/server/tournament';
+} from '../../../src/server/tournament.js';
 
 /**
  * GET /api/vote/:slug/next
@@ -21,7 +22,7 @@ import {
  * campaign's models. The seed is persisted in
  * `tournaments.seed_model_ids` so it's stable across visits.
  */
-export default withParticipant(async (request, ctx) => {
+export default toVercelHandler(withParticipant(async (request, ctx) => {
   if (request.method !== 'GET') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -244,7 +245,7 @@ export default withParticipant(async (request, ctx) => {
 
   // All prompts complete.
   return json({ done: true }, 200);
-});
+}));
 
 function estimateBattlesForTournament(votes: TournamentVote[]): number {
   // 4 battles always; +1 if b3 tied (triggers b5).

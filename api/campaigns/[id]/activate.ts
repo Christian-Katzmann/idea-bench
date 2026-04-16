@@ -1,7 +1,8 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withOperator } from '../../../src/server/auth/middleware';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withOperator } from '../../../src/server/auth/middleware.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 
 /**
  * POST /api/campaigns/:id/activate
@@ -15,7 +16,7 @@ import { withOperator } from '../../../src/server/auth/middleware';
  * Refuses activation if any slot is missing or errored. The operator's
  * recourse is to re-run /generate (which UPSERTs, so retries overwrite).
  */
-export default withOperator(async (request: Request) => {
+export default toVercelHandler(withOperator(async (request: Request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -89,7 +90,7 @@ export default withOperator(async (request: Request) => {
     .where(eq(schema.campaigns.id, id));
 
   return json({ ok: true, status: 'active' }, 200);
-});
+}));
 
 function extractId(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);

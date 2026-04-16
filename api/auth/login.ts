@@ -3,7 +3,8 @@ import {
   OPERATOR_COOKIE_NAME,
   buildSetCookie,
   signOperatorCookie,
-} from '../../src/server/auth/cookies';
+} from '../../src/server/auth/cookies.js';
+import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /**
  * POST /api/auth/login
@@ -13,7 +14,7 @@ import {
  * Rate limiting is NOT implemented here. Acceptable for single-operator
  * MVP but worth revisiting if this endpoint is ever exposed publicly.
  */
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -67,3 +68,5 @@ function constantTimeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+export default toVercelHandler(handler);

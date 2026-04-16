@@ -1,9 +1,10 @@
 import { desc } from 'drizzle-orm';
-import { getDb } from '../../src/server/db/client';
-import * as schema from '../../src/server/db/schema';
-import { generateShareSlug } from '../../src/lib/ids';
-import { isKnownModel, lookupModel } from '../../src/lib/models';
-import { withOperator } from '../../src/server/auth/middleware';
+import { getDb } from '../../src/server/db/client.js';
+import * as schema from '../../src/server/db/schema.js';
+import { generateShareSlug } from '../../src/lib/ids.js';
+import { isKnownModel, lookupModel } from '../../src/lib/models.js';
+import { withOperator } from '../../src/server/auth/middleware.js';
+import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /**
  * POST /api/campaigns
@@ -41,7 +42,7 @@ import { withOperator } from '../../src/server/auth/middleware';
  * operator can retry or delete it). Acceptable for Phase 2; Phase 4's
  * rating recompute will need a pool-based driver swap for real transactions.
  */
-export default withOperator(async (request: Request) => {
+export default toVercelHandler(withOperator(async (request: Request) => {
   if (request.method === 'GET') {
     return handleList();
   }
@@ -113,7 +114,7 @@ export default withOperator(async (request: Request) => {
     },
     201,
   );
-});
+}));
 
 interface ParsedPayload {
   name: string;

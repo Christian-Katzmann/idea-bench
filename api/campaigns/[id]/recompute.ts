@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withOperator } from '../../../src/server/auth/middleware';
-import { recomputeCampaignRatings } from '../../../src/server/ratings';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withOperator } from '../../../src/server/auth/middleware.js';
+import { recomputeCampaignRatings } from '../../../src/server/ratings.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 
 /**
  * POST /api/campaigns/:id/recompute
@@ -15,7 +16,7 @@ import { recomputeCampaignRatings } from '../../../src/server/ratings';
  * Returns a small summary — no per-model detail, since the dashboard
  * just refetches /api/campaigns/:id to pick up the new rating rows.
  */
-export default withOperator(async (request: Request) => {
+export default toVercelHandler(withOperator(async (request: Request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -48,7 +49,7 @@ export default withOperator(async (request: Request) => {
     },
     200,
   );
-});
+}));
 
 function extractId(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);

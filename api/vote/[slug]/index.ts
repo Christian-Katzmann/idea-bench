@@ -1,7 +1,8 @@
 import { eq, count } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client';
-import * as schema from '../../../src/server/db/schema';
-import { withParticipant } from '../../../src/server/auth/middleware';
+import { getDb } from '../../../src/server/db/client.js';
+import * as schema from '../../../src/server/db/schema.js';
+import { withParticipant } from '../../../src/server/auth/middleware.js';
+import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
 
 /**
  * GET  /api/vote/:slug                  — public landing info
@@ -14,7 +15,7 @@ import { withParticipant } from '../../../src/server/auth/middleware';
  * on first contact. GET doesn't need the participant record — it just
  * returns the campaign's public-facing info.
  */
-export default withParticipant(async (request, ctx) => {
+export default toVercelHandler(withParticipant(async (request, ctx) => {
   const slug = extractSlug(new URL(request.url));
   if (!slug) return json({ error: 'missing slug' }, 400);
 
@@ -118,7 +119,7 @@ export default withParticipant(async (request, ctx) => {
   }
 
   return new Response('method not allowed', { status: 405 });
-});
+}));
 
 function extractSlug(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);

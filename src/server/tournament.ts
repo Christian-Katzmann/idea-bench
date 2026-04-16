@@ -16,7 +16,7 @@
  * result (for tie/both_bad). Downstream battles read that column to
  * know who advanced.
  */
-import type { BracketPosition, Vote } from './db/schema';
+import type { BracketPosition, Vote } from './db/schema.js';
 
 /** The four models that make up a bracket, in seed order. */
 export type BracketSeed = readonly [string, string, string, string];

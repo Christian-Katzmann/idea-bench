@@ -1,0 +1,284 @@
+import { and, eq, inArray } from 'drizzle-orm';
+import { getDb } from '../../../src/server/db/client';
+import * as schema from '../../../src/server/db/schema';
+import { withParticipant } from '../../../src/server/auth/middleware';
+import {
+  finalRanking,
+  type TournamentVote,
+} from '../../../src/server/tournament';
+
+/**
+ * GET /api/vote/:slug/results
+ *
+ * Returns the participant's personal results for this campaign. Per-
+ * prompt rankings are derived from the participant's tournament votes.
+ * Group-agreement % compares the participant's decisive votes to the
+ * majority outcome across all other participants on the same
+ * generation-pair (same prompt, same two outputs, regardless of
+ * display order). B-T computation is Phase 4 — not here.
+ *
+ * Personal-results UI constraints (from the design):
+ *   - Only rank models the participant actually saw (with >4 models,
+ *     they only see 4 per prompt).
+ *   - Flag <20 votes as "sample small \u2014 directional".
+ */
+export default withParticipant(async (request, ctx) => {
+  if (request.method !== 'GET') {
+    return new Response('method not allowed', { status: 405 });
+  }
+
+  const slug = extractSlug(new URL(request.url));
+  if (!slug) return json({ error: 'missing slug' }, 400);
+
+  const db = getDb();
+  const [campaign] = await db
+    .select()
+    .from(schema.campaigns)
+    .where(eq(schema.campaigns.shareSlug, slug))
+    .limit(1);
+  if (!campaign) return json({ error: 'campaign not found' }, 404);
+
+  const [participant] = await db
+    .select()
+    .from(schema.participants)
+    .where(
+      and(
+        eq(schema.participants.cookieId, ctx.participantCookieId),
+        eq(schema.participants.campaignId, campaign.id),
+      ),
+    )
+    .limit(1);
+  if (!participant) return json({ error: 'participant not started' }, 409);
+
+  // Pull all of this participant's tournaments + votes + the
+  // generations referenced, plus the campaign models (for display names).
+  const [tournaments, votes, campaignModels, prompts] = await Promise.all([
+    db
+      .select()
+      .from(schema.tournaments)
+      .where(eq(schema.tournaments.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.votes)
+      .where(eq(schema.votes.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.campaignModels)
+      .where(eq(schema.campaignModels.campaignId, campaign.id)),
+    db
+      .select()
+      .from(schema.prompts)
+      .where(eq(schema.prompts.campaignId, campaign.id)),
+  ]);
+
+  const modelsById = new Map(campaignModels.map((m) => [m.id, m]));
+  const promptsById = new Map(prompts.map((p) => [p.id, p]));
+
+  // Need generation → campaign_model mapping to translate ranked
+  // generation ids back to model display names.
+  const generationIds = new Set<string>();
+  for (const v of votes) {
+    generationIds.add(v.generationAId);
+    generationIds.add(v.generationBId);
+  }
+  const generations =
+    generationIds.size > 0
+      ? await db
+          .select()
+          .from(schema.generations)
+          .where(inArray(schema.generations.id, [...generationIds]))
+      : [];
+  const generationToModel = new Map(
+    generations.map((g) => [g.id, g.campaignModelId]),
+  );
+
+  // Per-prompt rankings.
+  const perPrompt = tournaments
+    .map((t) => {
+      const tvotes: TournamentVote[] = votes
+        .filter((v) => v.tournamentId === t.id)
+        .map((v) => ({
+          bracketPosition: v.bracketPosition,
+          generationAId: v.generationAId,
+          generationBId: v.generationBId,
+          winner: v.winner,
+          advancedGenerationId: v.advancedGenerationId,
+        }));
+      const ranking = finalRanking(tvotes);
+      const prompt = promptsById.get(t.promptId);
+      return {
+        promptId: t.promptId,
+        promptText: prompt?.text ?? '',
+        complete: t.status === 'complete',
+        battlesPlayed: tvotes.length,
+        ranking: ranking.map((r) => ({
+          rank: r.rank,
+          models: r.generationIds.map((gid) => {
+            const cmId = generationToModel.get(gid);
+            const m = cmId ? modelsById.get(cmId) : undefined;
+            return {
+              campaignModelId: cmId ?? null,
+              displayName: m?.displayName ?? '(unknown)',
+              providerModelId: m?.providerModelId ?? '',
+            };
+          }),
+        })),
+      };
+    })
+    // Show tournaments with at least one vote cast.
+    .filter((t) => t.battlesPlayed > 0);
+
+  // Aggregate: count per-model wins (rank 1 or joint 1) across prompts.
+  const aggregate = new Map<
+    string,
+    {
+      displayName: string;
+      providerModelId: string;
+      firsts: number;
+      appearances: number;
+    }
+  >();
+  for (const t of perPrompt) {
+    const seen = new Set<string>();
+    for (const r of t.ranking) {
+      for (const m of r.models) {
+        if (!m.campaignModelId) continue;
+        const key = m.campaignModelId;
+        if (!aggregate.has(key)) {
+          aggregate.set(key, {
+            displayName: m.displayName,
+            providerModelId: m.providerModelId,
+            firsts: 0,
+            appearances: 0,
+          });
+        }
+        const bucket = aggregate.get(key)!;
+        if (!seen.has(key)) {
+          bucket.appearances++;
+          seen.add(key);
+        }
+        if (r.rank === 1) bucket.firsts++;
+      }
+    }
+  }
+  const campaignRanking = [...aggregate.entries()]
+    .map(([campaignModelId, v]) => ({
+      campaignModelId,
+      displayName: v.displayName,
+      providerModelId: v.providerModelId,
+      firstPlaceCount: v.firsts,
+      appearances: v.appearances,
+    }))
+    .sort(
+      (a, b) =>
+        b.firstPlaceCount - a.firstPlaceCount ||
+        a.displayName.localeCompare(b.displayName),
+    );
+
+  // Group agreement: for decisive votes where ≥3 other participants
+  // voted on the same pair, compute what fraction of those the
+  // participant aligned with the majority.
+  const decisiveVotes = votes.filter(
+    (v) => v.winner === 'A' || v.winner === 'B',
+  );
+  let agreementSamples = 0;
+  let agreementMatches = 0;
+  if (decisiveVotes.length > 0) {
+    // Pair by canonical generation-pair key so we can group across
+    // display-order flips.
+    const pairKey = (a: string, b: string) =>
+      a < b ? `${a}:${b}` : `${b}:${a}`;
+    const myPairs = new Map<string, { winnerGen: string }>();
+    for (const v of decisiveVotes) {
+      const winner =
+        v.winner === 'A' ? v.generationAId : v.generationBId;
+      myPairs.set(pairKey(v.generationAId, v.generationBId), {
+        winnerGen: winner,
+      });
+    }
+    const pairKeys = [...myPairs.keys()];
+    if (pairKeys.length > 0) {
+      // Fetch all votes on these pairs (excluding this participant).
+      // We do it in one broad query and filter in memory — cheaper
+      // than per-pair queries.
+      const relevantGenIds = new Set<string>();
+      for (const k of pairKeys) {
+        const [a, b] = k.split(':');
+        relevantGenIds.add(a);
+        relevantGenIds.add(b);
+      }
+      const otherVotes = await db
+        .select()
+        .from(schema.votes)
+        .where(
+          and(
+            eq(schema.votes.campaignId, campaign.id),
+            inArray(schema.votes.generationAId, [...relevantGenIds]),
+            inArray(schema.votes.generationBId, [...relevantGenIds]),
+          ),
+        );
+      for (const k of pairKeys) {
+        const [lo] = k.split(':');
+        const votesOnPair = otherVotes.filter(
+          (v) =>
+            v.participantId !== participant.id &&
+            pairKey(v.generationAId, v.generationBId) === k &&
+            (v.winner === 'A' || v.winner === 'B'),
+        );
+        if (votesOnPair.length < 3) continue; // skimpy, skip
+        const tally = new Map<string, number>();
+        for (const v of votesOnPair) {
+          const w = v.winner === 'A' ? v.generationAId : v.generationBId;
+          tally.set(w, (tally.get(w) ?? 0) + 1);
+        }
+        const majority = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (!majority) continue;
+        agreementSamples++;
+        if (majority[0] === myPairs.get(k)!.winnerGen) agreementMatches++;
+        void lo;
+      }
+    }
+  }
+  const groupAgreement =
+    agreementSamples > 0 ? agreementMatches / agreementSamples : null;
+
+  return json(
+    {
+      campaign: {
+        name: campaign.name,
+        shareSlug: campaign.shareSlug,
+      },
+      totals: {
+        battlesPlayed: votes.length,
+        tournamentsComplete: perPrompt.filter((t) => t.complete).length,
+        tournamentsStarted: perPrompt.length,
+      },
+      perPrompt,
+      campaignRanking,
+      groupAgreement: {
+        fraction: groupAgreement,
+        samples: agreementSamples,
+      },
+      // Preserve the honesty framing — flag low-sample personal results.
+      honesty: {
+        directional: votes.length < 20,
+      },
+    },
+    200,
+  );
+});
+
+function extractSlug(url: URL): string | null {
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'api' && parts[1] === 'vote' && parts[3] === 'results') {
+    return parts[2] || null;
+  }
+  return null;
+}
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}

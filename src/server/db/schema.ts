@@ -340,3 +340,7 @@ export type Vote = typeof votes.$inferSelect;
 export type NewVote = typeof votes.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
+
+export type BracketPosition = (typeof bracketPositionEnum.enumValues)[number];
+export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];
+export type VoteWinner = (typeof voteWinnerEnum.enumValues)[number];

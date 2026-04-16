@@ -1,3 +1,4 @@
+import { desc } from 'drizzle-orm';
 import { getDb } from '../../src/server/db/client';
 import * as schema from '../../src/server/db/schema';
 import { generateShareSlug } from '../../src/lib/ids';
@@ -41,6 +42,9 @@ import { withOperator } from '../../src/server/auth/middleware';
  * rating recompute will need a pool-based driver swap for real transactions.
  */
 export default withOperator(async (request: Request) => {
+  if (request.method === 'GET') {
+    return handleList();
+  }
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -176,6 +180,24 @@ function parseCreatePayload(
   }
 
   return { name, description, categories, prompts, providerModelIds: ids };
+}
+
+async function handleList(): Promise<Response> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.campaigns.id,
+      shareSlug: schema.campaigns.shareSlug,
+      name: schema.campaigns.name,
+      description: schema.campaigns.description,
+      categories: schema.campaigns.categories,
+      status: schema.campaigns.status,
+      createdAt: schema.campaigns.createdAt,
+      closedAt: schema.campaigns.closedAt,
+    })
+    .from(schema.campaigns)
+    .orderBy(desc(schema.campaigns.createdAt));
+  return json({ campaigns: rows }, 200);
 }
 
 function json(body: unknown, status: number): Response {

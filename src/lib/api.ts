@@ -82,9 +82,17 @@ export interface CampaignDetail {
   ratings: Array<{
     category: string;
     rating: number;
+    seRating: number | null;
+    btStrength: number | null;
     ciLow: number | null;
     ciHigh: number | null;
     gameCount: number;
+    gamesPlayed: number;
+    winCount: number;
+    lossCount: number;
+    tieCount: number;
+    winRate: number | null;
+    stability: 'directional' | 'preliminary' | 'stable';
     computedAt: string;
     campaignModelId: string;
     providerModelId: string;
@@ -149,9 +157,17 @@ export interface PersonalResults {
     campaignModelId: string;
     displayName: string;
     providerModelId: string;
+    rating: number;
+    seRating: number | null;
+    ciLow: number | null;
+    ciHigh: number | null;
+    gameCount: number;
+    winRate: number | null;
+    stability: 'directional' | 'preliminary' | 'stable';
     firstPlaceCount: number;
     appearances: number;
   }>;
+  personalBT: { iterations: number; converged: boolean };
   groupAgreement: { fraction: number | null; samples: number };
   honesty: { directional: boolean };
 }

@@ -6,21 +6,25 @@ import {
   finalRanking,
   type TournamentVote,
 } from '../../../src/server/tournament';
+import { computeParticipantRatings } from '../../../src/server/ratings';
+import { stabilityFor } from '../../../src/lib/stability';
 
 /**
  * GET /api/vote/:slug/results
  *
- * Returns the participant's personal results for this campaign. Per-
- * prompt rankings are derived from the participant's tournament votes.
- * Group-agreement % compares the participant's decisive votes to the
- * majority outcome across all other participants on the same
- * generation-pair (same prompt, same two outputs, regardless of
- * display order). B-T computation is Phase 4 — not here.
+ * Returns the participant's personal results for this campaign.
  *
- * Personal-results UI constraints (from the design):
- *   - Only rank models the participant actually saw (with >4 models,
- *     they only see 4 per prompt).
- *   - Flag <20 votes as "sample small \u2014 directional".
+ *   - Per-prompt rankings: derived from each tournament's final bracket.
+ *     Joint-ranks when b3/b4 ties weren't broken by b5.
+ *   - Campaign-level B-T: same math as the global leaderboard, but
+ *     scoped to this participant's votes only. Restricted to models
+ *     the participant actually saw (relevant when the campaign has
+ *     >4 models and each tournament samples 4 independently).
+ *   - Group agreement: fraction of decisive pair-votes where the
+ *     participant picked the same side as the majority of other voters.
+ *
+ * Personal B-T is computed on demand; nothing is cached in the ratings
+ * table for participant-scoped output.
  */
 export default withParticipant(async (request, ctx) => {
   if (request.method !== 'GET') {
@@ -161,18 +165,45 @@ export default withParticipant(async (request, ctx) => {
       }
     }
   }
-  const campaignRanking = [...aggregate.entries()]
-    .map(([campaignModelId, v]) => ({
-      campaignModelId,
-      displayName: v.displayName,
-      providerModelId: v.providerModelId,
-      firstPlaceCount: v.firsts,
-      appearances: v.appearances,
-    }))
+  // Phase 4: run the same B-T math the global leaderboard uses, but
+  // scoped to just this participant's votes. Only models the
+  // participant has seen get a rating — ones never in any of their
+  // brackets are excluded (relevant when the campaign has >4 models).
+  const personalBT = await computeParticipantRatings(
+    campaign.id,
+    participant.id,
+  );
+  const personalOverall = personalBT.overall;
+
+  const campaignRanking = personalOverall.modelIds
+    .map((campaignModelId) => {
+      const bucket = aggregate.get(campaignModelId);
+      const m = modelsById.get(campaignModelId);
+      const games = personalOverall.gameCount[campaignModelId] ?? 0;
+      const winRate = personalOverall.winRate[campaignModelId];
+      const se = personalOverall.seRatings[campaignModelId];
+      return {
+        campaignModelId,
+        displayName: m?.displayName ?? bucket?.displayName ?? '(unknown)',
+        providerModelId: m?.providerModelId ?? bucket?.providerModelId ?? '',
+        rating: Math.round(personalOverall.ratings[campaignModelId]),
+        seRating: se != null ? Math.round(se * 10) / 10 : null,
+        ciLow: personalOverall.ciLow[campaignModelId] != null
+          ? Math.round(personalOverall.ciLow[campaignModelId]!)
+          : null,
+        ciHigh: personalOverall.ciHigh[campaignModelId] != null
+          ? Math.round(personalOverall.ciHigh[campaignModelId]!)
+          : null,
+        gameCount: games,
+        winRate,
+        stability: stabilityFor(games),
+        firstPlaceCount: bucket?.firsts ?? 0,
+        appearances: bucket?.appearances ?? 0,
+      };
+    })
     .sort(
       (a, b) =>
-        b.firstPlaceCount - a.firstPlaceCount ||
-        a.displayName.localeCompare(b.displayName),
+        b.rating - a.rating || a.displayName.localeCompare(b.displayName),
     );
 
   // Group agreement: for decisive votes where ≥3 other participants
@@ -255,6 +286,10 @@ export default withParticipant(async (request, ctx) => {
       },
       perPrompt,
       campaignRanking,
+      personalBT: {
+        iterations: personalOverall.iterations,
+        converged: personalOverall.converged,
+      },
       groupAgreement: {
         fraction: groupAgreement,
         samples: agreementSamples,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import OperatorLayout from '../components/layout/OperatorLayout';
 import { Button } from '../components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -12,18 +12,36 @@ import {
   StopCircle,
   CheckCircle2,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { ApiError, apiFetch, type CampaignDetail } from '../lib/api';
+import { STABILITY_LABELS, type Stability } from '../lib/stability';
 
 export default function CampaignDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
     queryFn: () => apiFetch<CampaignDetail>(`/api/campaigns/${id}`),
     enabled: !!id,
+  });
+
+  const recompute = useMutation({
+    mutationFn: () =>
+      apiFetch<{
+        ok: true;
+        totalVotes: number;
+        rowsWritten: number;
+        iterations: number | null;
+        converged: boolean | null;
+        elapsedMs: number;
+      }>(`/api/campaigns/${id}/recompute`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaign', id] });
+    },
   });
 
   if (error instanceof ApiError && error.status === 401) {
@@ -80,6 +98,31 @@ export default function CampaignDashboard() {
   }
 
   if (!data) return null;
+
+  function StabilityBadge({ tier }: { tier: Stability }) {
+    const styles: Record<Stability, string> = {
+      stable:
+        'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
+      preliminary:
+        'bg-amber-500/10 text-amber-500 border-amber-500/30',
+      directional:
+        'bg-muted text-muted-foreground border-border',
+    };
+    return (
+      <span
+        className={`text-[10px] uppercase tracking-wider font-medium px-2 py-1 rounded border ${styles[tier]}`}
+        title={
+          tier === 'directional'
+            ? 'Fewer than 50 comparisons. Rating is directional only — treat with caution.'
+            : tier === 'preliminary'
+              ? 'Between 50 and 200 comparisons. Rating is directionally correct but confidence intervals are still wide.'
+              : '200+ comparisons. Rating has tightened up; treat as stable.'
+        }
+      >
+        {STABILITY_LABELS[tier]}
+      </span>
+    );
+  }
 
   const { campaign, stats } = data;
   const totalVotes = stats.totalVotes;
@@ -182,43 +225,62 @@ export default function CampaignDashboard() {
       </div>
 
       <div className="flex-1 bg-card border border-border rounded-xl flex flex-col overflow-hidden">
-        <div className="bg-foreground/5 px-6 py-3 border-b border-border grid grid-cols-[40px_1.5fr_1fr_1fr_1fr] text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          <div>#</div>
-          <div>Model Name</div>
-          <div>Rating</div>
-          <div>95% CI</div>
-          <div>Sample</div>
+        <div className="bg-foreground/5 px-6 py-3 border-b border-border flex items-center justify-between gap-4">
+          <div className="grid grid-cols-[40px_1.5fr_1fr_1fr_1fr_140px] flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div>#</div>
+            <div>Model</div>
+            <div>Rating · 95% CI</div>
+            <div>Win rate</div>
+            <div>Sample</div>
+            <div>Tier</div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => recompute.mutate()}
+            disabled={recompute.isPending || campaign.status === 'draft'}
+            className="text-muted-foreground hover:text-foreground"
+            title="Run the Bradley-Terry solver + Fisher-info CIs over the full vote log"
+          >
+            {recompute.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            <span className="ml-2 text-xs">Recompute</span>
+          </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {sortedRatings.length > 0 && totalVotes < 100 && (
-            <div className="m-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-start gap-3 text-amber-500 text-sm">
-              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Low sample size.</span>{' '}
-                Confidence intervals are wide. Results may shift significantly
-                with more votes.
-              </div>
-            </div>
-          )}
-
           {sortedRatings.map((rating, idx) => (
             <div
               key={rating.campaignModelId}
-              className="px-6 py-4 border-b border-border grid grid-cols-[40px_1.5fr_1fr_1fr_1fr] items-center text-sm hover:bg-foreground/5 transition-colors"
+              className={`px-6 py-4 border-b border-border grid grid-cols-[40px_1.5fr_1fr_1fr_1fr_140px] items-center text-sm hover:bg-foreground/5 transition-colors ${
+                rating.stability === 'directional' ? 'opacity-60' : ''
+              }`}
             >
               <div className="font-mono text-muted-foreground">
                 {(idx + 1).toString().padStart(2, '0')}
               </div>
               <div className="font-semibold">{rating.displayName}</div>
-              <div className="font-mono font-semibold">{rating.rating}</div>
-              <div className="font-mono text-xs text-muted-foreground">
-                {rating.ciLow != null && rating.ciHigh != null
-                  ? `±${Math.round((rating.ciHigh - rating.ciLow) / 2)}`
+              <div className="font-mono text-sm">
+                <span className="font-semibold">{rating.rating}</span>
+                {rating.ciLow != null && rating.ciHigh != null && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ±{Math.round((rating.ciHigh - rating.ciLow) / 2)}
+                  </span>
+                )}
+              </div>
+              <div className="font-mono">
+                {rating.winRate != null
+                  ? `${Math.round(rating.winRate * 100)}%`
                   : '—'}
               </div>
               <div className="text-[13px] text-muted-foreground">
-                {rating.gameCount} votes
+                <span className="font-mono">{rating.gameCount}</span> comparisons
+              </div>
+              <div>
+                <StabilityBadge tier={rating.stability} />
               </div>
             </div>
           ))}
@@ -226,7 +288,29 @@ export default function CampaignDashboard() {
             <div className="text-center py-8 text-muted-foreground">
               {campaign.status === 'draft'
                 ? 'Activate the campaign and collect votes to populate the leaderboard.'
-                : 'No ratings yet. Ratings are computed from votes (Phase 4).'}
+                : totalVotes === 0
+                  ? 'No votes yet. Share the link and come back once people have voted.'
+                  : 'No ratings yet — hit Recompute to run the Bradley-Terry solver.'}
+            </div>
+          )}
+          {recompute.data && (
+            <div className="px-6 py-3 border-b border-border text-xs text-muted-foreground bg-foreground/5">
+              Recomputed in {recompute.data.elapsedMs}ms · {recompute.data.totalVotes} votes ·
+              {' '}
+              {recompute.data.iterations != null
+                ? `${recompute.data.iterations} iters${recompute.data.converged ? ' (converged)' : ' (max)'}`
+                : '—'}
+            </div>
+          )}
+          {recompute.error && (
+            <div className="mx-4 my-3 p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-sm rounded-md flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Recompute failed:{' '}
+                {recompute.error instanceof Error
+                  ? recompute.error.message
+                  : String(recompute.error)}
+              </span>
             </div>
           )}
         </div>

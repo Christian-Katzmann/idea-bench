@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
+loadDotenv({ path: '.env.local' });
+loadDotenv({ path: '.env' });
 import { defineConfig } from 'drizzle-kit';
 
 // DATABASE_URL is only needed for `drizzle-kit push` and `studio`.

@@ -20,7 +20,9 @@
  *
  * Usage: `npm run db:seed`
  */
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
+loadDotenv({ path: '.env.local' });
+loadDotenv({ path: '.env' });
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { sql } from 'drizzle-orm';

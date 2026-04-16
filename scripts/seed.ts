@@ -1,10 +1,22 @@
 /**
- * Seeds the DB with demo campaigns that mirror the original frontend
- * mocks, so the dashboard and voting flow have realistic content to
- * render during local dev.
+ * Seeds the DB with demo campaigns so the dashboard and landing pages
+ * have realistic content to render during local dev.
  *
- * Destructive: truncates every app table before seeding. Do NOT run
- * against a production-like database.
+ * What's seeded:
+ *   - 3 campaigns (active / completed / draft)
+ *   - Prompts + campaign_models + generations for the active one
+ *   - Pre-computed ratings on the active one, so the leaderboard shows
+ *     numbers out of the box
+ *
+ * What's NOT seeded:
+ *   - Participants, tournaments, votes. These are created organically
+ *     when a real voter walks through /vote/:slug, and fabricating
+ *     bracket-shaped vote logs just to populate the dashboard is more
+ *     trouble than it's worth. The pre-computed ratings exist so the
+ *     dashboard demo looks plausible without them.
+ *
+ * Destructive: truncates every app table before seeding. Refuses to
+ * run against `NODE_ENV=production` unless `ALLOW_PROD_SEED=1`.
  *
  * Usage: `npm run db:seed`
  */
@@ -13,7 +25,7 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { sql } from 'drizzle-orm';
 import * as schema from '../src/server/db/schema';
-import { generateShareSlug, pairKey } from '../src/lib/ids';
+import { generateShareSlug } from '../src/lib/ids';
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -35,11 +47,12 @@ async function main() {
   const db = drizzle(neon(url), { schema });
 
   console.log('Truncating tables...');
-  // Order matters only if we use DELETE; TRUNCATE CASCADE handles FKs.
+  // TRUNCATE ... CASCADE handles FKs regardless of order.
   await db.execute(sql`
     TRUNCATE TABLE
       ${schema.ratings},
       ${schema.votes},
+      ${schema.tournaments},
       ${schema.participants},
       ${schema.generations},
       ${schema.campaignModels},
@@ -101,14 +114,19 @@ async function main() {
     ])
     .returning();
 
-  console.log('Inserting campaign models...');
-  const [opus, gpt5, gemini] = await db
+  console.log('Inserting campaign models (4 — minimum for a tournament)...');
+  const [opus, sonnet, gpt5, gemini] = await db
     .insert(schema.campaignModels)
     .values([
       {
         campaignId: danish.id,
         providerModelId: 'anthropic/claude-opus-4-6',
         displayName: 'Claude Opus 4.6',
+      },
+      {
+        campaignId: danish.id,
+        providerModelId: 'anthropic/claude-sonnet-4-6',
+        displayName: 'Claude Sonnet 4.6',
       },
       {
         campaignId: danish.id,
@@ -125,177 +143,138 @@ async function main() {
 
   console.log('Inserting generations...');
   const now = new Date();
-  const gens = await db
-    .insert(schema.generations)
-    .values([
-      // prompt 1
-      {
-        promptId: prompt1.id,
-        campaignModelId: opus.id,
-        output:
-          'Kære Borger,\n\nVi har den glæde at meddele dig, at din ansøgning om byggetilladelse er blevet godkendt. Du kan nu påbegynde dit byggeprojekt.\n\nVær venligst opmærksom på, at byggeriet skal påbegyndes inden for 12 måneder fra dags dato. Hvis dette ikke overholdes, vil tilladelsen bortfalde.\n\nMed venlig hilsen,\nKommunen',
-        tokensIn: 120,
-        tokensOut: 65,
-        latencyMs: 1200,
-        completedAt: now,
-      },
-      {
-        promptId: prompt1.id,
-        campaignModelId: gpt5.id,
-        output:
-          'Til rette vedkommende.\n\nDin byggetilladelse er godkendt. Byggeriet skal starte inden 12 måneder, ellers udløber tilladelsen.\n\nVenlig hilsen,\nByggeafdelingen',
-        tokensIn: 120,
-        tokensOut: 40,
-        latencyMs: 800,
-        completedAt: now,
-      },
-      {
-        promptId: prompt1.id,
-        campaignModelId: gemini.id,
-        output:
-          'Kære ansøger,\n\nVi skriver for at informere dig om, at din byggetilladelse er godkendt. Husk at byggeriet skal sættes i gang senest 12 måneder fra i dag.\n\nVenlig hilsen,\nBorgerservice',
-        tokensIn: 120,
-        tokensOut: 50,
-        latencyMs: 950,
-        completedAt: now,
-      },
-      // prompt 2
-      {
-        promptId: prompt2.id,
-        campaignModelId: opus.id,
-        output:
-          'Vigtig information om affaldssortering.\n\nFra den 1. oktober skal alle husstande sortere deres madaffald i de nye grønne spande. Det er vigtigt at overholde dette, da manglende sortering kan medføre et gebyr på 500 kr.',
-        tokensIn: 180,
-        tokensOut: 55,
-        latencyMs: 1100,
-        completedAt: now,
-      },
-      {
-        promptId: prompt2.id,
-        campaignModelId: gpt5.id,
-        output:
-          'Nye regler for affald.\n\nAlle skal bruge de grønne spande til organisk affald fra 1. oktober. Bøde på 500 kr. hvis det ikke overholdes.',
-        tokensIn: 180,
-        tokensOut: 35,
-        latencyMs: 750,
-        completedAt: now,
-      },
-      {
-        promptId: prompt2.id,
-        campaignModelId: gemini.id,
-        output:
-          'Kære borger,\n\nFra 1. oktober indfører vi nye regler for affaldssortering. Det betyder, at du skal sortere dit madaffald i den nye grønne spand. Bemærk venligst, at det kan koste en afgift på 500 kr., hvis affaldet ikke sorteres korrekt.',
-        tokensIn: 180,
-        tokensOut: 60,
-        latencyMs: 1050,
-        completedAt: now,
-      },
-    ])
-    .returning();
-
-  // Index generations by (promptId, campaignModelId) for easy lookup below.
-  const g = new Map(gens.map((x) => [`${x.promptId}:${x.campaignModelId}`, x]));
-  const lookup = (p: { id: string }, m: { id: string }) => {
-    const hit = g.get(`${p.id}:${m.id}`);
-    if (!hit) throw new Error(`missing generation for ${p.id}/${m.id}`);
-    return hit;
-  };
-
-  console.log('Inserting participants + votes...');
-  const participants = await db
-    .insert(schema.participants)
-    .values([
-      { cookieId: crypto.randomUUID(), campaignId: danish.id, email: 'alice@example.com' },
-      { cookieId: crypto.randomUUID(), campaignId: danish.id, email: 'bob@example.com' },
-      { cookieId: crypto.randomUUID(), campaignId: danish.id, email: 'carol@example.com' },
-    ])
-    .returning();
-
-  const p1Opus = lookup(prompt1, opus);
-  const p1Gpt5 = lookup(prompt1, gpt5);
-  const p1Gem = lookup(prompt1, gemini);
-  const p2Opus = lookup(prompt2, opus);
-  const p2Gem = lookup(prompt2, gemini);
-
-  await db.insert(schema.votes).values([
+  await db.insert(schema.generations).values([
+    // prompt 1
     {
-      campaignId: danish.id,
-      participantId: participants[0].id,
       promptId: prompt1.id,
-      generationAId: p1Opus.id,
-      generationBId: p1Gpt5.id,
-      pairKey: pairKey(p1Opus.id, p1Gpt5.id),
-      winner: 'A',
+      campaignModelId: opus.id,
+      output:
+        'Kære Borger,\n\nVi har den glæde at meddele dig, at din ansøgning om byggetilladelse er blevet godkendt. Du kan nu påbegynde dit byggeprojekt.\n\nVær venligst opmærksom på, at byggeriet skal påbegyndes inden for 12 måneder fra dags dato. Hvis dette ikke overholdes, vil tilladelsen bortfalde.\n\nMed venlig hilsen,\nKommunen',
+      tokensIn: 120,
+      tokensOut: 65,
+      latencyMs: 1200,
+      completedAt: now,
     },
     {
-      campaignId: danish.id,
-      participantId: participants[0].id,
+      promptId: prompt1.id,
+      campaignModelId: sonnet.id,
+      output:
+        'Kære modtager,\n\nDin ansøgning om byggetilladelse er godkendt. Bemærk at byggeriet skal igangsættes inden 12 måneder, ellers bortfalder tilladelsen.\n\nVenlig hilsen,\nByggesagsafdelingen',
+      tokensIn: 120,
+      tokensOut: 45,
+      latencyMs: 900,
+      completedAt: now,
+    },
+    {
+      promptId: prompt1.id,
+      campaignModelId: gpt5.id,
+      output:
+        'Til rette vedkommende.\n\nDin byggetilladelse er godkendt. Byggeriet skal starte inden 12 måneder, ellers udløber tilladelsen.\n\nVenlig hilsen,\nByggeafdelingen',
+      tokensIn: 120,
+      tokensOut: 40,
+      latencyMs: 800,
+      completedAt: now,
+    },
+    {
+      promptId: prompt1.id,
+      campaignModelId: gemini.id,
+      output:
+        'Kære ansøger,\n\nVi skriver for at informere dig om, at din byggetilladelse er godkendt. Husk at byggeriet skal sættes i gang senest 12 måneder fra i dag.\n\nVenlig hilsen,\nBorgerservice',
+      tokensIn: 120,
+      tokensOut: 50,
+      latencyMs: 950,
+      completedAt: now,
+    },
+    // prompt 2
+    {
       promptId: prompt2.id,
-      generationAId: p2Opus.id,
-      generationBId: p2Gem.id,
-      pairKey: pairKey(p2Opus.id, p2Gem.id),
-      winner: 'B',
+      campaignModelId: opus.id,
+      output:
+        'Vigtig information om affaldssortering.\n\nFra den 1. oktober skal alle husstande sortere deres madaffald i de nye grønne spande. Det er vigtigt at overholde dette, da manglende sortering kan medføre et gebyr på 500 kr.',
+      tokensIn: 180,
+      tokensOut: 55,
+      latencyMs: 1100,
+      completedAt: now,
     },
     {
-      campaignId: danish.id,
-      participantId: participants[1].id,
-      promptId: prompt1.id,
-      generationAId: p1Gpt5.id,
-      generationBId: p1Gem.id,
-      pairKey: pairKey(p1Gpt5.id, p1Gem.id),
-      winner: 'B',
+      promptId: prompt2.id,
+      campaignModelId: sonnet.id,
+      output:
+        'Kære beboer,\n\nFra 1. oktober starter en ny ordning for affaldssortering: madaffald skal i de grønne spande. Manglende sortering kan udløse et gebyr på 500 kr.',
+      tokensIn: 180,
+      tokensOut: 40,
+      latencyMs: 880,
+      completedAt: now,
     },
     {
-      campaignId: danish.id,
-      participantId: participants[2].id,
-      promptId: prompt1.id,
-      generationAId: p1Opus.id,
-      generationBId: p1Gem.id,
-      pairKey: pairKey(p1Opus.id, p1Gem.id),
-      winner: 'A',
+      promptId: prompt2.id,
+      campaignModelId: gpt5.id,
+      output:
+        'Nye regler for affald.\n\nAlle skal bruge de grønne spande til organisk affald fra 1. oktober. Bøde på 500 kr. hvis det ikke overholdes.',
+      tokensIn: 180,
+      tokensOut: 35,
+      latencyMs: 750,
+      completedAt: now,
+    },
+    {
+      promptId: prompt2.id,
+      campaignModelId: gemini.id,
+      output:
+        'Kære borger,\n\nFra 1. oktober indfører vi nye regler for affaldssortering. Det betyder, at du skal sortere dit madaffald i den nye grønne spand. Bemærk venligst, at det kan koste en afgift på 500 kr., hvis affaldet ikke sorteres korrekt.',
+      tokensIn: 180,
+      tokensOut: 60,
+      latencyMs: 1050,
+      completedAt: now,
     },
   ]);
 
-  console.log('Inserting placeholder ratings (overall only)...');
-  // These are illustrative numbers to populate the dashboard. Phase 4
-  // replaces them with real Elo + bootstrap CI output.
+  console.log('Inserting placeholder ratings (illustrative; Phase 4 replaces)...');
+  // These are not real B-T output — just plausible numbers so the
+  // dashboard renders with content. Phase 4 computes the real thing from
+  // the vote log.
   await db.insert(schema.ratings).values([
     {
       campaignId: danish.id,
       campaignModelId: opus.id,
       category: 'overall',
-      elo: 1247,
+      rating: 1247,
       ciLow: 1209,
       ciHigh: 1285,
       gameCount: 45,
-      ciComputedAt: now,
+    },
+    {
+      campaignId: danish.id,
+      campaignModelId: sonnet.id,
+      category: 'overall',
+      rating: 1195,
+      ciLow: 1155,
+      ciHigh: 1235,
+      gameCount: 43,
     },
     {
       campaignId: danish.id,
       campaignModelId: gemini.id,
       category: 'overall',
-      elo: 1180,
+      rating: 1180,
       ciLow: 1140,
       ciHigh: 1220,
       gameCount: 42,
-      ciComputedAt: now,
     },
     {
       campaignId: danish.id,
       campaignModelId: gpt5.id,
       category: 'overall',
-      elo: 1050,
+      rating: 1050,
       ciLow: 980,
       ciHigh: 1120,
       gameCount: 40,
-      ciComputedAt: now,
     },
   ]);
 
   console.log(`\nSeeded 3 campaigns:`);
-  console.log(`  Active:    /vote/${danish.shareSlug}   — ${danish.name}`);
-  console.log(`  Completed: /vote/${codeReview.shareSlug}   — ${codeReview.name}`);
-  console.log(`  Draft:     /vote/${meeting.shareSlug}   — ${meeting.name}`);
+  console.log(`  Active:    /vote/${danish.shareSlug}`);
+  console.log(`  Completed: /vote/${codeReview.shareSlug}`);
+  console.log(`  Draft:     /vote/${meeting.shareSlug}`);
 }
 
 main().catch((err) => {

@@ -1,5 +1,5 @@
 {
-  "id": "626f8d08-fdb5-45a4-9128-de9d7fd27da9",
+  "id": "a00f54d3-51cc-49a3-aeb5-b112152f851b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -521,12 +521,18 @@
           "notNull": true,
           "default": "'overall'"
         },
-        "elo": {
-          "name": "elo",
+        "rating": {
+          "name": "rating",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 1000
+        },
+        "se_rating": {
+          "name": "se_rating",
+          "type": "numeric(10, 6)",
+          "primaryKey": false,
+          "notNull": false
         },
         "ci_low": {
           "name": "ci_low",
@@ -537,6 +543,12 @@
         "ci_high": {
           "name": "ci_high",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bt_strength": {
+          "name": "bt_strength",
+          "type": "numeric(12, 8)",
           "primaryKey": false,
           "notNull": false
         },
@@ -553,12 +565,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "ci_computed_at": {
-          "name": "ci_computed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -624,6 +630,114 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.tournaments": {
+      "name": "tournaments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_id": {
+          "name": "prompt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed_model_ids": {
+          "name": "seed_model_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "tournament_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'in_progress'"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uniq_tournament_participant_prompt": {
+          "name": "uniq_tournament_participant_prompt",
+          "columns": [
+            {
+              "expression": "participant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "prompt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tournaments_participant_id_participants_id_fk": {
+          "name": "tournaments_participant_id_participants_id_fk",
+          "tableFrom": "tournaments",
+          "tableTo": "participants",
+          "columnsFrom": [
+            "participant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tournaments_prompt_id_prompts_id_fk": {
+          "name": "tournaments_prompt_id_prompts_id_fk",
+          "tableFrom": "tournaments",
+          "tableTo": "prompts",
+          "columnsFrom": [
+            "prompt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.votes": {
       "name": "votes",
       "schema": "",
@@ -641,6 +755,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "tournament_id": {
+          "name": "tournament_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "participant_id": {
           "name": "participant_id",
           "type": "uuid",
@@ -650,6 +770,19 @@
         "prompt_id": {
           "name": "prompt_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bracket_position": {
+          "name": "bracket_position",
+          "type": "bracket_position",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -665,18 +798,18 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pair_key": {
-          "name": "pair_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "winner": {
           "name": "winner",
           "type": "vote_winner",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
+        },
+        "advanced_generation_id": {
+          "name": "advanced_generation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -687,17 +820,17 @@
         }
       },
       "indexes": {
-        "uniq_participant_pair": {
-          "name": "uniq_participant_pair",
+        "uniq_vote_tournament_position": {
+          "name": "uniq_vote_tournament_position",
           "columns": [
             {
-              "expression": "participant_id",
+              "expression": "tournament_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "pair_key",
+              "expression": "bracket_position",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -737,6 +870,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "votes_participant": {
+          "name": "votes_participant",
+          "columns": [
+            {
+              "expression": "participant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -746,6 +894,19 @@
           "tableTo": "campaigns",
           "columnsFrom": [
             "campaign_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "votes_tournament_id_tournaments_id_fk": {
+          "name": "votes_tournament_id_tournaments_id_fk",
+          "tableFrom": "votes",
+          "tableTo": "tournaments",
+          "columnsFrom": [
+            "tournament_id"
           ],
           "columnsTo": [
             "id"
@@ -804,6 +965,19 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "votes_advanced_generation_id_generations_id_fk": {
+          "name": "votes_advanced_generation_id_generations_id_fk",
+          "tableFrom": "votes",
+          "tableTo": "generations",
+          "columnsFrom": [
+            "advanced_generation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -814,6 +988,17 @@
     }
   },
   "enums": {
+    "public.bracket_position": {
+      "name": "bracket_position",
+      "schema": "public",
+      "values": [
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5"
+      ]
+    },
     "public.campaign_status": {
       "name": "campaign_status",
       "schema": "public",
@@ -821,6 +1006,14 @@
         "draft",
         "active",
         "completed"
+      ]
+    },
+    "public.tournament_status": {
+      "name": "tournament_status",
+      "schema": "public",
+      "values": [
+        "in_progress",
+        "complete"
       ]
     },
     "public.vote_winner": {

@@ -1,0 +1,6 @@
+{
+  "name": "ModelArena",
+  "description": "An organizational tool for finding the best AI models for specific tasks via head-to-head voting campaigns.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

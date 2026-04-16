@@ -3,6 +3,7 @@ import { getDb } from '../../../src/server/db/client';
 import * as schema from '../../../src/server/db/schema';
 import { withParticipant } from '../../../src/server/auth/middleware';
 import { coinFlip } from '../../../src/server/tournament';
+import { recomputeCampaignRatings } from '../../../src/server/ratings';
 
 /**
  * POST /api/vote/:slug/submit
@@ -113,6 +114,17 @@ export default withParticipant(async (request, ctx) => {
       );
     }
     throw err;
+  }
+
+  // Kick a fresh rating recompute. Synchronous + try/catch so a compute
+  // failure doesn't take down the submit path — a stale leaderboard is
+  // a better failure mode than a rejected vote. Compute is cheap
+  // (O(M² × iters) where M is model count, ~4-8) so the added latency
+  // is negligible at our scale.
+  try {
+    await recomputeCampaignRatings(campaign.id);
+  } catch (err) {
+    console.error('[submit] rating recompute failed (non-fatal):', err);
   }
 
   return json(

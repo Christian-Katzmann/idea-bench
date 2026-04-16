@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ModeToggle } from '../components/ModeToggle';
 import { apiFetch, type PersonalResults } from '../lib/api';
+import { STABILITY_LABELS, type Stability } from '../lib/stability';
 
 export default function PersonalResultsPage() {
   const { slug } = useParams();
@@ -51,6 +52,28 @@ export default function PersonalResultsPage() {
   const { campaign, totals, perPrompt, campaignRanking, groupAgreement, honesty } =
     data;
   const top = campaignRanking[0];
+
+  function PersonalStabilityBadge({ tier }: { tier: Stability }) {
+    const styles: Record<Stability, string> = {
+      stable: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
+      preliminary: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+      directional: 'bg-muted text-muted-foreground border-border',
+    };
+    return (
+      <span
+        className={`text-[10px] uppercase tracking-wider font-medium px-2 py-1 rounded border ${styles[tier]}`}
+        title={
+          tier === 'directional'
+            ? 'Fewer than 50 comparisons on this model in your votes.'
+            : tier === 'preliminary'
+              ? '50-200 comparisons. Directionally correct; still some uncertainty.'
+              : '200+ comparisons in your votes. Tight.'
+        }
+      >
+        {STABILITY_LABELS[tier]}
+      </span>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8 font-sans">
@@ -90,7 +113,7 @@ export default function PersonalResultsPage() {
           </div>
         )}
 
-        {/* Campaign-level ranking */}
+        {/* Campaign-level ranking — B-T scoped to this participant's votes */}
         <Card className="shadow-md border-border overflow-hidden">
           <CardHeader className="bg-card text-card-foreground border-b border-border">
             <CardTitle className="text-xl">Your Overall Preferences</CardTitle>
@@ -101,15 +124,19 @@ export default function PersonalResultsPage() {
                 <TableRow>
                   <TableHead className="w-16 text-center">Rank</TableHead>
                   <TableHead>Model</TableHead>
-                  <TableHead className="text-right">1st places</TableHead>
-                  <TableHead className="text-right">Seen in</TableHead>
+                  <TableHead className="text-right">Rating</TableHead>
+                  <TableHead className="text-right">Win rate</TableHead>
+                  <TableHead className="text-right">1sts / seen</TableHead>
+                  <TableHead className="w-28 text-right">Tier</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {campaignRanking.map((r, idx) => (
                   <TableRow
                     key={r.campaignModelId}
-                    className={idx === 0 ? 'bg-primary/5' : ''}
+                    className={`${idx === 0 ? 'bg-primary/5' : ''} ${
+                      r.stability === 'directional' ? 'opacity-60' : ''
+                    }`}
                   >
                     <TableCell className="text-center font-medium">
                       {idx === 0 ? (
@@ -129,17 +156,30 @@ export default function PersonalResultsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium">
-                      {r.firstPlaceCount}
+                      {r.rating}
+                      {r.ciLow != null && r.ciHigh != null && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ±{Math.round((r.ciHigh - r.ciLow) / 2)}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {r.winRate != null
+                        ? `${Math.round(r.winRate * 100)}%`
+                        : '—'}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground text-sm">
-                      {r.appearances} / {perPrompt.length}
+                      {r.firstPlaceCount} / {r.appearances}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PersonalStabilityBadge tier={r.stability} />
                     </TableCell>
                   </TableRow>
                 ))}
                 {campaignRanking.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={6}
                       className="text-center text-muted-foreground py-6"
                     >
                       No completed tournaments yet.

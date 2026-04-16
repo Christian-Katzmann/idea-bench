@@ -7,6 +7,16 @@ import {
   type OpenRouterCallResult,
 } from '../../../src/server/openrouter';
 
+// TODO(strict-mode): Remove these Extract<> assertions when tsconfig
+// enables `strict: true` (or at least `strictNullChecks: true`). With
+// strictness off, TS collapses `number | null` to `number` and the
+// discriminated-union narrowing on `if (result.ok)` doesn't survive
+// across the async Promise.allSettled callback boundary — the branches
+// see the full union rather than the narrowed variant. See the running
+// thread on narrowing through closures:
+//   https://github.com/microsoft/TypeScript/issues/9998
+// Once strict mode is on, `result.kind` / `result.output` should narrow
+// automatically and these `as` casts can come out.
 type OkVariant = Extract<OpenRouterCallResult, { ok: true }>;
 type ErrorVariant = Extract<OpenRouterCallResult, { ok: false }>;
 import { createSSEStream, sseHeaders } from '../../../src/server/sse';

@@ -18,9 +18,11 @@ import {
   apiFetch,
   type CampaignSummary,
 } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function OperatorHome() {
   const navigate = useNavigate();
+  useDocumentTitle('Campaigns');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaigns'],

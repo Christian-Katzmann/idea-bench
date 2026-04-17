@@ -9,9 +9,11 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { ApiError, apiFetch, type DashboardSummary } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function OperatorDashboard() {
   const navigate = useNavigate();
+  useDocumentTitle('Dashboard');
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiFetch<DashboardSummary>('/api/dashboard'),

@@ -29,6 +29,27 @@ describe('OperatorLayout', () => {
     expect(
       screen.getByRole('link', { name: /api settings/i }),
     ).toHaveAttribute('href', '/settings/api');
+    expect(screen.getByRole('link', { name: /^modelarena$/i })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    );
+  });
+
+  it('marks the active operator section in the sidebar', () => {
+    renderWithRouter(
+      <OperatorLayout>
+        <div>body</div>
+      </OperatorLayout>,
+      { route: '/dashboard' },
+    );
+
+    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: /campaigns/i })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
   it('lets the operator log out from the sidebar', async () => {

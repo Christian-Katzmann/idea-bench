@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ApiError, apiFetch, type CampaignDetail } from '../lib/api';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function CampaignDashboard() {
   const { id } = useParams();
@@ -28,6 +29,8 @@ export default function CampaignDashboard() {
     queryFn: () => apiFetch<CampaignDetail>(`/api/campaigns/${id}`),
     enabled: !!id,
   });
+
+  useDocumentTitle(data?.campaign.name ?? 'Campaign');
 
   const recompute = useMutation({
     mutationFn: () =>

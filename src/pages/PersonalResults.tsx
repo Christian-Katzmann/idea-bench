@@ -20,6 +20,7 @@ import {
 import { ModeToggle } from '../components/ModeToggle';
 import { apiFetch, type PersonalResults } from '../lib/api';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function PersonalResultsPage() {
   const { slug } = useParams();
@@ -30,6 +31,8 @@ export default function PersonalResultsPage() {
     queryFn: () => apiFetch<PersonalResults>(`/api/vote/${slug}/results`),
     enabled: !!slug,
   });
+
+  useDocumentTitle(data ? `Your Results · ${data.campaign.name}` : 'Your Results');
 
   if (isLoading) {
     return (

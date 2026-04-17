@@ -23,6 +23,7 @@ import {
   type ModelLibraryData,
   type ModelLibraryRow,
 } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function buildLibraryUrl(search: string, status: string, sort: string) {
   const params = new URLSearchParams({ status, sort });
@@ -70,6 +71,7 @@ function applyRegistryPatch(
 export default function ModelLibrary() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  useDocumentTitle('Model Library');
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState('all');

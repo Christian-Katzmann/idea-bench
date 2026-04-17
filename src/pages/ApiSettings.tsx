@@ -4,6 +4,7 @@ import OperatorLayout from '../components/layout/OperatorLayout';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { ApiError, apiFetch, type ApiSettingsSummary } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function statusBadge(ready: boolean) {
   return ready ? (
@@ -17,6 +18,7 @@ function statusBadge(ready: boolean) {
 
 export default function ApiSettings() {
   const navigate = useNavigate();
+  useDocumentTitle('API Settings');
   const { data, isLoading, error } = useQuery({
     queryKey: ['api-settings'],
     queryFn: () => apiFetch<ApiSettingsSummary>('/api/settings/api'),

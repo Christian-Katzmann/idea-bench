@@ -21,6 +21,7 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { ApiError, apiFetch, type ModelLibraryData } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -69,6 +70,7 @@ interface CreatedCampaign {
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
+  useDocumentTitle('New Campaign');
   const [step, setStep] = useState(1);
 
   // Form state

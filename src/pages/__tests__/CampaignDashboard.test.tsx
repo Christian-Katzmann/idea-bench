@@ -105,6 +105,7 @@ describe('CampaignDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText(/closed/i)).toBeInTheDocument();
     });
+    expect(document.title).toBe('Support QA · ModelArena');
   });
 
   it('opens the csv export endpoint from the operator page', async () => {
@@ -128,5 +129,6 @@ describe('CampaignDashboard', () => {
       '_blank',
       'noopener',
     );
+    expect(document.title).toBe('Support QA · ModelArena');
   });
 });

@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Activity, Clock, Layers, AlertTriangle, Loader2 } from 'lucide-react';
 import { ModeToggle } from '../components/ModeToggle';
 import { apiFetch, type VoteLanding } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function ParticipantLanding() {
   const { slug } = useParams();
@@ -18,6 +19,8 @@ export default function ParticipantLanding() {
     queryFn: () => apiFetch<VoteLanding>(`/api/vote/${slug}`),
     enabled: !!slug,
   });
+
+  useDocumentTitle(landing.data?.name ?? 'Vote');
 
   const start = useMutation({
     mutationFn: (payload: { email?: string }) =>

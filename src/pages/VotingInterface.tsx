@@ -16,6 +16,7 @@ import {
   type NextBattleResponse,
   type NextBattlePayload,
 } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 type NextResp = NextBattleResponse | NextBattlePayload;
 
@@ -23,6 +24,7 @@ export default function VotingInterface() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  useDocumentTitle('Vote');
 
   const nextQ = useQuery({
     queryKey: ['vote-next', slug],

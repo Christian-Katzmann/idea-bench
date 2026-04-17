@@ -26,6 +26,24 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
         : 'text-muted-foreground hover:bg-card hover:text-foreground'
     }`;
 
+  const navSections = [
+    {
+      label: 'Main',
+      items: [
+        { label: 'Dashboard', href: '/dashboard', active: isDashboard },
+        { label: 'Campaigns', href: '/', active: isCampaigns },
+        { label: 'Team Activity', href: '/team-activity', active: isTeamActivity },
+      ],
+    },
+    {
+      label: 'System',
+      items: [
+        { label: 'Model Library', href: '/models', active: isModels },
+        { label: 'API Settings', href: '/settings/api', active: isApiSettings },
+      ],
+    },
+  ] as const;
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     setLogoutError(null);
@@ -47,33 +65,31 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
       {/* Sidebar Navigation */}
       <nav className="w-[240px] bg-sidebar border-r border-border p-6 flex flex-col gap-8 shrink-0 relative">
-        <div className="font-bold tracking-tight text-xl flex items-center gap-2">
+        <Link
+          to="/dashboard"
+          className="font-bold tracking-tight text-xl flex items-center gap-2 w-fit hover:text-foreground/90"
+        >
           <div className="w-6 h-6 bg-primary rounded" />
           ModelArena
-        </div>
+        </Link>
 
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Main</div>
-          <Link to="/dashboard" className={navItemClass(isDashboard)}>
-            Dashboard
-          </Link>
-          <Link to="/" className={navItemClass(isCampaigns)}>
-            Campaigns
-          </Link>
-          <Link to="/team-activity" className={navItemClass(isTeamActivity)}>
-            Team Activity
-          </Link>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">System</div>
-          <Link to="/models" className={navItemClass(isModels)}>
-            Model Library
-          </Link>
-          <Link to="/settings/api" className={navItemClass(isApiSettings)}>
-            API Settings
-          </Link>
-        </div>
+        {navSections.map((section) => (
+          <div key={section.label} className="flex flex-col gap-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+              {section.label}
+            </div>
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                aria-current={item.active ? 'page' : undefined}
+                className={navItemClass(item.active)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        ))}
         
         <div className="absolute bottom-6 left-6 right-6 flex flex-col gap-3">
           {logoutError && (

@@ -6,9 +6,11 @@ import KpiCard from '../components/dashboard/KpiCard';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { ApiError, apiFetch, type ActivityFeed } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function TeamActivity() {
   const navigate = useNavigate();
+  useDocumentTitle('Team Activity');
   const { data, isLoading, error } = useQuery({
     queryKey: ['activity'],
     queryFn: () => apiFetch<ActivityFeed>('/api/activity'),

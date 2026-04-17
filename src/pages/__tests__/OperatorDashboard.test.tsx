@@ -57,5 +57,6 @@ describe('OperatorDashboard', () => {
     expect(await screen.findByText(/active campaigns/i)).toBeInTheDocument();
     expect(screen.getByText(/top models/i)).toBeInTheDocument();
     expect(screen.getByText(/needs attention/i)).toBeInTheDocument();
+    expect(document.title).toBe('Dashboard · ModelArena');
   });
 });

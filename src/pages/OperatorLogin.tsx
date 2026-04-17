@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Activity, Loader2 } from 'lucide-react';
 import { ModeToggle } from '../components/ModeToggle';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function OperatorLogin() {
   const navigate = useNavigate();
@@ -12,6 +13,8 @@ export default function OperatorLogin() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useDocumentTitle('Operator Sign In');
 
   // Where to bounce back to after login; defaults to operator home.
   const returnTo =

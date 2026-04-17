@@ -3,8 +3,7 @@ import {
   OPERATOR_COOKIE_NAME,
   buildSetCookie,
   signOperatorCookie,
-} from '../../src/server/auth/cookies.js';
-import { toVercelHandler } from '../../src/server/vercel-adapter.js';
+} from '../../auth/cookies.js';
 
 /**
  * POST /api/auth/login
@@ -69,4 +68,4 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export default toVercelHandler(handler);
+export const loginWebHandler = handler;

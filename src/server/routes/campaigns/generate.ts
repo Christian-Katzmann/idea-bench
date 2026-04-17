@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client.js';
-import * as schema from '../../../src/server/db/schema.js';
-import { withOperator } from '../../../src/server/auth/middleware.js';
+import { getDb } from '../../db/client.js';
+import * as schema from '../../db/schema.js';
+import { withOperator } from '../../auth/middleware.js';
 import {
   callOpenRouter,
   type OpenRouterCallResult,
-} from '../../../src/server/openrouter.js';
+} from '../../openrouter.js';
 
 // TODO(strict-mode): Remove these Extract<> assertions when tsconfig
 // enables `strict: true` (or at least `strictNullChecks: true`). With
@@ -19,8 +19,7 @@ import {
 // automatically and these `as` casts can come out.
 type OkVariant = Extract<OpenRouterCallResult, { ok: true }>;
 type ErrorVariant = Extract<OpenRouterCallResult, { ok: false }>;
-import { createSSEStream, sseHeaders } from '../../../src/server/sse.js';
-import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
+import { createSSEStream, sseHeaders } from '../../sse.js';
 
 /**
  * POST /api/campaigns/:id/generate
@@ -50,7 +49,7 @@ import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
  * an active campaign is rejected — it would mutate the outputs that
  * participants are already voting on.
  */
-export default toVercelHandler(withOperator(async (request: Request) => {
+export const generateCampaignWebHandler = withOperator(async (request: Request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -177,7 +176,7 @@ export default toVercelHandler(withOperator(async (request: Request) => {
   });
 
   return new Response(stream, { status: 200, headers: sseHeaders() });
-}));
+});
 
 /**
  * Split helpers so each caller passes a narrowed variant. Calling a

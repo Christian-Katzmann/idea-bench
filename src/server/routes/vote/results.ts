@@ -1,14 +1,13 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client.js';
-import * as schema from '../../../src/server/db/schema.js';
-import { withParticipant } from '../../../src/server/auth/middleware.js';
+import { getDb } from '../../db/client.js';
+import * as schema from '../../db/schema.js';
+import { withParticipant } from '../../auth/middleware.js';
 import {
   finalRanking,
   type TournamentVote,
-} from '../../../src/server/tournament.js';
-import { computeParticipantRatings } from '../../../src/server/ratings.js';
-import { stabilityFor } from '../../../src/lib/stability.js';
-import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
+} from '../../tournament.js';
+import { computeParticipantRatings } from '../../ratings.js';
+import { stabilityFor } from '../../../lib/stability.js';
 
 /**
  * GET /api/vote/:slug/results
@@ -27,7 +26,7 @@ import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
  * Personal B-T is computed on demand; nothing is cached in the ratings
  * table for participant-scoped output.
  */
-export default toVercelHandler(withParticipant(async (request, ctx) => {
+export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
   if (request.method !== 'GET') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -302,7 +301,7 @@ export default toVercelHandler(withParticipant(async (request, ctx) => {
     },
     200,
   );
-}));
+});
 
 function extractSlug(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);

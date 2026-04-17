@@ -1,8 +1,7 @@
 import {
   OPERATOR_COOKIE_NAME,
   buildClearCookie,
-} from '../../src/server/auth/cookies.js';
-import { toVercelHandler } from '../../src/server/vercel-adapter.js';
+} from '../../auth/cookies.js';
 
 /** POST /api/auth/logout — clears the operator session cookie. */
 async function handler(request: Request): Promise<Response> {
@@ -18,4 +17,4 @@ async function handler(request: Request): Promise<Response> {
   });
 }
 
-export default toVercelHandler(handler);
+export const logoutWebHandler = handler;

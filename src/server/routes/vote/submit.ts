@@ -1,10 +1,9 @@
 import { and, eq } from 'drizzle-orm';
-import { getDb } from '../../../src/server/db/client.js';
-import * as schema from '../../../src/server/db/schema.js';
-import { withParticipant } from '../../../src/server/auth/middleware.js';
-import { coinFlip } from '../../../src/server/tournament.js';
-import { recomputeCampaignRatings } from '../../../src/server/ratings.js';
-import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
+import { getDb } from '../../db/client.js';
+import * as schema from '../../db/schema.js';
+import { withParticipant } from '../../auth/middleware.js';
+import { coinFlip } from '../../tournament.js';
+import { recomputeCampaignRatings } from '../../ratings.js';
 
 /**
  * POST /api/vote/:slug/submit
@@ -27,7 +26,7 @@ import { toVercelHandler } from '../../../src/server/vercel-adapter.js';
  * per submit. If a fancier session notion is ever needed, move this
  * into the start handler.
  */
-export default toVercelHandler(withParticipant(async (request, ctx) => {
+export const voteSubmitWebHandler = withParticipant(async (request, ctx) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -138,7 +137,7 @@ export default toVercelHandler(withParticipant(async (request, ctx) => {
     },
     200,
   );
-}));
+});
 
 interface ParsedSubmit {
   tournamentId: string;

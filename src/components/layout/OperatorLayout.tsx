@@ -1,9 +1,17 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { LogOut, Loader2 } from 'lucide-react';
 import { ModeToggle } from '../ModeToggle';
+import { Button } from '../ui/button';
+import { apiFetch } from '../../lib/api';
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const isCampaigns =
     location.pathname === '/' || location.pathname.startsWith('/campaign');
   const isDashboard = location.pathname.startsWith('/dashboard');
@@ -17,6 +25,23 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
         ? 'bg-card text-foreground border border-border'
         : 'text-muted-foreground hover:bg-card hover:text-foreground'
     }`;
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await apiFetch<{ ok: true }>('/api/auth/logout', { method: 'POST' });
+      queryClient.clear();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      setLogoutError(
+        error instanceof Error ? error.message : 'Failed to log out.',
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
@@ -50,8 +75,28 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           </Link>
         </div>
         
-        <div className="absolute bottom-6 left-6">
-          <ModeToggle />
+        <div className="absolute bottom-6 left-6 right-6 flex flex-col gap-3">
+          {logoutError && (
+            <div className="text-xs text-red-400">{logoutError}</div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <ModeToggle />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="h-8 px-3 border-border text-muted-foreground hover:text-foreground"
+            >
+              {isLoggingOut ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4 mr-2" />
+              )}
+              Log Out
+            </Button>
+          </div>
         </div>
       </nav>
 

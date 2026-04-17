@@ -1,10 +1,14 @@
 import { type WebHandler, toVercelHandler } from '../../../src/server/vercel-adapter.js';
 import { activateCampaignWebHandler } from '../../../src/server/routes/campaigns/activate.js';
+import { closeCampaignWebHandler } from '../../../src/server/routes/campaigns/close.js';
+import { exportCampaignCsvWebHandler } from '../../../src/server/routes/campaigns/exportCsv.js';
 import { generateCampaignWebHandler } from '../../../src/server/routes/campaigns/generate.js';
 import { recomputeCampaignWebHandler } from '../../../src/server/routes/campaigns/recompute.js';
 
 const actionHandlers: Record<string, WebHandler> = {
   activate: activateCampaignWebHandler,
+  close: closeCampaignWebHandler,
+  export: exportCampaignCsvWebHandler,
   generate: generateCampaignWebHandler,
   recompute: recomputeCampaignWebHandler,
 };

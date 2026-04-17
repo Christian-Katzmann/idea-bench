@@ -44,6 +44,22 @@ export default function CampaignDashboard() {
     },
   });
 
+  const closeCampaign = useMutation({
+    mutationFn: () =>
+      apiFetch<{
+        ok: true;
+        status: 'completed';
+        closedAt: string;
+        alreadyClosed?: boolean;
+      }>(`/api/campaigns/${id}/close`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaign', id] });
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['activity'] });
+    },
+  });
+
   if (error instanceof ApiError && error.status === 401) {
     navigate('/login', {
       state: { from: `/campaign/${id}` },
@@ -67,6 +83,22 @@ export default function CampaignDashboard() {
     navigator.clipboard.writeText(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCloseCampaign = () => {
+    if (
+      !window.confirm(
+        'Close this campaign? Voting will stop immediately for new participants.',
+      )
+    ) {
+      return;
+    }
+
+    closeCampaign.mutate();
+  };
+
+  const handleExportCsv = () => {
+    window.open(`/api/campaigns/${id}/export`, '_blank', 'noopener');
   };
 
   if (isLoading) {
@@ -185,10 +217,16 @@ export default function CampaignDashboard() {
           {campaign.status === 'active' && (
             <Button
               variant="outline"
+              onClick={handleCloseCampaign}
+              disabled={closeCampaign.isPending}
               className="border-border text-red-400 hover:bg-red-500/10 hover:text-red-400 h-9 px-4 rounded-md"
             >
-              <StopCircle className="w-4 h-4 mr-2" />
-              Close
+              {closeCampaign.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <StopCircle className="w-4 h-4 mr-2" />
+              )}
+              {closeCampaign.isPending ? 'Closing...' : 'Close'}
             </Button>
           )}
         </div>
@@ -217,6 +255,7 @@ export default function CampaignDashboard() {
         <div className="bg-card border border-border p-5 rounded-xl flex items-center justify-center">
           <Button
             variant="ghost"
+            onClick={handleExportCsv}
             className="w-full h-full text-muted-foreground hover:text-foreground hover:bg-foreground/5"
           >
             <Download className="w-4 h-4 mr-2" /> Export CSV
@@ -310,6 +349,17 @@ export default function CampaignDashboard() {
                 {recompute.error instanceof Error
                   ? recompute.error.message
                   : String(recompute.error)}
+              </span>
+            </div>
+          )}
+          {closeCampaign.error && (
+            <div className="mx-4 my-3 p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-sm rounded-md flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Close failed:{' '}
+                {closeCampaign.error instanceof Error
+                  ? closeCampaign.error.message
+                  : String(closeCampaign.error)}
               </span>
             </div>
           )}

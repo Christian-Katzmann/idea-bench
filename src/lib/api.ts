@@ -171,3 +171,117 @@ export interface PersonalResults {
   groupAgreement: { fraction: number | null; samples: number };
   honesty: { directional: boolean };
 }
+
+export interface ActivityEvent {
+  id: string;
+  kind: 'campaign_created' | 'participant_finished' | 'ratings_recomputed';
+  label: string;
+  at: string;
+  campaignId?: string;
+}
+
+export interface DashboardSummary {
+  kpis: {
+    activeCampaigns: number;
+    draftCampaigns: number;
+    totalVotes: number;
+    uniqueParticipants: number;
+  };
+  recentCampaigns: Array<{
+    id: string;
+    name: string;
+    status: string;
+    shareSlug?: string;
+    createdAt?: string;
+    totalVotes: number;
+    uniqueParticipants: number;
+  }>;
+  leaderboard: Array<{
+    id: string;
+    displayName: string;
+    providerModelId: string;
+    availability: 'enabled' | 'disabled' | 'legacy';
+    campaigns: number;
+    comparisons: number;
+    winRate: number | null;
+  }>;
+  attention: {
+    draftsNeedingGeneration: Array<{ id: string; name: string }>;
+    readyToLaunch: Array<{ id: string; name: string }>;
+    lowVoteVolume: Array<{ id: string; name: string; totalVotes: number }>;
+  };
+  recentMovement: ActivityEvent[];
+}
+
+export interface ModelLibraryRow {
+  id: string;
+  providerModelId: string;
+  displayName: string;
+  enabled: boolean;
+  legacy: boolean;
+  availability: 'enabled' | 'disabled' | 'legacy';
+  usage: {
+    campaigns: number;
+    activeCampaigns: number;
+    completedCampaigns: number;
+  };
+  performance: {
+    wins: number;
+    losses: number;
+    ties: number;
+    comparisons: number;
+    winRate: number | null;
+    averageRating: number | null;
+  };
+  footprint: Array<{
+    campaignId: string;
+    name: string;
+    status: string;
+  }>;
+  recommendation: string;
+}
+
+export interface ModelLibraryData {
+  rows: ModelLibraryRow[];
+  summary: {
+    totalModels: number;
+    enabled: number;
+    disabled: number;
+    legacy: number;
+    inUse: number;
+  };
+  guidance: {
+    recommendedIds: string[];
+    note: string;
+  };
+}
+
+export interface ActivityFeed {
+  summary: {
+    activeCampaigns: number;
+    completedCampaigns: number;
+    totalVotes: number;
+  };
+  events: ActivityEvent[];
+  topCampaigns: Array<{
+    id: string;
+    name: string;
+    status: string;
+  }>;
+}
+
+export interface ApiSettingsSummary {
+  configurationHealth: {
+    databaseConfigured: boolean;
+    authConfigured: boolean;
+    operatorConfigured: boolean;
+    openrouterConfigured: boolean;
+  };
+  secrets: {
+    database: { configured: boolean; label: string };
+    auth: { configured: boolean; label: string };
+    operator: { configured: boolean; label: string };
+    openrouter: { configured: boolean; label: string };
+  };
+  notes: string[];
+}

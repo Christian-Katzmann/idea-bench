@@ -5,6 +5,10 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import OperatorHome from './pages/OperatorHome';
+import OperatorDashboard from './pages/OperatorDashboard';
+import TeamActivity from './pages/TeamActivity';
+import ModelLibrary from './pages/ModelLibrary';
+import ApiSettings from './pages/ApiSettings';
 import OperatorLogin from './pages/OperatorLogin';
 import CreateCampaign from './pages/CreateCampaign';
 import CampaignDashboard from './pages/CampaignDashboard';
@@ -23,6 +27,10 @@ export default function App() {
 
           {/* Operator Routes */}
           <Route path="/" element={<OperatorHome />} />
+          <Route path="/dashboard" element={<OperatorDashboard />} />
+          <Route path="/team-activity" element={<TeamActivity />} />
+          <Route path="/models" element={<ModelLibrary />} />
+          <Route path="/settings/api" element={<ApiSettings />} />
           <Route path="/campaign/new" element={<CreateCampaign />} />
           <Route path="/campaign/:id" element={<CampaignDashboard />} />
 

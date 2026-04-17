@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import OperatorLayout from '../components/layout/OperatorLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { activeModels } from '../lib/models';
+import { ApiError, apiFetch, type ModelLibraryData } from '../lib/api';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -85,6 +86,21 @@ export default function CreateCampaign() {
   const [slotTotal, setSlotTotal] = useState(0);
   const [slots, setSlots] = useState<Record<string, SlotEvent>>({});
   const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const { data: modelLibrary, error: modelsError, isLoading: modelsLoading } = useQuery({
+    queryKey: ['models', 'enabled', 'name', 'campaign-create'],
+    queryFn: () => apiFetch<ModelLibraryData>('/api/models?status=enabled&sort=name'),
+  });
+
+  useEffect(() => {
+    const selectableIds = new Set((modelLibrary?.rows ?? []).map((row) => row.providerModelId));
+    if (selectableIds.size === 0) return;
+    setSelectedModels((prev) => prev.filter((providerModelId) => selectableIds.has(providerModelId)));
+  }, [modelLibrary]);
+
+  if (modelsError instanceof ApiError && modelsError.status === 401) {
+    navigate('/login', { state: { from: '/campaign/new' }, replace: true });
+  }
 
   const handleNext = () => setStep((s) => Math.min(5, s + 1));
   const handleBack = () => setStep((s) => Math.max(1, s - 1));
@@ -202,7 +218,7 @@ export default function CreateCampaign() {
   const failed = slotValues.filter((s) => s.status === 'error').length;
   const pct = slotTotal ? Math.round((slotsReceived / slotTotal) * 100) : 0;
 
-  const MODELS = activeModels();
+  const MODELS = (modelLibrary?.rows ?? []).filter((model) => model.enabled && !model.legacy);
 
   return (
     <OperatorLayout>
@@ -347,10 +363,14 @@ export default function CreateCampaign() {
                         </Button>
                       )}
                       <div className="space-y-2">
-                        <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                        <Label
+                          htmlFor={`prompt-text-${idx}`}
+                          className="text-muted-foreground text-xs uppercase tracking-wider"
+                        >
                           Prompt {idx + 1}
                         </Label>
                         <Textarea
+                          id={`prompt-text-${idx}`}
                           value={prompt.text}
                           onChange={(e) => {
                             const newP = [...prompts];
@@ -362,10 +382,14 @@ export default function CreateCampaign() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-muted-foreground text-xs uppercase tracking-wider">
+                        <Label
+                          htmlFor={`prompt-context-${idx}`}
+                          className="text-muted-foreground text-xs uppercase tracking-wider"
+                        >
                           Context (Optional)
                         </Label>
                         <Textarea
+                          id={`prompt-context-${idx}`}
                           value={prompt.context}
                           onChange={(e) => {
                             const newP = [...prompts];
@@ -402,32 +426,42 @@ export default function CreateCampaign() {
                     require at least {MIN_MODELS}.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {MODELS.map((model) => (
-                    <div
-                      key={model.providerModelId}
-                      onClick={() => toggleModel(model.providerModelId)}
-                      className={cn(
-                        'p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between',
-                        selectedModels.includes(model.providerModelId)
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-background hover:border-border/80 text-foreground',
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">
-                          {model.displayName}
+                {modelsLoading ? (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    Loading available models...
+                  </div>
+                ) : modelsError && !(modelsError instanceof ApiError && modelsError.status === 401) ? (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    {modelsError instanceof Error ? modelsError.message : String(modelsError)}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {MODELS.map((model) => (
+                      <div
+                        key={model.providerModelId}
+                        onClick={() => toggleModel(model.providerModelId)}
+                        className={cn(
+                          'p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between',
+                          selectedModels.includes(model.providerModelId)
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-background hover:border-border/80 text-foreground',
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">
+                            {model.displayName}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                            {model.providerModelId}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
-                          {model.providerModelId}
-                        </div>
+                        {selectedModels.includes(model.providerModelId) && (
+                          <Check className="w-4 h-4 shrink-0" />
+                        )}
                       </div>
-                      {selectedModels.includes(model.providerModelId) && (
-                        <Check className="w-4 h-4 shrink-0" />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <div className="text-xs text-muted-foreground">
                   {selectedModels.length} selected · need at least {MIN_MODELS}
                 </div>

@@ -3,6 +3,7 @@ import { getDb } from '../../src/server/db/client.js';
 import * as schema from '../../src/server/db/schema.js';
 import { generateShareSlug } from '../../src/lib/ids.js';
 import { isKnownModel, lookupModel } from '../../src/lib/models.js';
+import { listSelectableRegistryModels } from '../../src/server/models/registry.js';
 import { withOperator } from '../../src/server/auth/middleware.js';
 import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
@@ -62,6 +63,18 @@ export default toVercelHandler(withOperator(async (request: Request) => {
   const { name, description, categories, prompts, providerModelIds } = parsed;
 
   const db = getDb();
+  const selectableModels = await listSelectableRegistryModels(db);
+  const selectableModelIds = new Set(
+    selectableModels.map((model) => model.providerModelId),
+  );
+  for (const providerModelId of providerModelIds) {
+    if (!selectableModelIds.has(providerModelId)) {
+      return json(
+        { error: `providerModelId is not currently selectable: ${providerModelId}` },
+        400,
+      );
+    }
+  }
 
   const [campaign] = await db
     .insert(schema.campaigns)

@@ -28,6 +28,7 @@ import { neon } from '@neondatabase/serverless';
 import { sql } from 'drizzle-orm';
 import * as schema from '../src/server/db/schema';
 import { generateShareSlug } from '../src/lib/ids';
+import { AVAILABLE_MODELS } from '../src/lib/models';
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -52,6 +53,7 @@ async function main() {
   // TRUNCATE ... CASCADE handles FKs regardless of order.
   await db.execute(sql`
     TRUNCATE TABLE
+      ${schema.modelRegistry},
       ${schema.ratings},
       ${schema.votes},
       ${schema.tournaments},
@@ -62,6 +64,15 @@ async function main() {
       ${schema.campaigns}
     RESTART IDENTITY CASCADE
   `);
+
+  console.log('Syncing model registry seed...');
+  await db.insert(schema.modelRegistry).values(
+    AVAILABLE_MODELS.map((model) => ({
+      providerModelId: model.providerModelId,
+      displayName: model.displayName,
+      legacy: 'legacy' in model && !!model.legacy,
+    })),
+  );
 
   console.log('Inserting campaigns...');
   const [danish, codeReview, meeting] = await db

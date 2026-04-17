@@ -40,6 +40,7 @@ import {
   uuid,
   timestamp,
   integer,
+  boolean,
   numeric,
   jsonb,
   uniqueIndex,
@@ -51,6 +52,20 @@ export const campaignStatusEnum = pgEnum('campaign_status', [
   'active',
   'completed',
 ]);
+
+export const modelRegistry = pgTable('model_registry', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  providerModelId: text('provider_model_id').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  legacy: boolean('legacy').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const voteWinnerEnum = pgEnum('vote_winner', [
   'A',
@@ -330,6 +345,8 @@ export type Prompt = typeof prompts.$inferSelect;
 export type NewPrompt = typeof prompts.$inferInsert;
 export type CampaignModel = typeof campaignModels.$inferSelect;
 export type NewCampaignModel = typeof campaignModels.$inferInsert;
+export type ModelRegistry = typeof modelRegistry.$inferSelect;
+export type NewModelRegistry = typeof modelRegistry.$inferInsert;
 export type Generation = typeof generations.$inferSelect;
 export type NewGeneration = typeof generations.$inferInsert;
 export type Participant = typeof participants.$inferSelect;

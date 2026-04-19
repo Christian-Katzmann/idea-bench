@@ -154,6 +154,9 @@ function createSnapshot() {
         campaignModelId: 'cm-active-gpt5',
         category: 'overall',
         rating: 1180,
+        seRating: 22,
+        ciLow: 1135,
+        ciHigh: 1225,
         gameCount: 2,
         computedAt: new Date('2026-04-16T11:13:00.000Z'),
       },
@@ -162,6 +165,9 @@ function createSnapshot() {
         campaignModelId: 'cm-active-sonnet',
         category: 'overall',
         rating: 980,
+        seRating: 22,
+        ciLow: 935,
+        ciHigh: 1025,
         gameCount: 2,
         computedAt: new Date('2026-04-16T11:13:00.000Z'),
       },
@@ -181,5 +187,36 @@ describe('buildDashboardSummary', () => {
       displayName: 'GPT-5',
       availability: 'enabled',
     });
+  });
+
+  it('emits a featured leaderboard per active campaign, sorted by rating desc, with CI bounds and tier', async () => {
+    const summary = await buildDashboardSummary(createSnapshot());
+
+    expect(summary.leaderboards).toHaveLength(1);
+    const [featured] = summary.leaderboards;
+    expect(featured.id).toBe('campaign-active');
+    expect(featured.name).toBe('Active Campaign');
+    expect(featured.totalVotes).toBe(2);
+    expect(featured.updatedAt).toBe('2026-04-16T11:13:00.000Z');
+    expect(featured.ratings.map((row) => row.displayName)).toEqual([
+      'GPT-5',
+      'Claude Sonnet 4.6',
+    ]);
+    expect(featured.ratings[0]).toMatchObject({
+      rating: 1180,
+      ciLow: 1135,
+      ciHigh: 1225,
+      gameCount: 2,
+      stability: 'directional',
+    });
+  });
+
+  it('returns an empty leaderboards array when there are no active campaigns with signal', async () => {
+    const snapshot = createSnapshot();
+    snapshot.campaigns = snapshot.campaigns.filter(
+      (c) => c.status !== 'active',
+    );
+    const summary = await buildDashboardSummary(snapshot);
+    expect(summary.leaderboards).toEqual([]);
   });
 });

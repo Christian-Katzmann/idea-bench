@@ -180,6 +180,28 @@ export interface ActivityEvent {
   campaignId?: string;
 }
 
+export interface DashboardLeaderboardRow {
+  campaignModelId: string;
+  providerModelId: string;
+  displayName: string;
+  rating: number;
+  seRating: number | null;
+  ciLow: number | null;
+  ciHigh: number | null;
+  gameCount: number;
+  winRate: number | null;
+  stability: 'directional' | 'preliminary' | 'stable';
+}
+
+export interface DashboardLeaderboardCampaign {
+  id: string;
+  name: string;
+  shareSlug: string;
+  totalVotes: number;
+  updatedAt: string | null;
+  ratings: DashboardLeaderboardRow[];
+}
+
 export interface DashboardSummary {
   kpis: {
     activeCampaigns: number;
@@ -205,6 +227,7 @@ export interface DashboardSummary {
     comparisons: number;
     winRate: number | null;
   }>;
+  leaderboards: DashboardLeaderboardCampaign[];
   attention: {
     draftsNeedingGeneration: Array<{ id: string; name: string }>;
     readyToLaunch: Array<{ id: string; name: string }>;

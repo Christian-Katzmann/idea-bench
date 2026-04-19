@@ -1,9 +1,37 @@
+import { stabilityFor, type Stability } from '../../lib/stability.js';
 import { getDb } from '../db/client.js';
 import {
   buildModelLibrary,
   loadAnalyticsSnapshot,
   type AnalyticsSnapshot,
 } from '../models/library.js';
+
+/** One row on the dashboard's rich leaderboard — a single model within one
+ *  campaign, with its Bradley-Terry rating, 95% CI bounds, vote count, and
+ *  win rate. Tier is derived from gameCount via `stabilityFor`. */
+export interface DashboardLeaderboardRow {
+  campaignModelId: string;
+  providerModelId: string;
+  displayName: string;
+  rating: number;
+  seRating: number | null;
+  ciLow: number | null;
+  ciHigh: number | null;
+  gameCount: number;
+  winRate: number | null;
+  stability: Stability;
+}
+
+/** A featured campaign on the dashboard leaderboard. One tab per campaign,
+ *  ordered by recent vote volume. Rows are the campaign's overall ratings. */
+export interface DashboardLeaderboardCampaign {
+  id: string;
+  name: string;
+  shareSlug: string;
+  totalVotes: number;
+  updatedAt: string | null;
+  ratings: DashboardLeaderboardRow[];
+}
 
 export interface DashboardSummary {
   kpis: {
@@ -30,6 +58,7 @@ export interface DashboardSummary {
     comparisons: number;
     winRate: number | null;
   }>;
+  leaderboards: DashboardLeaderboardCampaign[];
   attention: {
     draftsNeedingGeneration: Array<{ id: string; name: string }>;
     readyToLaunch: Array<{ id: string; name: string }>;
@@ -43,6 +72,10 @@ export interface DashboardSummary {
     campaignId?: string;
   }>;
 }
+
+/** Cap: featured leaderboards shown on the dashboard. Beyond this the user
+ *  should click through to an individual campaign. */
+const MAX_FEATURED_LEADERBOARDS = 4;
 
 function isSnapshot(input: AnalyticsSnapshot | ReturnType<typeof getDb>): input is AnalyticsSnapshot {
   return 'registry' in input;
@@ -154,6 +187,100 @@ export async function buildDashboardSummary(
     }))
     .filter((campaign) => campaign.totalVotes < 10);
 
+  // Featured leaderboards — up to MAX_FEATURED_LEADERBOARDS active campaigns,
+  // ordered by recent vote volume. Each carries its own overall-category
+  // ratings so the dashboard can render a full Bradley-Terry table per tab.
+  const campaignModelsByCampaignId = new Map<
+    string,
+    AnalyticsSnapshot['campaignModels']
+  >();
+  for (const campaignModel of snapshot.campaignModels) {
+    const list = campaignModelsByCampaignId.get(campaignModel.campaignId) ?? [];
+    list.push(campaignModel);
+    campaignModelsByCampaignId.set(campaignModel.campaignId, list);
+  }
+
+  const ratingsByCampaignId = new Map<
+    string,
+    AnalyticsSnapshot['ratings']
+  >();
+  for (const rating of snapshot.ratings) {
+    if (rating.category !== 'overall') continue;
+    const list = ratingsByCampaignId.get(rating.campaignId) ?? [];
+    list.push(rating);
+    ratingsByCampaignId.set(rating.campaignId, list);
+  }
+
+  const winStatsByCampaignModelId =
+    snapshot.voteAggregates?.performanceByCampaignModelId ?? new Map();
+
+  const leaderboards: DashboardLeaderboardCampaign[] = snapshot.campaigns
+    .filter((campaign) => campaign.status === 'active')
+    .map((campaign) => ({
+      campaign,
+      totalVotes: voteCountByCampaignId.get(campaign.id) ?? 0,
+    }))
+    .sort((a, b) => b.totalVotes - a.totalVotes)
+    .slice(0, MAX_FEATURED_LEADERBOARDS)
+    .map(({ campaign, totalVotes: campaignVotes }) => {
+      const campaignModels = campaignModelsByCampaignId.get(campaign.id) ?? [];
+      const ratings = ratingsByCampaignId.get(campaign.id) ?? [];
+      const ratingByCampaignModelId = new Map(
+        ratings.map((rating) => [rating.campaignModelId, rating]),
+      );
+
+      const rows: DashboardLeaderboardRow[] = campaignModels
+        .map((campaignModel) => {
+          const rating = ratingByCampaignModelId.get(campaignModel.id);
+          const winStats = winStatsByCampaignModelId.get(campaignModel.id);
+          const games = winStats
+            ? winStats.wins + winStats.losses + winStats.ties
+            : 0;
+          const winRate =
+            winStats && games > 0
+              ? (winStats.wins + 0.5 * winStats.ties) / games
+              : null;
+          const gameCount = rating?.gameCount ?? games;
+          return {
+            campaignModelId: campaignModel.id,
+            providerModelId: campaignModel.providerModelId,
+            displayName: campaignModel.displayName,
+            rating: rating?.rating ?? 1000,
+            seRating: rating?.seRating ?? null,
+            ciLow: rating?.ciLow ?? null,
+            ciHigh: rating?.ciHigh ?? null,
+            gameCount,
+            winRate,
+            stability: stabilityFor(gameCount),
+          };
+        })
+        // Only surface models that have actually accumulated some signal —
+        // zero-rated untouched models clutter the board without helping.
+        .filter((row) => row.gameCount > 0 || row.rating !== 1000)
+        .sort((a, b) => b.rating - a.rating);
+
+      let latestComputedAt: number | null = null;
+      for (const rating of ratings) {
+        if (!rating.computedAt) continue;
+        const t = rating.computedAt.getTime();
+        if (latestComputedAt === null || t > latestComputedAt) {
+          latestComputedAt = t;
+        }
+      }
+
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        shareSlug: campaign.shareSlug ?? '',
+        totalVotes: campaignVotes,
+        updatedAt:
+          latestComputedAt !== null
+            ? new Date(latestComputedAt).toISOString()
+            : null,
+        ratings: rows,
+      } satisfies DashboardLeaderboardCampaign;
+    });
+
   const recentMovement = [
     ...snapshot.campaigns
       .filter((campaign) => campaign.createdAt)
@@ -212,6 +339,7 @@ export async function buildDashboardSummary(
       comparisons: row.performance.comparisons,
       winRate: row.performance.winRate,
     })),
+    leaderboards,
     attention: {
       draftsNeedingGeneration,
       readyToLaunch,

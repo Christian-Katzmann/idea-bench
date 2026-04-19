@@ -288,4 +288,12 @@
         mask-composite: exclude;
         -webkit-mask-composite: xor;
     }
+
+    /* Leaderboard row flash — brief accent wash when a rating/vote ticks.
+       Intentionally subtle: the row stays readable throughout. */
+    @keyframes lb-flash {
+        0%   { background-color: rgb(var(--rgb-accent) / 0.08); }
+        100% { background-color: transparent; }
+    }
+    .lb-just-updated { animation: lb-flash 1.2s ease-out; }
 }

@@ -19,6 +19,12 @@ export interface SnapshotVoteAggregates {
     string,
     { wins: number; losses: number; ties: number }
   >;
+  /** Per-(campaign × campaignModel) wins/losses/ties. Needed for per-campaign
+   *  leaderboards that report winRate alongside Bradley-Terry rating. */
+  performanceByCampaignModelId: Map<
+    string,
+    { wins: number; losses: number; ties: number }
+  >;
 }
 
 export interface SnapshotGenerationAggregates {
@@ -47,6 +53,12 @@ export interface ActivityRatingRecord {
   campaignModelId: string;
   category: string;
   rating: number;
+  /** Standard error of the rating (nullable — unknown until BT recompute runs). */
+  seRating?: number | null;
+  /** Lower bound of 95% confidence interval, in rating points. */
+  ciLow?: number | null;
+  /** Upper bound of 95% confidence interval, in rating points. */
+  ciHigh?: number | null;
   gameCount: number;
   computedAt?: Date;
 }
@@ -547,6 +559,7 @@ async function loadVoteAggregates(
     db
       .select({
         providerModelId: schema.campaignModels.providerModelId,
+        campaignModelId: schema.campaignModels.id,
         winner: schema.votes.winner,
         n: count(),
       })
@@ -559,10 +572,15 @@ async function loadVoteAggregates(
         schema.campaignModels,
         eq(schema.generations.campaignModelId, schema.campaignModels.id),
       )
-      .groupBy(schema.campaignModels.providerModelId, schema.votes.winner),
+      .groupBy(
+        schema.campaignModels.providerModelId,
+        schema.campaignModels.id,
+        schema.votes.winner,
+      ),
     db
       .select({
         providerModelId: schema.campaignModels.providerModelId,
+        campaignModelId: schema.campaignModels.id,
         winner: schema.votes.winner,
         n: count(),
       })
@@ -575,7 +593,11 @@ async function loadVoteAggregates(
         schema.campaignModels,
         eq(schema.generations.campaignModelId, schema.campaignModels.id),
       )
-      .groupBy(schema.campaignModels.providerModelId, schema.votes.winner),
+      .groupBy(
+        schema.campaignModels.providerModelId,
+        schema.campaignModels.id,
+        schema.votes.winner,
+      ),
   ]);
 
   const countByCampaignId = new Map<string, number>();
@@ -590,24 +612,53 @@ async function loadVoteAggregates(
     string,
     { wins: number; losses: number; ties: number }
   >();
-  function bump(provider: string, key: 'wins' | 'losses' | 'ties', n: number) {
+  const performanceByCampaignModelId = new Map<
+    string,
+    { wins: number; losses: number; ties: number }
+  >();
+  function bumpProvider(
+    provider: string,
+    key: 'wins' | 'losses' | 'ties',
+    n: number,
+  ) {
     const bucket =
       performanceByProviderModelId.get(provider) ?? { wins: 0, losses: 0, ties: 0 };
     bucket[key] += n;
     performanceByProviderModelId.set(provider, bucket);
   }
+  function bumpCampaignModel(
+    campaignModelId: string,
+    key: 'wins' | 'losses' | 'ties',
+    n: number,
+  ) {
+    const bucket =
+      performanceByCampaignModelId.get(campaignModelId) ?? {
+        wins: 0,
+        losses: 0,
+        ties: 0,
+      };
+    bucket[key] += n;
+    performanceByCampaignModelId.set(campaignModelId, bucket);
+  }
   for (const row of asASide) {
-    if (row.winner === 'A') bump(row.providerModelId, 'wins', row.n);
-    else if (row.winner === 'B') bump(row.providerModelId, 'losses', row.n);
-    else bump(row.providerModelId, 'ties', row.n);
+    const key =
+      row.winner === 'A' ? 'wins' : row.winner === 'B' ? 'losses' : 'ties';
+    bumpProvider(row.providerModelId, key, row.n);
+    bumpCampaignModel(row.campaignModelId, key, row.n);
   }
   for (const row of asBSide) {
-    if (row.winner === 'B') bump(row.providerModelId, 'wins', row.n);
-    else if (row.winner === 'A') bump(row.providerModelId, 'losses', row.n);
-    else bump(row.providerModelId, 'ties', row.n);
+    const key =
+      row.winner === 'B' ? 'wins' : row.winner === 'A' ? 'losses' : 'ties';
+    bumpProvider(row.providerModelId, key, row.n);
+    bumpCampaignModel(row.campaignModelId, key, row.n);
   }
 
-  return { totalVotes, countByCampaignId, performanceByProviderModelId };
+  return {
+    totalVotes,
+    countByCampaignId,
+    performanceByProviderModelId,
+    performanceByCampaignModelId,
+  };
 }
 
 async function loadGenerationAggregates(
@@ -687,6 +738,9 @@ async function computeAnalyticsSnapshot(
           campaignModelId: schema.ratings.campaignModelId,
           category: schema.ratings.category,
           rating: schema.ratings.rating,
+          seRating: schema.ratings.seRating,
+          ciLow: schema.ratings.ciLow,
+          ciHigh: schema.ratings.ciHigh,
           gameCount: schema.ratings.gameCount,
           computedAt: schema.ratings.computedAt,
         })
@@ -718,7 +772,12 @@ async function computeAnalyticsSnapshot(
     campaignModels,
     generations: [],
     votes: [],
-    ratings,
+    // Drizzle returns `numeric(p,s)` columns as strings. Coerce to number
+    // here so the ActivityRatingRecord contract holds across consumers.
+    ratings: ratings.map((rating) => ({
+      ...rating,
+      seRating: rating.seRating != null ? Number(rating.seRating) : null,
+    })),
     voteAggregates,
     generationAggregates,
     participantAggregates,

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ChevronRight,
   Plus,
-  Zap,
 } from 'lucide-react';
 import { AppShell } from '../components/layout/app-shell';
 import { Button } from '../components/ui/button';
@@ -15,6 +14,8 @@ import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { StatusBadge, type StatusState } from '../components/ui/status-badge';
 import KpiCard from '../components/dashboard/KpiCard';
+import { Leaderboard } from '../components/dashboard/leaderboard/Leaderboard';
+import { LeaderboardSkeleton } from '../components/dashboard/leaderboard/LeaderboardSkeleton';
 import {
   ApiError,
   apiFetch,
@@ -49,6 +50,12 @@ export default function OperatorDashboard() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiFetch<DashboardSummary>('/api/operator/dashboard'),
+    // Keep the live leaderboard's vote ticker and row-flash animations
+    // fed by fresh data. The endpoint is Runtime-Cache-backed (5min TTL) and
+    // invalidated on vote-submit / recompute, so the effective cadence is
+    // "as fast as the server has new numbers."
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
   });
 
   if (error instanceof ApiError && error.status === 401) {
@@ -89,108 +96,60 @@ export default function OperatorDashboard() {
             <KpiCard label="Unique participants" value={data.kpis.uniqueParticipants} />
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <Panel
-              title="Recent campaigns"
-              rightSlot={
-                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {data.recentCampaigns.length} tracked
-                </span>
-              }
-            >
-              {data.recentCampaigns.length === 0 ? (
-                <PanelEmpty>No campaigns yet.</PanelEmpty>
-              ) : (
-                <PanelList>
-                  {data.recentCampaigns.map((campaign) => (
-                    <Link
-                      key={campaign.id}
-                      to={`/campaign/${campaign.id}`}
-                      className="group flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-surface-highlight/40"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <EntityIcon name={campaign.name} size="sm" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium text-foreground">
-                              {campaign.name}
-                            </span>
-                            <StatusBadge
-                              state={campaign.status as StatusState}
-                            />
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {campaign.createdAt
-                              ? `Created ${formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}`
-                              : 'Created recently'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="font-mono text-sm tabular-nums text-foreground">
-                            {campaign.totalVotes}
-                          </div>
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            votes · {campaign.uniqueParticipants}p
-                          </div>
-                        </div>
-                        <ChevronRight className="size-4 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
-                      </div>
-                    </Link>
-                  ))}
-                </PanelList>
-              )}
-            </Panel>
+          <Leaderboard leaderboards={data.leaderboards} />
 
-            <Panel
-              title="Top models"
-              icon={<Zap className="size-3.5 text-accent" />}
-            >
-              {data.leaderboard.length === 0 ? (
-                <PanelEmpty>No model performance yet.</PanelEmpty>
-              ) : (
-                <PanelList>
-                  {data.leaderboard.map((row) => (
-                    <button
-                      key={row.id}
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          `/models?search=${encodeURIComponent(row.providerModelId)}`,
-                        )
-                      }
-                      className="group flex w-full items-center justify-between gap-4 px-5 py-3 text-left transition-colors hover:bg-surface-highlight/40"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <EntityIcon name={row.displayName} size="sm" />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {row.displayName}
-                          </div>
-                          <div className="truncate font-mono text-[11px] text-muted-foreground">
-                            {row.providerModelId}
-                          </div>
+          <Panel
+            title="Recent campaigns"
+            rightSlot={
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {data.recentCampaigns.length} tracked
+              </span>
+            }
+          >
+            {data.recentCampaigns.length === 0 ? (
+              <PanelEmpty>No campaigns yet.</PanelEmpty>
+            ) : (
+              <PanelList>
+                {data.recentCampaigns.map((campaign) => (
+                  <Link
+                    key={campaign.id}
+                    to={`/campaign/${campaign.id}`}
+                    className="group flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-surface-highlight/40"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <EntityIcon name={campaign.name} size="sm" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {campaign.name}
+                          </span>
+                          <StatusBadge
+                            state={campaign.status as StatusState}
+                          />
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {campaign.createdAt
+                            ? `Created ${formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}`
+                            : 'Created recently'}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <div className="text-right">
-                          <div className="font-mono text-sm tabular-nums text-foreground">
-                            {row.winRate != null
-                              ? `${Math.round(row.winRate * 100)}%`
-                              : '—'}
-                          </div>
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            {row.availability}
-                          </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="font-mono text-sm tabular-nums text-foreground">
+                          {campaign.totalVotes}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          votes · {campaign.uniqueParticipants}p
                         </div>
                       </div>
-                    </button>
-                  ))}
-                </PanelList>
-              )}
-            </Panel>
-          </div>
+                      <ChevronRight className="size-4 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+                    </div>
+                  </Link>
+                ))}
+              </PanelList>
+            )}
+          </Panel>
 
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Panel title="Needs attention">
@@ -344,35 +303,29 @@ function DashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div
-            key={i}
-            className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-          >
-            <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <Skeleton className="h-3 w-32" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-            <ul className="divide-y divide-border">
-              {Array.from({ length: 4 }).map((_, j) => (
-                <li
-                  key={j}
-                  className="flex items-center justify-between gap-3 px-5 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="size-7 rounded-md" />
-                    <div className="flex flex-col gap-1.5">
-                      <Skeleton className="h-3 w-36" />
-                      <Skeleton className="h-2.5 w-24" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-3 w-10" />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      <LeaderboardSkeleton />
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+        <ul className="divide-y divide-border">
+          {Array.from({ length: 4 }).map((_, j) => (
+            <li
+              key={j}
+              className="flex items-center justify-between gap-3 px-5 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-7 rounded-md" />
+                <div className="flex flex-col gap-1.5">
+                  <Skeleton className="h-3 w-36" />
+                  <Skeleton className="h-2.5 w-24" />
+                </div>
+              </div>
+              <Skeleton className="h-3 w-10" />
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import ApiSettings from './pages/ApiSettings';
 import OperatorLogin from './pages/OperatorLogin';
 import CreateCampaign from './pages/CreateCampaign';
 import CampaignDashboard from './pages/CampaignDashboard';
+import CampaignPreview from './pages/CampaignPreview';
 import ParticipantLanding from './pages/ParticipantLanding';
 import VotingInterface from './pages/VotingInterface';
 import PersonalResults from './pages/PersonalResults';
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/settings/api" element={<ApiSettings />} />
           <Route path="/campaign/new" element={<CreateCampaign />} />
           <Route path="/campaign/:id" element={<CampaignDashboard />} />
+          <Route path="/campaign/:id/preview" element={<CampaignPreview />} />
 
           {/* Participant Routes — `slug` is the public share slug
               (unguessable 16-char base62). Internal campaign UUIDs

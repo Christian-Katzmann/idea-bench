@@ -1,29 +1,29 @@
 import { useEffect, useRef, useState } from "react"
+import { Link, useLocation, useMatch } from "react-router-dom"
 import { Check, ChevronDown, Eye } from "lucide-react"
 import { BrandMark } from "@/components/ui/brand-mark"
 import { cn } from "@/lib/utils"
 
 /**
- * Top-left sidebar control — currently a placeholder (per Q2, option C).
+ * Top-left sidebar control — per Q2, a view-mode switcher.
  *
- * Intended trajectory:
  *   - "Operator" (current, default) — the admin view of the app.
- *   - "Participant Preview" — lets an operator see the voting experience
- *     for a selected campaign without logging out. Disabled until we wire
- *     it up in a later phase; the dropdown surfaces the intent today.
+ *   - "Participant preview" — opens a read-only snapshot of the
+ *     voting experience for the campaign currently in view. No
+ *     participant row or vote row is created; the preview runs
+ *     client-side against /api/campaigns/:id/preview.
  *
- * The shape matches GitSlip's org-switcher tile: `/` mark + label + small
- * caption + chevron. A left-click opens the dropdown; clicking the same
- * item closes it. No backend change — purely UI scaffolding.
+ * The preview item is only enabled on `/campaign/:id` (including its
+ * nested routes). On every other operator page it shows a helper
+ * subtitle telling the operator to open a campaign first.
  */
-
-type ViewMode = "operator" | "participant"
 
 export function ViewSwitcher({ className }: { className?: string }) {
   const [isOpen, setIsOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const location = useLocation()
 
-  // Close on outside click
+  // Close on outside click and on route change.
   useEffect(() => {
     if (!isOpen) return
     const handleClick = (e: MouseEvent) => {
@@ -35,7 +35,24 @@ export function ViewSwitcher({ className }: { className?: string }) {
     return () => window.removeEventListener("mousedown", handleClick)
   }, [isOpen])
 
-  const activeMode: ViewMode = "operator"
+  useEffect(() => {
+    setIsOpen(false)
+  }, [location.pathname])
+
+  // Detect whether we're on a campaign page. `/campaign/new` is
+  // excluded — there's nothing to preview until the wizard ships a
+  // real campaign id.
+  const campaignMatch = useMatch('/campaign/:id/*')
+  const campaignId =
+    campaignMatch && campaignMatch.params.id && campaignMatch.params.id !== 'new'
+      ? campaignMatch.params.id
+      : null
+
+  // Are we already inside the preview? If so, the "Operator" item
+  // becomes the actionable exit.
+  const isPreviewPath = !!useMatch('/campaign/:id/preview')
+
+  const activeLabel = isPreviewPath ? "Participant" : "Operator"
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
@@ -52,7 +69,7 @@ export function ViewSwitcher({ className }: { className?: string }) {
             ModelArena
           </div>
           <div className="truncate text-[10px] text-muted-foreground">
-            Operator
+            {activeLabel}
           </div>
         </div>
         <ChevronDown
@@ -64,32 +81,70 @@ export function ViewSwitcher({ className }: { className?: string }) {
       </button>
 
       {isOpen && (
-        <div className="absolute inset-x-2 top-full z-20 mt-1 origin-top animate-in fade-in-0 slide-in-from-top-1 duration-150 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-xl">
+        <div
+          role="menu"
+          className="absolute inset-x-2 top-full z-20 mt-1 origin-top animate-in fade-in-0 slide-in-from-top-1 duration-150 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-xl"
+        >
           <div className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             View mode
           </div>
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md bg-surface-highlight px-3 py-2 text-sm text-foreground"
-          >
-            <BrandMark size="sm" />
-            <span className="truncate">Operator</span>
-            {activeMode === "operator" && (
+          {isPreviewPath && campaignId ? (
+            <Link
+              to={`/campaign/${campaignId}`}
+              onClick={() => setIsOpen(false)}
+              role="menuitem"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-highlight"
+            >
+              <BrandMark size="sm" />
+              <span className="truncate">Operator</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              role="menuitem"
+              className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md bg-surface-highlight px-3 py-2 text-sm text-foreground"
+            >
+              <BrandMark size="sm" />
+              <span className="truncate">Operator</span>
               <Check className="ml-auto size-3.5 text-foreground" />
-            )}
-          </button>
-          <div
-            className="mx-1 mt-0.5 flex w-[calc(100%-0.5rem)] cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted-foreground/70"
-            aria-disabled
-            title="Pick a campaign first to preview the participant experience"
-          >
-            <Eye className="size-4" />
-            <span className="truncate">Participant preview</span>
-            <span className="ml-auto rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70">
-              Soon
-            </span>
-          </div>
+            </button>
+          )}
+
+          {campaignId && !isPreviewPath ? (
+            <Link
+              to={`/campaign/${campaignId}/preview`}
+              onClick={() => setIsOpen(false)}
+              role="menuitem"
+              className="mx-1 mt-0.5 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-highlight"
+            >
+              <Eye className="size-4 text-muted-foreground" />
+              <span className="truncate">Participant preview</span>
+            </Link>
+          ) : isPreviewPath && campaignId ? (
+            <div
+              role="menuitem"
+              aria-current="true"
+              className="mx-1 mt-0.5 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md bg-surface-highlight px-3 py-2 text-sm text-foreground"
+            >
+              <Eye className="size-4 text-muted-foreground" />
+              <span className="truncate">Participant preview</span>
+              <Check className="ml-auto size-3.5 text-foreground" />
+            </div>
+          ) : (
+            <div
+              role="menuitem"
+              aria-disabled
+              className="mx-1 mt-0.5 flex w-[calc(100%-0.5rem)] cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted-foreground/70"
+              title="Open a campaign first to preview the voter experience"
+            >
+              <Eye className="size-4" />
+              <span className="truncate">Participant preview</span>
+              <span className="ml-auto text-[10px] text-muted-foreground/70">
+                Open a campaign
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

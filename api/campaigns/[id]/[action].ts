@@ -3,6 +3,7 @@ import { activateCampaignWebHandler } from '../../../src/server/routes/campaigns
 import { closeCampaignWebHandler } from '../../../src/server/routes/campaigns/close.js';
 import { exportCampaignCsvWebHandler } from '../../../src/server/routes/campaigns/exportCsv.js';
 import { generateCampaignWebHandler } from '../../../src/server/routes/campaigns/generate.js';
+import { previewCampaignWebHandler } from '../../../src/server/routes/campaigns/preview.js';
 import { recomputeCampaignWebHandler } from '../../../src/server/routes/campaigns/recompute.js';
 
 const actionHandlers: Record<string, WebHandler> = {
@@ -10,6 +11,7 @@ const actionHandlers: Record<string, WebHandler> = {
   close: closeCampaignWebHandler,
   export: exportCampaignCsvWebHandler,
   generate: generateCampaignWebHandler,
+  preview: previewCampaignWebHandler,
   recompute: recomputeCampaignWebHandler,
 };
 

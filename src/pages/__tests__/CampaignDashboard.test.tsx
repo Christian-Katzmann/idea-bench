@@ -1,4 +1,4 @@
-import { screen, render, waitFor, within } from '@testing-library/react';
+import { screen, render, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -98,7 +98,15 @@ describe('CampaignDashboard', () => {
 
     renderCampaignDashboard();
 
-    // Open the destructive confirmation modal from the Actions panel.
+    // Close campaign lives under the Settings tab, not the default Overview.
+    // Base-UI's tab activation runs on mousedown/pointerdown, so fireEvent
+    // beats userEvent.click here — userEvent's pointer sequence doesn't
+    // always flip the tab in jsdom.
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /settings/i }),
+    );
+
+    // Open the destructive confirmation modal from the Actions list.
     await user.click(
       await screen.findByRole('button', { name: /close campaign/i }),
     );
@@ -117,8 +125,11 @@ describe('CampaignDashboard', () => {
     expect(confirmButton).toBeEnabled();
     await user.click(confirmButton);
 
+    // After the mutation, the refetched campaign status flips to completed
+    // and the header badge shows COMPLETED (toast isn't mounted in this
+    // minimal test harness; the badge is the stable signal).
     await waitFor(() => {
-      expect(screen.getByText(/closed/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
     });
     expect(document.title).toBe('Support QA · ModelArena');
   });
@@ -137,8 +148,15 @@ describe('CampaignDashboard', () => {
 
     renderCampaignDashboard();
 
+    // Export lives under the Settings tab.
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /settings/i }),
+    );
+
+    // ActionRow renders a row with the descriptive title + a short button
+    // label ("Export"). findByRole matches the button's accessible name.
     await user.click(
-      await screen.findByRole('button', { name: /export votes as csv/i }),
+      await screen.findByRole('button', { name: /^export$/i }),
     );
 
     expect(openSpy).toHaveBeenCalledWith(

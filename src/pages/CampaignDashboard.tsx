@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FileText,
   Info,
   Loader2,
   RefreshCw,
@@ -20,6 +21,12 @@ import { EntityIcon } from '../components/ui/entity-icon';
 import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { StatusBadge, type StatusState } from '../components/ui/status-badge';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../components/ui/tabs';
 import { toast } from '../components/ui/toast';
 import { ApiError, apiFetch, type CampaignDetail } from '../lib/api';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
@@ -203,10 +210,30 @@ export default function CampaignDashboard() {
         }
       />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Main column */}
-        <div className="flex flex-col gap-6">
-          {/* Stats strip */}
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="ratings">
+            Ratings
+            {sortedRatings.length > 0 && (
+              <span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/80">
+                {sortedRatings.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="prompts">
+            Prompts
+            {stats.promptCount > 0 && (
+              <span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/80">
+                {stats.promptCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        {/* Overview ---------------------------------------------------- */}
+        <TabsContent value="overview" className="flex flex-col gap-6">
           <div className="grid gap-3 sm:grid-cols-3">
             <StatTile label="Total votes" value={stats.totalVotes} />
             <StatTile
@@ -220,7 +247,85 @@ export default function CampaignDashboard() {
             />
           </div>
 
-          {/* Ratings table */}
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h3 className="font-heading text-sm font-semibold text-foreground">
+                Public voting
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Share this link with voters — they don't need an account.
+              </p>
+            </header>
+            <div className="flex flex-col gap-4 px-5 py-4">
+              <KeyValue label="Share link">
+                <code className="truncate font-mono text-xs text-foreground">
+                  {campaign.shareSlug}
+                </code>
+              </KeyValue>
+              <KeyValue label="Models">
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {stats.modelCount}
+                </span>
+              </KeyValue>
+              <KeyValue label="Prompts">
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {stats.promptCount}
+                </span>
+              </KeyValue>
+              <KeyValue label="Finished participants">
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {stats.finishedParticipants}
+                </span>
+              </KeyValue>
+              <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleCopyLink}
+                  disabled={campaign.status === 'draft'}
+                  className="sm:flex-1"
+                >
+                  {copied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copied ? 'Copied' : 'Copy share link'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={campaign.status === 'draft'}
+                  onClick={() =>
+                    window.open(
+                      `/vote/${campaign.shareSlug}`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="sm:flex-1"
+                >
+                  <ExternalLink className="size-3.5" />
+                  Open voting page
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex items-start gap-2.5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-warning">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <div>
+              <span className="font-medium text-foreground">
+                Preference ≠ correctness.
+              </span>{' '}
+              For high-stakes outputs, spot-check winners manually. Ratings
+              reflect blind preference, not verified accuracy.
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Ratings ----------------------------------------------------- */}
+        <TabsContent value="ratings" className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
               <div>
@@ -277,37 +382,56 @@ export default function CampaignDashboard() {
               </>
             )}
           </section>
+        </TabsContent>
 
-          {/* Preference ≠ correctness caveat — kept inline because it's
-              critical product messaging, not a passing toast. */}
-          <div className="flex items-start gap-2.5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-warning">
-            <Info className="mt-0.5 size-3.5 shrink-0" />
-            <div>
-              <span className="font-medium text-foreground">
-                Preference ≠ correctness.
-              </span>{' '}
-              For high-stakes outputs, spot-check winners manually. Ratings
-              reflect blind preference, not verified accuracy.
-            </div>
-          </div>
-        </div>
-
-        {/* Right column — share card + actions */}
-        <aside className="flex flex-col gap-4">
+        {/* Prompts ----------------------------------------------------- */}
+        <TabsContent value="prompts" className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <header className="border-b border-border px-5 py-3">
-              <h3 className="font-heading text-sm font-semibold text-foreground">
-                Public voting
-              </h3>
+              <h2 className="font-heading text-sm font-semibold text-foreground">
+                Prompts
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                The questions voters see. One tournament runs per prompt.
+              </p>
             </header>
-            <div className="flex flex-col gap-4 px-5 py-4">
+            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-highlight text-muted-foreground">
+                <FileText className="size-5" />
+              </div>
+              <div className="max-w-sm">
+                <div className="text-sm font-medium text-foreground">
+                  {stats.promptCount}{' '}
+                  {stats.promptCount === 1 ? 'prompt' : 'prompts'} configured
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Full prompt content isn't returned by{' '}
+                  <code className="font-mono text-[11px] text-foreground">
+                    /api/campaigns/:id
+                  </code>{' '}
+                  yet. Extending the detail endpoint to include prompt
+                  bodies will light up this view.
+                </p>
+              </div>
+            </div>
+          </section>
+        </TabsContent>
+
+        {/* Settings ---------------------------------------------------- */}
+        <TabsContent value="settings" className="flex flex-col gap-4">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h2 className="font-heading text-sm font-semibold text-foreground">
+                Status
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                When the campaign was created and closed, plus current
+                state.
+              </p>
+            </header>
+            <dl className="grid gap-3 px-5 py-4 sm:grid-cols-2">
               <KeyValue label="Status">
                 <StatusBadge state={campaign.status as StatusState} />
-              </KeyValue>
-              <KeyValue label="Share link">
-                <code className="truncate font-mono text-xs text-foreground">
-                  {campaign.shareSlug}
-                </code>
               </KeyValue>
               <KeyValue label="Created">
                 <span className="text-xs text-muted-foreground">
@@ -316,70 +440,65 @@ export default function CampaignDashboard() {
                   })}
                 </span>
               </KeyValue>
-              {campaign.closedAt && (
-                <KeyValue label="Closed">
-                  <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(campaign.closedAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </KeyValue>
-              )}
-              <div className="flex flex-col gap-2 pt-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleCopyLink}
-                  disabled={campaign.status === 'draft'}
-                  className="w-full"
-                >
-                  {copied ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                  {copied ? 'Copied' : 'Copy share link'}
-                </Button>
-              </div>
-            </div>
+              <KeyValue label="Closed">
+                <span className="text-xs text-muted-foreground">
+                  {campaign.closedAt
+                    ? formatDistanceToNow(new Date(campaign.closedAt), {
+                        addSuffix: true,
+                      })
+                    : '—'}
+                </span>
+              </KeyValue>
+              <KeyValue label="Share slug">
+                <code className="font-mono text-xs text-foreground">
+                  {campaign.shareSlug}
+                </code>
+              </KeyValue>
+            </dl>
           </section>
 
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <header className="border-b border-border px-5 py-3">
-              <h3 className="font-heading text-sm font-semibold text-foreground">
+              <h2 className="font-heading text-sm font-semibold text-foreground">
                 Actions
-              </h3>
+              </h2>
             </header>
-            <div className="flex flex-col gap-2 px-5 py-4">
-              <Button
-                variant="outline"
-                size="sm"
+            <ul className="divide-y divide-border/60">
+              <ActionRow
+                icon={<RefreshCw className="size-4" />}
+                title="Recompute ratings"
+                description="Run the Bradley-Terry solver + Fisher-info CIs over the full vote log."
+                actionLabel="Recompute"
+                pendingLabel="Recomputing…"
+                onClick={() => recompute.mutate()}
+                disabled={
+                  recompute.isPending || campaign.status === 'draft'
+                }
+                isPending={recompute.isPending}
+              />
+              <ActionRow
+                icon={<Download className="size-4" />}
+                title="Export votes as CSV"
+                description="Download every vote with participant, tournament, and prompt IDs."
+                actionLabel="Export"
                 onClick={handleExportCsv}
-                className="w-full justify-start"
-              >
-                <Download className="size-3.5" />
-                Export votes as CSV
-              </Button>
+              />
               {campaign.status === 'active' && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <ActionRow
+                  icon={<StopCircle className="size-4" />}
+                  title="Close campaign"
+                  description="Stop accepting new participants. Already-started voters can finish."
+                  actionLabel="Close campaign"
+                  pendingLabel="Closing…"
                   onClick={handleCloseCampaign}
                   disabled={closeCampaign.isPending}
-                  className="w-full justify-start"
-                >
-                  {closeCampaign.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <StopCircle className="size-3.5" />
-                  )}
-                  {closeCampaign.isPending ? 'Closing…' : 'Close campaign'}
-                </Button>
+                  isPending={closeCampaign.isPending}
+                />
               )}
-            </div>
+            </ul>
           </section>
-        </aside>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDestructive
         open={isCloseOpen}
@@ -416,53 +535,32 @@ function CampaignDashboardSkeleton() {
           <Skeleton className="h-3 w-64" />
         </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex flex-col gap-6">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm"
-              >
-                <Skeleton className="h-2.5 w-20" />
-                <Skeleton className="h-7 w-12" />
-              </div>
-            ))}
+      <div className="flex gap-6 border-b border-border">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-16" />
+        ))}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm"
+          >
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className="h-7 w-12" />
           </div>
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-7 w-24 rounded-md" />
-            </div>
-            <ul className="divide-y divide-border">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <li key={i} className="flex items-center gap-3 px-5 py-3">
-                  <Skeleton className="h-3 w-6" />
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="ml-auto h-3 w-12" />
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                </li>
-              ))}
-            </ul>
-          </div>
+        ))}
+      </div>
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-7 w-24 rounded-md" />
         </div>
-        <aside className="flex flex-col gap-4">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div
-              key={i}
-              className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-            >
-              <div className="border-b border-border px-5 py-3">
-                <Skeleton className="h-3 w-28" />
-              </div>
-              <div className="flex flex-col gap-3 px-5 py-4">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="mt-1 h-9 w-full rounded-full" />
-              </div>
-            </div>
-          ))}
-        </aside>
+        <div className="flex flex-col gap-3 px-5 py-5">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="mt-1 h-9 w-full rounded-full" />
+        </div>
       </div>
     </div>
   );
@@ -560,6 +658,53 @@ function RatingRow({
         <StabilityChip tier={rating.stability} />
       </div>
     </div>
+  );
+}
+
+function ActionRow({
+  icon,
+  title,
+  description,
+  actionLabel,
+  pendingLabel,
+  onClick,
+  disabled = false,
+  isPending = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  actionLabel: string;
+  pendingLabel?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  isPending?: boolean;
+}) {
+  return (
+    <li className="flex items-center gap-4 px-5 py-4">
+      <div
+        aria-hidden
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-highlight text-muted-foreground"
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-foreground">{title}</div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onClick}
+        disabled={disabled}
+        className="shrink-0"
+      >
+        {isPending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : null}
+        {isPending && pendingLabel ? pendingLabel : actionLabel}
+      </Button>
+    </li>
   );
 }
 

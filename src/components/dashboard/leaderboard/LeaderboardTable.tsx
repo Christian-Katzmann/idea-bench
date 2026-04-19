@@ -39,8 +39,12 @@ export function LeaderboardTable({
   const origin = Number.isFinite(minR) ? minR : 0;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="hidden grid-cols-[40px_minmax(0,1fr)_96px_minmax(200px,1.3fr)_56px_72px_104px] items-center gap-4 border-b border-border bg-surface-highlight px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:grid">
+    // On desktop the whole card is ONE grid so every row shares column
+    // tracks via subgrid — that's what guarantees ratings/votes/win-rate
+    // line up vertically regardless of row content. On mobile rows stack as
+    // plain blocks and each owns a local 3-col grid (see LeaderboardRow).
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm sm:grid sm:grid-cols-[40px_minmax(0,1fr)_96px_minmax(200px,1.3fr)_56px_72px_104px]">
+      <div className="col-span-full hidden grid-cols-subgrid items-center gap-4 border-b border-border bg-surface-highlight px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:grid">
         <div>#</div>
         <div>Model</div>
         <div className="text-right">Rating</div>

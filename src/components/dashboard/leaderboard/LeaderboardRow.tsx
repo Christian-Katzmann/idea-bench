@@ -51,7 +51,10 @@ export function LeaderboardRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'group grid grid-cols-[40px_1fr_auto] items-center gap-4 border-b border-border/60 px-4 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-highlight/40 sm:grid-cols-[40px_minmax(0,1fr)_96px_minmax(200px,1.3fr)_56px_72px_104px]',
+        'group grid grid-cols-[40px_1fr_auto] items-center gap-4 border-b border-border/60 px-4 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-highlight/40',
+        // Inherit the parent table's column tracks on desktop so numerics
+        // align vertically across rows. See LeaderboardTable.
+        'sm:col-span-full sm:grid-cols-subgrid',
         isDirectional && 'opacity-70',
         isUpdated && 'lb-just-updated',
       )}

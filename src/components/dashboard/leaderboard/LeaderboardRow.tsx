@@ -1,4 +1,3 @@
-import { ChevronRight } from 'lucide-react';
 import { EntityIcon } from '@/components/ui/entity-icon';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { DashboardLeaderboardRow } from '@/lib/api';
@@ -8,10 +7,14 @@ import { CiBar } from './CiBar';
 /**
  * One rendered rank in the leaderboard.
  *
- * Progressive disclosure: below the `sm` breakpoint we collapse the Votes and
- * Win rate columns into a stacked line under the model name and flatten the
- * grid so the CI bar keeps its full width. The grid template is synced to
- * `LeaderboardTable` — change both together if you alter column widths.
+ * Grid template is synced to `LeaderboardTable` — change both together if
+ * column widths move. Numeric cells (Rating, Votes, Win rate, Stability) are
+ * right-aligned so digits line up vertically across rows despite variable
+ * widths (1030 vs 986, 55.9% vs 41.0%, STABLE vs PRELIMINARY).
+ *
+ * Below the `sm` breakpoint, Votes/Win rate collapse into a stacked line
+ * under the model name and the CI bar takes the full content width on its
+ * own row.
  */
 export function LeaderboardRow({
   row,
@@ -48,7 +51,7 @@ export function LeaderboardRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'group grid grid-cols-[40px_1fr_auto] items-center gap-3 border-b border-border/60 px-4 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-highlight/60 sm:grid-cols-[40px_1.7fr_0.9fr_1.6fr_0.9fr_0.9fr_0.9fr]',
+        'group grid grid-cols-[40px_1fr_auto] items-center gap-4 border-b border-border/60 px-4 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-highlight/40 sm:grid-cols-[40px_minmax(0,1fr)_96px_minmax(200px,1.3fr)_56px_72px_104px]',
         isDirectional && 'opacity-70',
         isUpdated && 'lb-just-updated',
       )}
@@ -72,8 +75,8 @@ export function LeaderboardRow({
         </div>
       </div>
 
-      <div className="hidden font-mono text-sm tabular-nums sm:block">
-        {row.rating}
+      <div className="hidden text-right font-mono tabular-nums sm:block">
+        <span className="text-sm text-foreground">{row.rating}</span>
         {ciHalfWidth != null && (
           <span className="ml-1 text-[11px] text-muted-foreground">
             ±{ciHalfWidth}
@@ -82,23 +85,22 @@ export function LeaderboardRow({
       </div>
 
       <div
-        className="col-span-3 flex items-center gap-2 pt-1 sm:col-span-1 sm:pt-0"
+        className="col-span-3 flex items-center pt-1 sm:col-span-1 sm:pt-0"
         title={ciLabel}
       >
         <CiBar lo={lo} hi={hi} pt={pt} muted={isDirectional} title={ciLabel} />
       </div>
 
-      <div className="hidden font-mono text-xs tabular-nums text-muted-foreground sm:block">
+      <div className="hidden text-right font-mono text-xs tabular-nums text-muted-foreground sm:block">
         {votesLabel}
       </div>
 
-      <div className="hidden font-mono text-sm tabular-nums sm:block">
+      <div className="hidden text-right font-mono text-[13px] tabular-nums text-foreground sm:block">
         {winRateLabel}
       </div>
 
-      <div className="hidden items-center gap-1.5 sm:flex">
+      <div className="hidden justify-self-end sm:block">
         <StatusBadge state={row.stability} />
-        <ChevronRight className="size-3.5 text-muted-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
       </div>
     </button>
   );

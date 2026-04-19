@@ -40,14 +40,14 @@ export function LeaderboardTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="hidden grid-cols-[40px_1.7fr_0.9fr_1.6fr_0.9fr_0.9fr_0.9fr] items-center gap-3 border-b border-border bg-surface-highlight px-4 py-2.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+      <div className="hidden grid-cols-[40px_minmax(0,1fr)_96px_minmax(200px,1.3fr)_56px_72px_104px] items-center gap-4 border-b border-border bg-surface-highlight px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:grid">
         <div>#</div>
         <div>Model</div>
-        <div>Rating</div>
+        <div className="text-right">Rating</div>
         <div>95% CI</div>
-        <div>Votes</div>
-        <div>Win rate</div>
-        <div>Stability</div>
+        <div className="text-right">Votes</div>
+        <div className="text-right">Win rate</div>
+        <div className="text-right">Stability</div>
       </div>
 
       {rows.map((row, i) => {

@@ -14,6 +14,7 @@ import {
   StopCircle,
 } from 'lucide-react';
 import { AppShell } from '../components/layout/app-shell';
+import { ConfirmDestructive } from '../components/modals/confirm-destructive';
 import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { PageHeader } from '../components/ui/page-header';
@@ -30,6 +31,7 @@ export default function CampaignDashboard() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
+  const [isCloseOpen, setIsCloseOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
@@ -83,6 +85,7 @@ export default function CampaignDashboard() {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['activity'] });
+      setIsCloseOpen(false);
       toast.success('Campaign closed', {
         details: 'New participants can no longer start voting.',
       });
@@ -122,14 +125,7 @@ export default function CampaignDashboard() {
   };
 
   const handleCloseCampaign = () => {
-    if (
-      !window.confirm(
-        'Close this campaign? Voting will stop immediately for new participants.',
-      )
-    ) {
-      return;
-    }
-    closeCampaign.mutate();
+    setIsCloseOpen(true);
   };
 
   const handleExportCsv = () => {
@@ -384,6 +380,24 @@ export default function CampaignDashboard() {
           </section>
         </aside>
       </div>
+
+      <ConfirmDestructive
+        open={isCloseOpen}
+        onOpenChange={setIsCloseOpen}
+        title="Close campaign"
+        description={
+          <>
+            New participants will no longer be able to start voting on{' '}
+            <span className="font-medium text-foreground">{campaign.name}</span>.
+            Participants already in progress can finish, and you can still
+            recompute ratings and export votes afterward.
+          </>
+        }
+        confirmWord={campaign.name}
+        confirmLabel="Close campaign"
+        isPending={closeCampaign.isPending}
+        onConfirm={() => closeCampaign.mutate()}
+      />
     </AppShell>
   );
 }

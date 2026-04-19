@@ -1,4 +1,4 @@
-import { screen, render, waitFor } from '@testing-library/react';
+import { screen, render, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -96,13 +96,26 @@ describe('CampaignDashboard', () => {
       },
     ]);
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     renderCampaignDashboard();
 
+    // Open the destructive confirmation modal from the Actions panel.
     await user.click(
       await screen.findByRole('button', { name: /close campaign/i }),
     );
+
+    // Modal pops with a typed-name guard; confirm is disabled until match.
+    const dialog = await screen.findByRole('dialog');
+    const confirmButton = within(dialog).getByRole('button', {
+      name: /close campaign/i,
+    });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(
+      within(dialog).getByRole('textbox'),
+      'Support QA',
+    );
+    expect(confirmButton).toBeEnabled();
+    await user.click(confirmButton);
 
     await waitFor(() => {
       expect(screen.getByText(/closed/i)).toBeInTheDocument();

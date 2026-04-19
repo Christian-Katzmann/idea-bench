@@ -5,10 +5,12 @@
  * than three.
  *
  * Each GET response is cached in the Vercel Runtime Cache (per-region
- * KV, shared across Fluid Compute instances) with a 30 s TTL. Entries
+ * KV, shared across Fluid Compute instances) with a 5 min TTL. Entries
  * are tagged with `snapshot` so a mutation elsewhere in the app can
  * bust them globally via `invalidateAnalyticsSnapshot()` —
- * see `src/server/models/library.ts`.
+ * see `src/server/models/library.ts`. The long TTL is safe because
+ * mutations always invalidate via tag; staleness is bounded by the
+ * library.ts module-level L1 cache (30 s) on non-mutating instances.
  *
  * Response bodies are cached as already-serialized JSON strings to
  * avoid Date-object round-trip issues (Runtime Cache uses JSON
@@ -134,7 +136,7 @@ const operatorWebHandler = async (request: Request): Promise<Response> => {
     // Fire-and-forget — the response is already being returned to the
     // client. A failed set() just means the next request pays the same
     // DB cost; no correctness impact.
-    rc.set(cacheKey, serialized, { ttl: 30, tags: ['snapshot'] }).catch(
+    rc.set(cacheKey, serialized, { ttl: 300, tags: ['snapshot'] }).catch(
       () => {},
     );
   }

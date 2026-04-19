@@ -111,6 +111,25 @@
     <p class="footer">Participant voting links don't require this.</p>
   </main>
   <script>
+    // Pre-warm: while the user reads the form and types their password,
+    // fire fetches at the two endpoints they're most likely to hit right
+    // after login (OperatorHome → /api/campaigns, OperatorDashboard →
+    // /api/operator/dashboard). Without a cookie the server returns 401
+    // and we discard it — but the Vercel Function is now warm so the
+    // post-login round-trip skips the cold start. If the user still has
+    // a valid operator_session cookie, the Runtime Cache gets populated
+    // and the SPA's first data fetch is a hit.
+    (function () {
+      var warm = function (url) {
+        try {
+          fetch(url, { credentials: 'same-origin', cache: 'no-store' }).catch(function () {});
+        } catch (e) { /* ignore */ }
+      };
+      warm('/api/campaigns');
+      warm('/api/operator/dashboard');
+    })();
+  </script>
+  <script>
     (function () {
       var f = document.getElementById('f');
       var pw = document.getElementById('pw');

@@ -50,7 +50,7 @@ const dashboardFixture = {
 
 describe('OperatorDashboard', () => {
   it('renders KPI cards, recent campaigns, and the cross-campaign leaderboard', async () => {
-    installMockFetch([{ url: '/api/dashboard', body: dashboardFixture }]);
+    installMockFetch([{ url: '/api/operator/dashboard', body: dashboardFixture }]);
 
     renderWithRouter(<OperatorDashboard />);
 

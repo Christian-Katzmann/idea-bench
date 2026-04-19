@@ -42,7 +42,7 @@ const settingsFixture = {
 
 describe('Operator shell pages', () => {
   it('renders activity sections and recent events', async () => {
-    installMockFetch([{ url: '/api/activity', body: activityFixture }]);
+    installMockFetch([{ url: '/api/operator/activity', body: activityFixture }]);
 
     renderWithRouter(<TeamActivity />);
 

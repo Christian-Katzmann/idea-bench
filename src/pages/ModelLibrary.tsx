@@ -38,7 +38,7 @@ import { cn } from '../lib/utils';
 function buildLibraryUrl(search: string, status: string, sort: string) {
   const params = new URLSearchParams({ status, sort });
   if (search.trim()) params.set('search', search.trim());
-  return `/api/models?${params.toString()}`;
+  return `/api/operator/models?${params.toString()}`;
 }
 
 function availabilityFromRow(

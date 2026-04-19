@@ -61,7 +61,7 @@ const modelsFixture = {
 describe('CreateCampaign', () => {
   it('only shows enabled non-legacy models in the campaign model selector', async () => {
     const user = userEvent.setup();
-    installMockFetch([{ url: '/api/models?status=enabled&sort=name', body: modelsFixture }]);
+    installMockFetch([{ url: '/api/operator/models?status=enabled&sort=name', body: modelsFixture }]);
 
     renderWithRouter(<CreateCampaign />);
 

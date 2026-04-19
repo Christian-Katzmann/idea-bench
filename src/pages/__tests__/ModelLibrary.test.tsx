@@ -45,7 +45,7 @@ describe('ModelLibrary', () => {
     let modelReads = 0;
     installMockFetch([
       {
-        url: '/api/models?status=all&sort=usage',
+        url: '/api/operator/models?status=all&sort=usage',
         body: () => {
           modelReads += 1;
           return modelReads > 1

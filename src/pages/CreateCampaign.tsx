@@ -102,7 +102,7 @@ export default function CreateCampaign() {
   } = useQuery({
     queryKey: ['models', 'enabled', 'name', 'campaign-create'],
     queryFn: () =>
-      apiFetch<ModelLibraryData>('/api/models?status=enabled&sort=name'),
+      apiFetch<ModelLibraryData>('/api/operator/models?status=enabled&sort=name'),
   });
 
   useEffect(() => {

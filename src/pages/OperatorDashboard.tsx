@@ -48,7 +48,7 @@ export default function OperatorDashboard() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => apiFetch<DashboardSummary>('/api/dashboard'),
+    queryFn: () => apiFetch<DashboardSummary>('/api/operator/dashboard'),
   });
 
   if (error instanceof ApiError && error.status === 401) {

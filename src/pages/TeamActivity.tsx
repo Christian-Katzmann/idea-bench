@@ -46,7 +46,7 @@ export default function TeamActivity() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['activity'],
-    queryFn: () => apiFetch<ActivityFeed>('/api/activity'),
+    queryFn: () => apiFetch<ActivityFeed>('/api/operator/activity'),
   });
 
   if (error instanceof ApiError && error.status === 401) {

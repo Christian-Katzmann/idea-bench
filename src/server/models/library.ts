@@ -491,6 +491,26 @@ let cachedSnapshot:
 
 export function invalidateAnalyticsSnapshot(): void {
   cachedSnapshot = null;
+  // L2 bust: expire the 'snapshot' tag on Vercel Runtime Cache so any
+  // /api/operator/:kind response cached in this region (and others,
+  // propagating globally in ≤300ms) is invalidated. Fire-and-forget —
+  // this function remains synchronous so existing callers don't need
+  // to await. Falls back silently in dev/tests where Runtime Cache is
+  // unavailable.
+  void (async () => {
+    try {
+      const mod = await import('@vercel/functions');
+      const getCache = (mod as { getCache?: unknown }).getCache;
+      if (typeof getCache !== 'function') return;
+      const cache = (getCache as (opts: { namespace: string }) => {
+        expireTag?: (tag: string) => Promise<void>;
+      })({ namespace: 'modelarena' });
+      await cache.expireTag?.('snapshot');
+    } catch {
+      /* swallow — invalidation failure is tolerable; the 30s TTL on
+         Runtime Cache entries is the upper bound on staleness. */
+    }
+  })();
 }
 
 export async function loadAnalyticsSnapshot(

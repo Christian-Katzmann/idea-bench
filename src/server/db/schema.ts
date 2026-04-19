@@ -33,6 +33,7 @@
  * Sample-size thresholds (hide/preliminary/stable) live as code
  * constants, not schema.
  */
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   pgEnum,
@@ -87,21 +88,27 @@ export const bracketPositionEnum = pgEnum('bracket_position', [
   'b5',
 ]);
 
-export const campaigns = pgTable('campaigns', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  shareSlug: text('share_slug').notNull().unique(),
-  name: text('name').notNull(),
-  description: text('description').notNull().default(''),
-  categories: text('categories').array().notNull().default([]),
-  status: campaignStatusEnum('status').notNull().default('draft'),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  closedAt: timestamp('closed_at', { withTimezone: true }),
-});
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    shareSlug: text('share_slug').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    categories: text('categories').array().notNull().default([]),
+    status: campaignStatusEnum('status').notNull().default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  // The list endpoint sorts by createdAt DESC; index that direction
+  // explicitly so postgres uses it without an extra sort step.
+  (t) => [index('campaigns_created_at').on(sql`${t.createdAt} desc`)],
+);
 
 export const prompts = pgTable(
   'prompts',
@@ -189,7 +196,12 @@ export const participants = pgTable(
       .defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
   },
-  (t) => [uniqueIndex('uniq_cookie_campaign').on(t.cookieId, t.campaignId)],
+  (t) => [
+    uniqueIndex('uniq_cookie_campaign').on(t.cookieId, t.campaignId),
+    // Supports the finishedParticipants count in buildCampaignDetail
+    // (WHERE campaign_id = ? AND finished_at IS NOT NULL).
+    index('participants_campaign_finished').on(t.campaignId, t.finishedAt),
+  ],
 );
 
 /**

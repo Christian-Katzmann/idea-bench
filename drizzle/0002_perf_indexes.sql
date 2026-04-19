@@ -1,0 +1,2 @@
+CREATE INDEX "campaigns_created_at" ON "campaigns" USING btree ("created_at" desc);--> statement-breakpoint
+CREATE INDEX "participants_campaign_finished" ON "participants" USING btree ("campaign_id","finished_at");

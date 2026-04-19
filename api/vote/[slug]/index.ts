@@ -39,6 +39,12 @@ export default toVercelHandler(withParticipant(async (request, ctx) => {
         .from(schema.campaignModels)
         .where(eq(schema.campaignModels.campaignId, campaign.id)),
     ]);
+    // Public landing data — same payload for every visitor of a slug.
+    // CDN absorbs repeat hits during the s-maxage window. SWR keeps
+    // serving stale-but-fresh while a background refetch runs.
+    // Vercel will skip caching first-time visits anyway because the
+    // withParticipant wrapper attaches Set-Cookie when minting a fresh
+    // participant_id; cookie-bearing repeat visits get the CDN HIT.
     return json(
       {
         shareSlug: campaign.shareSlug,
@@ -50,6 +56,7 @@ export default toVercelHandler(withParticipant(async (request, ctx) => {
         modelCount: modelCount[0]?.n ?? 0,
       },
       200,
+      { 'cache-control': 'public, s-maxage=30, stale-while-revalidate=60' },
     );
   }
 
@@ -138,9 +145,13 @@ function extractSlug(url: URL): string | null {
   return null;
 }
 
-function json(body: unknown, status: number): Response {
+function json(
+  body: unknown,
+  status: number,
+  extraHeaders?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...extraHeaders },
   });
 }

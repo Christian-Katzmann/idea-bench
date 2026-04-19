@@ -15,6 +15,13 @@
       "when": 1776412239086,
       "tag": "0001_model_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776610501525,
+      "tag": "0002_perf_indexes",
+      "breakpoints": true
     }
   ]
 }

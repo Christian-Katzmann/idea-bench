@@ -19,9 +19,12 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          // Split heavy vendors into long-lived chunks so app-code edits
-          // don't invalidate them across deploys. `motion` is intentionally
-          // omitted — it should follow the (lazy-loaded) routes that import it.
+          // Split only the truly cross-route heavy vendors into long-lived
+          // chunks. `@base-ui` / `@floating-ui` used to live in a single
+          // vendor-baseui chunk; that forced every route to pay for Dialog +
+          // Select even though those primitives are only used on a minority
+          // of pages. Omitting them lets Rollup co-locate each primitive with
+          // its consuming route chunk, trimming the initial bundle.
           manualChunks(id) {
             if (
               id.includes('node_modules/react/') ||
@@ -30,9 +33,6 @@ export default defineConfig(() => {
               id.includes('node_modules/scheduler/')
             ) {
               return 'vendor-react';
-            }
-            if (id.includes('node_modules/@base-ui') || id.includes('node_modules/@floating-ui')) {
-              return 'vendor-baseui';
             }
             if (id.includes('node_modules/@tanstack')) {
               return 'vendor-tanstack';

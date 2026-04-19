@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run deploy:check && npm run build",
   "rewrites": [
+    { "source": "/login", "destination": "/login.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

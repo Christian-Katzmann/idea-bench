@@ -6,7 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { AlertTriangle, HelpCircle, Loader2, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { ParticipantShell } from '../components/layout/participant-shell';
 import { Button } from '../components/ui/button';
 import { KeyHint } from '../components/ui/key-hint';

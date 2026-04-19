@@ -57,21 +57,29 @@ export async function buildDashboardSummary(
     sort: 'winRate',
   });
 
-  const voteCountByCampaignId = new Map<string, number>();
-  const participantCountByCampaignId = new Map<string, number>();
-  for (const vote of snapshot.votes) {
-    if (!vote.campaignId) continue;
-    voteCountByCampaignId.set(
-      vote.campaignId,
-      (voteCountByCampaignId.get(vote.campaignId) ?? 0) + 1,
-    );
-  }
-  for (const participant of snapshot.participants ?? []) {
-    participantCountByCampaignId.set(
-      participant.campaignId,
-      (participantCountByCampaignId.get(participant.campaignId) ?? 0) + 1,
-    );
-  }
+  // Prefer SQL-aggregated counts when the snapshot was loaded from the
+  // database (production); fall back to scanning raw arrays for test
+  // mocks that don't populate the aggregates.
+  const voteCountByCampaignId =
+    snapshot.voteAggregates?.countByCampaignId ??
+    (() => {
+      const m = new Map<string, number>();
+      for (const vote of snapshot.votes) {
+        if (!vote.campaignId) continue;
+        m.set(vote.campaignId, (m.get(vote.campaignId) ?? 0) + 1);
+      }
+      return m;
+    })();
+
+  const participantCountByCampaignId =
+    snapshot.participantAggregates?.countByCampaignId ??
+    (() => {
+      const m = new Map<string, number>();
+      for (const participant of snapshot.participants ?? []) {
+        m.set(participant.campaignId, (m.get(participant.campaignId) ?? 0) + 1);
+      }
+      return m;
+    })();
 
   const promptsByCampaignId = new Map<string, number>();
   for (const prompt of snapshot.prompts ?? []) {
@@ -89,23 +97,25 @@ export async function buildDashboardSummary(
     );
   }
 
-  const successfulGenerationCountByCampaignId = new Map<string, number>();
-  const campaignIdByCampaignModelId = new Map(
-    snapshot.campaignModels.map((campaignModel) => [
-      campaignModel.id,
-      campaignModel.campaignId,
-    ]),
-  );
-  for (const generation of snapshot.generations) {
-    const campaignId = campaignIdByCampaignModelId.get(generation.campaignModelId);
-    if (!campaignId) continue;
-    if (generation.output != null && generation.error == null) {
-      successfulGenerationCountByCampaignId.set(
-        campaignId,
-        (successfulGenerationCountByCampaignId.get(campaignId) ?? 0) + 1,
+  const successfulGenerationCountByCampaignId =
+    snapshot.generationAggregates?.successCountByCampaignId ??
+    (() => {
+      const m = new Map<string, number>();
+      const campaignIdByCampaignModelId = new Map(
+        snapshot.campaignModels.map((campaignModel) => [
+          campaignModel.id,
+          campaignModel.campaignId,
+        ]),
       );
-    }
-  }
+      for (const generation of snapshot.generations) {
+        const campaignId = campaignIdByCampaignModelId.get(generation.campaignModelId);
+        if (!campaignId) continue;
+        if (generation.output != null && generation.error == null) {
+          m.set(campaignId, (m.get(campaignId) ?? 0) + 1);
+        }
+      }
+      return m;
+    })();
 
   const recentCampaigns = [...snapshot.campaigns]
     .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
@@ -176,12 +186,21 @@ export async function buildDashboardSummary(
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 8);
 
+  const totalVotes =
+    snapshot.voteAggregates?.totalVotes ?? snapshot.votes.length;
+  const uniqueParticipants = snapshot.participantAggregates
+    ? Array.from(snapshot.participantAggregates.countByCampaignId.values()).reduce(
+        (sum, n) => sum + n,
+        0,
+      )
+    : (snapshot.participants ?? []).length;
+
   return {
     kpis: {
       activeCampaigns: snapshot.campaigns.filter((campaign) => campaign.status === 'active').length,
       draftCampaigns: snapshot.campaigns.filter((campaign) => campaign.status === 'draft').length,
-      totalVotes: snapshot.votes.length,
-      uniqueParticipants: (snapshot.participants ?? []).length,
+      totalVotes,
+      uniqueParticipants,
     },
     recentCampaigns,
     leaderboard: library.rows.slice(0, 5).map((row) => ({

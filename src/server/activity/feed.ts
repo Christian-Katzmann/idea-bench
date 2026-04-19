@@ -48,6 +48,14 @@ function isDatabase(input: ActivityFeedInput): input is ReturnType<typeof getDb>
   return typeof input === 'object' && input !== null && '$withAuth' in input;
 }
 
+function extractTotalVotes(
+  snapshot: ActivitySnapshot | AnalyticsSnapshot,
+): number {
+  const aggregates = (snapshot as AnalyticsSnapshot).voteAggregates;
+  if (aggregates) return aggregates.totalVotes;
+  return snapshot.votes.length;
+}
+
 export async function buildActivityFeed(
   input: ActivityFeedInput,
 ): Promise<ActivityFeed> {
@@ -89,7 +97,7 @@ export async function buildActivityFeed(
     summary: {
       activeCampaigns: snapshot.campaigns.filter((campaign) => campaign.status === 'active').length,
       completedCampaigns: snapshot.campaigns.filter((campaign) => campaign.status === 'completed').length,
-      totalVotes: snapshot.votes.length,
+      totalVotes: extractTotalVotes(snapshot),
     },
     events,
     topCampaigns: [...snapshot.campaigns]

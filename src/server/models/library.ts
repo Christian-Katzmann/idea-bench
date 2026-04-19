@@ -1,7 +1,34 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { syncModelRegistry, type RegistryRow } from './registry.js';
+
+/**
+ * Pre-aggregated snapshot fields so consumers don't have to scan large
+ * raw tables in JS. Computed via SQL GROUP BY in `computeAnalyticsSnapshot`.
+ *
+ * Consumers must still tolerate snapshots without these fields — the
+ * existing test mocks construct snapshots from raw arrays, and a
+ * fallback path iterates those.
+ */
+export interface SnapshotVoteAggregates {
+  totalVotes: number;
+  countByCampaignId: Map<string, number>;
+  /** Per-provider model wins/losses/ties summed across both A and B sides. */
+  performanceByProviderModelId: Map<
+    string,
+    { wins: number; losses: number; ties: number }
+  >;
+}
+
+export interface SnapshotGenerationAggregates {
+  /** Generations with output IS NOT NULL AND error IS NULL, per campaign. */
+  successCountByCampaignId: Map<string, number>;
+}
+
+export interface SnapshotParticipantAggregates {
+  countByCampaignId: Map<string, number>;
+}
 
 export type CampaignStatus = 'draft' | 'active' | 'completed';
 
@@ -56,6 +83,13 @@ export interface AnalyticsSnapshot {
   }>;
   votes: ActivityVoteRecord[];
   ratings: ActivityRatingRecord[];
+  /** Optional pre-aggregated counts. When present, consumers should
+   *  prefer these over scanning the raw arrays — production loaders
+   *  populate them and skip raw fetches for `votes`, `generations`,
+   *  and `participants`. Test fixtures may omit them. */
+  voteAggregates?: SnapshotVoteAggregates;
+  generationAggregates?: SnapshotGenerationAggregates;
+  participantAggregates?: SnapshotParticipantAggregates;
 }
 
 export type ModelLibraryStatusFilter =
@@ -142,11 +176,15 @@ export function summarizeModelLibrary(
   const campaignModelById = new Map(
     snapshot.campaignModels.map((campaignModel) => [campaignModel.id, campaignModel]),
   );
+  // Only built when the snapshot lacks pre-aggregated performance data
+  // (e.g., test mocks). Production skips this — aggregates come from SQL.
   const generationToProviderModelId = new Map<string, string>();
-  for (const generation of snapshot.generations) {
-    const campaignModel = campaignModelById.get(generation.campaignModelId);
-    if (campaignModel) {
-      generationToProviderModelId.set(generation.id, campaignModel.providerModelId);
+  if (!snapshot.voteAggregates) {
+    for (const generation of snapshot.generations) {
+      const campaignModel = campaignModelById.get(generation.campaignModelId);
+      if (campaignModel) {
+        generationToProviderModelId.set(generation.id, campaignModel.providerModelId);
+      }
     }
   }
 
@@ -219,23 +257,36 @@ export function summarizeModelLibrary(
     recordByProviderModelId.set(campaignModel.providerModelId, bucket);
   }
 
-  for (const vote of snapshot.votes) {
-    const providerA = generationToProviderModelId.get(vote.generationAId);
-    const providerB = generationToProviderModelId.get(vote.generationBId);
-    if (!providerA || !providerB) continue;
-    const bucketA = recordByProviderModelId.get(providerA);
-    const bucketB = recordByProviderModelId.get(providerB);
-    if (!bucketA || !bucketB) continue;
+  if (snapshot.voteAggregates) {
+    // Fast path: pre-aggregated wins/losses/ties per provider — folded
+    // into the existing per-provider buckets so footprint, ratings,
+    // etc. flow through unchanged.
+    for (const [providerModelId, perf] of snapshot.voteAggregates.performanceByProviderModelId) {
+      const bucket = recordByProviderModelId.get(providerModelId);
+      if (!bucket) continue;
+      bucket.wins += perf.wins;
+      bucket.losses += perf.losses;
+      bucket.ties += perf.ties;
+    }
+  } else {
+    for (const vote of snapshot.votes) {
+      const providerA = generationToProviderModelId.get(vote.generationAId);
+      const providerB = generationToProviderModelId.get(vote.generationBId);
+      if (!providerA || !providerB) continue;
+      const bucketA = recordByProviderModelId.get(providerA);
+      const bucketB = recordByProviderModelId.get(providerB);
+      if (!bucketA || !bucketB) continue;
 
-    if (vote.winner === 'A') {
-      bucketA.wins += 1;
-      bucketB.losses += 1;
-    } else if (vote.winner === 'B') {
-      bucketB.wins += 1;
-      bucketA.losses += 1;
-    } else {
-      bucketA.ties += 1;
-      bucketB.ties += 1;
+      if (vote.winner === 'A') {
+        bucketA.wins += 1;
+        bucketB.losses += 1;
+      } else if (vote.winner === 'B') {
+        bucketB.wins += 1;
+        bucketA.losses += 1;
+      } else {
+        bucketA.ties += 1;
+        bucketB.ties += 1;
+      }
     }
   }
 
@@ -454,23 +505,153 @@ export async function loadAnalyticsSnapshot(
   return snapshot;
 }
 
+/**
+ * Pulls vote aggregates without fetching the raw votes table.
+ *
+ * Three queries in parallel:
+ *   1. votes-by-campaign count (for dashboard KPIs and recentCampaigns)
+ *   2. wins/losses/ties grouped by provider model when vote.A is provider's
+ *   3. wins/losses/ties grouped by provider model when vote.B is provider's
+ *
+ * Result rows are tiny (~providers × 4 winners). Avoids loading a vote
+ * table that grows linearly with traffic.
+ */
+async function loadVoteAggregates(
+  db: ReturnType<typeof getDb>,
+): Promise<SnapshotVoteAggregates> {
+  const [byCampaign, asASide, asBSide] = await Promise.all([
+    db
+      .select({ campaignId: schema.votes.campaignId, n: count() })
+      .from(schema.votes)
+      .groupBy(schema.votes.campaignId),
+    db
+      .select({
+        providerModelId: schema.campaignModels.providerModelId,
+        winner: schema.votes.winner,
+        n: count(),
+      })
+      .from(schema.votes)
+      .innerJoin(
+        schema.generations,
+        eq(schema.votes.generationAId, schema.generations.id),
+      )
+      .innerJoin(
+        schema.campaignModels,
+        eq(schema.generations.campaignModelId, schema.campaignModels.id),
+      )
+      .groupBy(schema.campaignModels.providerModelId, schema.votes.winner),
+    db
+      .select({
+        providerModelId: schema.campaignModels.providerModelId,
+        winner: schema.votes.winner,
+        n: count(),
+      })
+      .from(schema.votes)
+      .innerJoin(
+        schema.generations,
+        eq(schema.votes.generationBId, schema.generations.id),
+      )
+      .innerJoin(
+        schema.campaignModels,
+        eq(schema.generations.campaignModelId, schema.campaignModels.id),
+      )
+      .groupBy(schema.campaignModels.providerModelId, schema.votes.winner),
+  ]);
+
+  const countByCampaignId = new Map<string, number>();
+  let totalVotes = 0;
+  for (const row of byCampaign) {
+    if (!row.campaignId) continue;
+    countByCampaignId.set(row.campaignId, row.n);
+    totalVotes += row.n;
+  }
+
+  const performanceByProviderModelId = new Map<
+    string,
+    { wins: number; losses: number; ties: number }
+  >();
+  function bump(provider: string, key: 'wins' | 'losses' | 'ties', n: number) {
+    const bucket =
+      performanceByProviderModelId.get(provider) ?? { wins: 0, losses: 0, ties: 0 };
+    bucket[key] += n;
+    performanceByProviderModelId.set(provider, bucket);
+  }
+  for (const row of asASide) {
+    if (row.winner === 'A') bump(row.providerModelId, 'wins', row.n);
+    else if (row.winner === 'B') bump(row.providerModelId, 'losses', row.n);
+    else bump(row.providerModelId, 'ties', row.n);
+  }
+  for (const row of asBSide) {
+    if (row.winner === 'B') bump(row.providerModelId, 'wins', row.n);
+    else if (row.winner === 'A') bump(row.providerModelId, 'losses', row.n);
+    else bump(row.providerModelId, 'ties', row.n);
+  }
+
+  return { totalVotes, countByCampaignId, performanceByProviderModelId };
+}
+
+async function loadGenerationAggregates(
+  db: ReturnType<typeof getDb>,
+): Promise<SnapshotGenerationAggregates> {
+  const rows = await db
+    .select({ campaignId: schema.campaignModels.campaignId, n: count() })
+    .from(schema.generations)
+    .innerJoin(
+      schema.campaignModels,
+      eq(schema.generations.campaignModelId, schema.campaignModels.id),
+    )
+    .where(
+      and(isNotNull(schema.generations.output), isNull(schema.generations.error)),
+    )
+    .groupBy(schema.campaignModels.campaignId);
+
+  const successCountByCampaignId = new Map<string, number>();
+  for (const row of rows) successCountByCampaignId.set(row.campaignId, row.n);
+  return { successCountByCampaignId };
+}
+
+async function loadParticipantAggregates(
+  db: ReturnType<typeof getDb>,
+): Promise<SnapshotParticipantAggregates> {
+  const rows = await db
+    .select({ campaignId: schema.participants.campaignId, n: count() })
+    .from(schema.participants)
+    .groupBy(schema.participants.campaignId);
+  const countByCampaignId = new Map<string, number>();
+  for (const row of rows) countByCampaignId.set(row.campaignId, row.n);
+  return { countByCampaignId };
+}
+
 async function computeAnalyticsSnapshot(
   db: ReturnType<typeof getDb>,
 ): Promise<AnalyticsSnapshot> {
   const registry = await syncModelRegistry(db);
 
-  const [campaigns, prompts, participants, campaignModels, generations, votes, ratings] =
-    await Promise.all([
+  const [
+    campaigns,
+    prompts,
+    finishedParticipants,
+    campaignModels,
+    ratings,
+    voteAggregates,
+    generationAggregates,
+    participantAggregates,
+  ] = await Promise.all([
       db.select().from(schema.campaigns),
       db.select({ id: schema.prompts.id, campaignId: schema.prompts.campaignId }).from(schema.prompts),
+      // Activity feed needs recent participant_finished events. Only
+      // finished participants matter for that — total counts come from
+      // participantAggregates below.
       db
         .select({
           id: schema.participants.id,
           campaignId: schema.participants.campaignId,
-          startedAt: schema.participants.startedAt,
           finishedAt: schema.participants.finishedAt,
         })
-        .from(schema.participants),
+        .from(schema.participants)
+        .where(isNotNull(schema.participants.finishedAt))
+        .orderBy(desc(schema.participants.finishedAt))
+        .limit(50),
       db
         .select({
           id: schema.campaignModels.id,
@@ -479,25 +660,6 @@ async function computeAnalyticsSnapshot(
           displayName: schema.campaignModels.displayName,
         })
         .from(schema.campaignModels),
-      db
-        .select({
-          id: schema.generations.id,
-          campaignModelId: schema.generations.campaignModelId,
-          promptId: schema.generations.promptId,
-          output: schema.generations.output,
-          error: schema.generations.error,
-        })
-        .from(schema.generations),
-      db
-        .select({
-          id: schema.votes.id,
-          campaignId: schema.votes.campaignId,
-          generationAId: schema.votes.generationAId,
-          generationBId: schema.votes.generationBId,
-          winner: schema.votes.winner,
-          createdAt: schema.votes.createdAt,
-        })
-        .from(schema.votes),
       db
         .select({
           id: schema.ratings.id,
@@ -511,6 +673,9 @@ async function computeAnalyticsSnapshot(
         .from(schema.ratings)
         .where(eq(schema.ratings.category, 'overall'))
         .orderBy(desc(schema.ratings.computedAt)),
+      loadVoteAggregates(db),
+      loadGenerationAggregates(db),
+      loadParticipantAggregates(db),
     ]);
 
   return {
@@ -524,10 +689,18 @@ async function computeAnalyticsSnapshot(
       createdAt: campaign.createdAt,
     })),
     prompts,
-    participants,
+    // Raw arrays for `votes` and `generations` are no longer fetched —
+    // consumers read the aggregates below. Empty arrays preserve shape
+    // for any code path or test that still inspects them. `participants`
+    // is narrowed to only the finished ones, which the activity feed
+    // needs for its participant_finished events.
+    participants: finishedParticipants,
     campaignModels,
-    generations,
-    votes,
+    generations: [],
+    votes: [],
     ratings,
+    voteAggregates,
+    generationAggregates,
+    participantAggregates,
   };
 }

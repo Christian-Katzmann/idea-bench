@@ -83,8 +83,8 @@ export default function OperatorHome() {
         )}
 
         {!isLoading && campaigns.length > 0 && (
-          <div className="scanline-bg relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <ul className="relative z-[1] divide-y divide-border">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <ul className="divide-y divide-border">
               {campaigns.map((campaign) => (
                 <li key={campaign.id}>
                   <CampaignRow campaign={campaign} />

@@ -14,6 +14,7 @@ import { EmptyState } from '../components/ui/empty-state';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Input } from '../components/ui/input';
+import { toast } from '../components/ui/toast';
 import {
   Select,
   SelectContent,
@@ -120,9 +121,12 @@ export default function ModelLibrary() {
       });
       return { previous };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       context?.previous.forEach(([key, value]) => {
         queryClient.setQueryData(key, value);
+      });
+      toast.error('Model update failed', {
+        details: error instanceof Error ? error.message : String(error),
       });
     },
     onSettled: () => {

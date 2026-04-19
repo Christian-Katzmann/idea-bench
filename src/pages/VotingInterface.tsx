@@ -1,11 +1,11 @@
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, HelpCircle, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ParticipantShell } from '../components/layout/participant-shell';
 import { Button } from '../components/ui/button';
@@ -180,6 +180,7 @@ export default function VotingInterface() {
               {battle.progress.tournamentsTotal}
             </span>
           </div>
+          <ShortcutsHelp />
           <button
             type="button"
             onClick={() => navigate(`/vote/${slug}/results`)}
@@ -334,6 +335,99 @@ function OutputColumn({
   );
 }
 
+function ShortcutsHelp() {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click. Also listen for `?` to toggle — matches
+  // GitHub / GitLab convention for keyboard-shortcut help.
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setIsOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        // Don't toggle while typing in a field — participants could have
+        // a `?` in an email or a future comment input.
+        if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
+          return;
+        }
+        e.preventDefault();
+        setIsOpen((v) => !v);
+      } else if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        aria-label="Keyboard shortcuts"
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        title="Keyboard shortcuts (press ?)"
+        className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-highlight hover:text-foreground"
+      >
+        <HelpCircle className="size-4" />
+      </button>
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          className="absolute right-0 top-full z-20 mt-1 w-64 origin-top-right animate-in fade-in-0 slide-in-from-top-1 overflow-hidden rounded-lg border border-border bg-card shadow-xl duration-150"
+        >
+          <div className="border-b border-border px-4 py-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Keyboard shortcuts
+            </div>
+          </div>
+          <ul className="flex flex-col gap-1 px-4 py-3 text-xs">
+            <ShortcutRow keys={['A', '←']} label="Model A is better" />
+            <ShortcutRow keys={['B', '→']} label="Model B is better" />
+            <ShortcutRow keys={['T', '↑']} label="Tie" />
+            <ShortcutRow keys={['X', '↓']} label="Both bad" />
+            <ShortcutRow keys={['?']} label="Toggle this help" />
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShortcutRow({
+  keys,
+  label,
+}: {
+  keys: string[];
+  label: string;
+}) {
+  return (
+    <li className="flex items-center justify-between gap-4 py-1">
+      <span className="text-foreground">{label}</span>
+      <span className="flex shrink-0 items-center gap-1">
+        {keys.map((k, i) => (
+          <span key={`${k}-${i}`} className="flex items-center gap-1">
+            {i > 0 && (
+              <span className="text-[10px] text-muted-foreground/70">or</span>
+            )}
+            <KeyHint>{k}</KeyHint>
+          </span>
+        ))}
+      </span>
+    </li>
+  );
+}
+
 function TertiaryVoteButton({
   children,
   hint,
@@ -345,13 +439,15 @@ function TertiaryVoteButton({
   disabled: boolean;
   onClick: () => void;
 }) {
+  // Use default h-10 (40px) on mobile → sm (h-8) on md+. The mobile
+  // bump keeps the tap target comfortably above 40px since voters are
+  // often on phones and the A/B pills are the primary targets anyway.
   return (
     <Button
       variant="outline"
-      size="sm"
       onClick={onClick}
       disabled={disabled}
-      className="gap-2"
+      className="h-11 gap-2 md:h-8 md:px-3 md:text-[13px]"
     >
       <span>{children}</span>
       <KeyHint>{hint}</KeyHint>

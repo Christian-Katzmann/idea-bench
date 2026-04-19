@@ -4,6 +4,7 @@ import * as schema from '../../src/server/db/schema.js';
 import { generateShareSlug } from '../../src/lib/ids.js';
 import { isKnownModel, lookupModel } from '../../src/lib/models.js';
 import { listSelectableRegistryModels } from '../../src/server/models/registry.js';
+import { invalidateAnalyticsSnapshot } from '../../src/server/models/library.js';
 import { withOperator } from '../../src/server/auth/middleware.js';
 import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
@@ -114,6 +115,7 @@ export default toVercelHandler(withOperator(async (request: Request) => {
     )
     .returning();
 
+  invalidateAnalyticsSnapshot();
   return json(
     {
       id: campaign.id,

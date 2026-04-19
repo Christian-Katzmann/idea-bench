@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
+import { invalidateAnalyticsSnapshot } from '../../models/library.js';
 
 /**
  * POST /api/campaigns/:id/activate
@@ -88,6 +89,7 @@ export const activateCampaignWebHandler = withOperator(async (request: Request) 
     .set({ status: 'active', updatedAt: new Date() })
     .where(eq(schema.campaigns.id, id));
 
+  invalidateAnalyticsSnapshot();
   return json({ ok: true, status: 'active' }, 200);
 });
 

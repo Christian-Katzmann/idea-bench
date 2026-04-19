@@ -409,6 +409,7 @@ export async function updateRegistryModel(
     throw new Error('model not found');
   }
 
+  invalidateAnalyticsSnapshot();
   return {
     id: updated.id,
     providerModelId: updated.providerModelId,
@@ -418,7 +419,42 @@ export async function updateRegistryModel(
   };
 }
 
+/**
+ * Memoized snapshot, scoped to the current Vercel Function instance.
+ *
+ * `loadAnalyticsSnapshot` runs ~7 unfiltered SELECTs (campaigns, prompts,
+ * participants, campaign_models, generations, votes, ratings) on every
+ * /api/dashboard, /api/models, and /api/activity request — measured at
+ * ~900ms warm. Memoizing the result for SNAPSHOT_TTL_MS reduces repeat
+ * reads to single-digit ms while keeping staleness bounded.
+ *
+ * Cross-instance invalidation is not possible without an external store,
+ * so the TTL acts as the upper bound on staleness even without explicit
+ * `invalidateAnalyticsSnapshot()` calls. Mutation handlers should call
+ * the invalidator anyway to make the same-instance experience snappy.
+ */
+const SNAPSHOT_TTL_MS = 30_000;
+let cachedSnapshot:
+  | { snapshot: AnalyticsSnapshot; expiresAt: number }
+  | null = null;
+
+export function invalidateAnalyticsSnapshot(): void {
+  cachedSnapshot = null;
+}
+
 export async function loadAnalyticsSnapshot(
+  db: ReturnType<typeof getDb>,
+): Promise<AnalyticsSnapshot> {
+  const now = Date.now();
+  if (cachedSnapshot && now < cachedSnapshot.expiresAt) {
+    return cachedSnapshot.snapshot;
+  }
+  const snapshot = await computeAnalyticsSnapshot(db);
+  cachedSnapshot = { snapshot, expiresAt: now + SNAPSHOT_TTL_MS };
+  return snapshot;
+}
+
+async function computeAnalyticsSnapshot(
   db: ReturnType<typeof getDb>,
 ): Promise<AnalyticsSnapshot> {
   const registry = await syncModelRegistry(db);

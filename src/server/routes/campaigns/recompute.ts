@@ -3,6 +3,7 @@ import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
 import { recomputeCampaignRatings } from '../../ratings.js';
+import { invalidateAnalyticsSnapshot } from '../../models/library.js';
 
 /**
  * POST /api/campaigns/:id/recompute
@@ -35,6 +36,7 @@ export const recomputeCampaignWebHandler = withOperator(async (request: Request)
   const res = await recomputeCampaignRatings(id);
   const elapsedMs = Date.now() - t0;
 
+  invalidateAnalyticsSnapshot();
   return json(
     {
       ok: true,

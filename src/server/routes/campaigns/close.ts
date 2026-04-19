@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
+import { invalidateAnalyticsSnapshot } from '../../models/library.js';
 
 export const closeCampaignWebHandler = withOperator(
   async (request: Request) => {
@@ -46,6 +47,7 @@ export const closeCampaignWebHandler = withOperator(
       })
       .where(eq(schema.campaigns.id, id));
 
+    invalidateAnalyticsSnapshot();
     return json(
       {
         ok: true,

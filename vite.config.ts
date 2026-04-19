@@ -16,6 +16,31 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Split heavy vendors into long-lived chunks so app-code edits
+          // don't invalidate them across deploys. `motion` is intentionally
+          // omitted — it should follow the (lazy-loaded) routes that import it.
+          manualChunks(id) {
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/scheduler/')
+            ) {
+              return 'vendor-react';
+            }
+            if (id.includes('node_modules/@base-ui') || id.includes('node_modules/@floating-ui')) {
+              return 'vendor-baseui';
+            }
+            if (id.includes('node_modules/@tanstack')) {
+              return 'vendor-tanstack';
+            }
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

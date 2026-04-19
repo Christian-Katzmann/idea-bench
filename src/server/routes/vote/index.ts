@@ -1,4 +1,4 @@
-import { eq, count } from 'drizzle-orm';
+import { and, eq, count } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withParticipant } from '../../auth/middleware.js';
@@ -76,10 +76,19 @@ export const voteLandingWebHandler = withParticipant(async (request, ctx) => {
         : null;
 
     // Upsert the participant row for this (cookie, campaign).
+    // Scoping by campaignId is critical: a single cookie can participate
+    // in multiple campaigns, and each pairing is its own row. Filtering
+    // by cookieId alone returns any of the voter's prior participations
+    // and causes /next to 409 on subsequent campaigns.
     const [existing] = await db
       .select()
       .from(schema.participants)
-      .where(eq(schema.participants.cookieId, ctx.participantCookieId))
+      .where(
+        and(
+          eq(schema.participants.cookieId, ctx.participantCookieId),
+          eq(schema.participants.campaignId, campaign.id),
+        ),
+      )
       .limit(1);
 
     let participant: schema.Participant;

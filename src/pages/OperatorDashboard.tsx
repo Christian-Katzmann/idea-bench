@@ -1,19 +1,51 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowRight, Plus, Trophy, Activity } from 'lucide-react';
-import OperatorLayout from '../components/layout/OperatorLayout';
-import KpiCard from '../components/dashboard/KpiCard';
-import AttentionPanel from '../components/dashboard/AttentionPanel';
-import { Badge } from '../components/ui/badge';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronRight,
+  Plus,
+  Zap,
+} from 'lucide-react';
+import { AppShell } from '../components/layout/app-shell';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { ApiError, apiFetch, type DashboardSummary } from '../lib/api';
+import { EntityIcon } from '../components/ui/entity-icon';
+import { PageHeader } from '../components/ui/page-header';
+import { Skeleton } from '../components/ui/skeleton';
+import { StatusBadge, type StatusState } from '../components/ui/status-badge';
+import KpiCard from '../components/dashboard/KpiCard';
+import {
+  ApiError,
+  apiFetch,
+  type ActivityEvent,
+  type DashboardSummary,
+} from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { cn } from '../lib/utils';
+
+const ATTENTION_SECTIONS = [
+  {
+    key: 'draftsNeedingGeneration' as const,
+    title: 'Drafts needing generation',
+    empty: 'Every draft has at least one generated output.',
+  },
+  {
+    key: 'readyToLaunch' as const,
+    title: 'Ready to launch',
+    empty: 'Nothing is fully staged right now.',
+  },
+  {
+    key: 'lowVoteVolume' as const,
+    title: 'Low vote volume',
+    empty: 'Active campaigns have healthy vote volume.',
+  },
+];
 
 export default function OperatorDashboard() {
   const navigate = useNavigate();
   useDocumentTitle('Dashboard');
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiFetch<DashboardSummary>('/api/dashboard'),
@@ -23,183 +55,357 @@ export default function OperatorDashboard() {
     navigate('/login', { state: { from: '/dashboard' }, replace: true });
   }
 
-  if (isLoading) {
-    return (
-      <OperatorLayout>
-        <div className="text-sm text-muted-foreground">Loading dashboard...</div>
-      </OperatorLayout>
-    );
-  }
-
-  if (error && !(error instanceof ApiError && error.status === 401)) {
-    return (
-      <OperatorLayout>
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {error instanceof Error ? error.message : String(error)}
-        </div>
-      </OperatorLayout>
-    );
-  }
-
-  if (!data) return null;
+  const isFetchError =
+    error && !(error instanceof ApiError && error.status === 401);
 
   return (
-    <OperatorLayout>
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Operator health, recent movement, and cross-campaign model signal.
-          </p>
+    <AppShell breadcrumb={[{ label: 'Dashboard' }]}>
+      <PageHeader
+        title="Dashboard"
+        description="Operator health, recent movement, and cross-campaign model signal."
+        action={
+          <Button onClick={() => navigate('/campaign/new')}>
+            <Plus className="size-4" />
+            New campaign
+          </Button>
+        }
+      />
+
+      {isFetchError && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>{error instanceof Error ? error.message : String(error)}</span>
         </div>
-        <Button onClick={() => navigate('/campaign/new')} className="h-9 px-4">
-          <Plus className="mr-2 h-4 w-4" />
-          New Campaign
-        </Button>
-      </div>
+      )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Active Campaigns" value={data.kpis.activeCampaigns} />
-        <KpiCard label="Draft Campaigns" value={data.kpis.draftCampaigns} />
-        <KpiCard label="Total Votes" value={data.kpis.totalVotes} />
-        <KpiCard label="Unique Participants" value={data.kpis.uniqueParticipants} />
-      </div>
+      {isLoading && !data && <DashboardSkeleton />}
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border-border bg-card rounded-xl shadow-none">
-          <CardHeader className="border-b border-border/80 pb-4">
-            <div className="flex items-center justify-between gap-4">
-              <CardTitle className="text-lg">Recent Campaigns</CardTitle>
-              <Badge variant="outline" className="border-border text-muted-foreground">
-                {data.recentCampaigns.length} tracked
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            {data.recentCampaigns.map((campaign) => (
-              <button
-                key={campaign.id}
-                type="button"
-                onClick={() => navigate(`/campaign/${campaign.id}`)}
-                className="flex w-full items-center justify-between rounded-xl border border-border bg-background/60 px-4 py-3 text-left transition-colors hover:bg-background"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{campaign.name}</span>
-                    <Badge variant="secondary" className="capitalize">
-                      {campaign.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {campaign.createdAt
-                      ? `Created ${formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}`
-                      : 'Created recently'}
-                  </div>
-                </div>
-                <div className="text-right text-sm text-muted-foreground">
-                  <div>{campaign.totalVotes} votes</div>
-                  <div>{campaign.uniqueParticipants} participants</div>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
+      {data && (
+        <div className="mt-6 flex flex-col gap-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Active campaigns" value={data.kpis.activeCampaigns} />
+            <KpiCard label="Draft campaigns" value={data.kpis.draftCampaigns} />
+            <KpiCard label="Total votes" value={data.kpis.totalVotes} />
+            <KpiCard label="Unique participants" value={data.kpis.uniqueParticipants} />
+          </div>
 
-        <Card className="border-border bg-card rounded-xl shadow-none">
-          <CardHeader className="border-b border-border/80 pb-4">
-            <div className="flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-amber-400" />
-              <CardTitle className="text-lg">Top Models</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            {data.leaderboard.map((row) => (
-              <button
-                key={row.id}
-                type="button"
-                onClick={() => navigate(`/models?search=${encodeURIComponent(row.providerModelId)}`)}
-                className="flex w-full items-center justify-between rounded-xl border border-border bg-background/60 px-4 py-3 text-left transition-colors hover:bg-background"
-              >
-                <div>
-                  <div className="font-medium text-foreground">{row.displayName}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {row.campaigns} campaigns · {row.comparisons} comparisons
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono text-sm text-foreground">
-                    {row.winRate != null ? `${Math.round(row.winRate * 100)}%` : '—'}
-                  </div>
-                  <div className="text-xs capitalize text-muted-foreground">{row.availability}</div>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <Panel
+              title="Recent campaigns"
+              rightSlot={
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {data.recentCampaigns.length} tracked
+                </span>
+              }
+            >
+              {data.recentCampaigns.length === 0 ? (
+                <PanelEmpty>No campaigns yet.</PanelEmpty>
+              ) : (
+                <PanelList>
+                  {data.recentCampaigns.map((campaign) => (
+                    <Link
+                      key={campaign.id}
+                      to={`/campaign/${campaign.id}`}
+                      className="group flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-surface-highlight/40"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <EntityIcon name={campaign.name} size="sm" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {campaign.name}
+                            </span>
+                            <StatusBadge
+                              state={campaign.status as StatusState}
+                            />
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {campaign.createdAt
+                              ? `Created ${formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}`
+                              : 'Created recently'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="font-mono text-sm tabular-nums text-foreground">
+                            {campaign.totalVotes}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            votes · {campaign.uniqueParticipants}p
+                          </div>
+                        </div>
+                        <ChevronRight className="size-4 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+                      </div>
+                    </Link>
+                  ))}
+                </PanelList>
+              )}
+            </Panel>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <AttentionPanel
-          sections={[
-            {
-              title: 'Drafts Needing Generation',
-              emptyLabel: 'Every draft has at least one generated output.',
-              items: data.attention.draftsNeedingGeneration.map((item) => ({
-                ...item,
-                onSelect: () => navigate(`/campaign/${item.id}`),
-              })),
-            },
-            {
-              title: 'Ready To Launch',
-              emptyLabel: 'Nothing is fully staged right now.',
-              items: data.attention.readyToLaunch.map((item) => ({
-                ...item,
-                onSelect: () => navigate(`/campaign/${item.id}`),
-              })),
-            },
-            {
-              title: 'Low Vote Volume',
-              emptyLabel: 'Active campaigns have healthy vote volume.',
-              items: data.attention.lowVoteVolume.map((item) => ({
-                ...item,
-                meta: `${item.totalVotes} votes so far`,
-                onSelect: () => navigate(`/campaign/${item.id}`),
-              })),
-            },
-          ]}
-        />
+            <Panel
+              title="Top models"
+              icon={<Zap className="size-3.5 text-accent" />}
+            >
+              {data.leaderboard.length === 0 ? (
+                <PanelEmpty>No model performance yet.</PanelEmpty>
+              ) : (
+                <PanelList>
+                  {data.leaderboard.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/models?search=${encodeURIComponent(row.providerModelId)}`,
+                        )
+                      }
+                      className="group flex w-full items-center justify-between gap-4 px-5 py-3 text-left transition-colors hover:bg-surface-highlight/40"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <EntityIcon name={row.displayName} size="sm" />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {row.displayName}
+                          </div>
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
+                            {row.providerModelId}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <div className="text-right">
+                          <div className="font-mono text-sm tabular-nums text-foreground">
+                            {row.winRate != null
+                              ? `${Math.round(row.winRate * 100)}%`
+                              : '—'}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {row.availability}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </PanelList>
+              )}
+            </Panel>
+          </div>
 
-        <Card className="border-border bg-card rounded-xl shadow-none">
-          <CardHeader className="border-b border-border/80 pb-4">
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-blue-400" />
-              <CardTitle className="text-lg">Recent Movement</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            {data.recentMovement.map((event) => (
-              <div
-                key={event.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-background/60 px-4 py-3"
-              >
-                <div>
-                  <div className="font-medium text-foreground">{event.label}</div>
-                  <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">
-                    {event.kind.replaceAll('_', ' ')}
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(event.at), { addSuffix: true })}
-                </div>
+          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <Panel title="Needs attention">
+              <div className="flex flex-col gap-5 px-5 py-4">
+                {ATTENTION_SECTIONS.map(({ key, title, empty }) => {
+                  const items = data.attention[key];
+                  return (
+                    <section key={key} className="flex flex-col gap-1.5">
+                      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {title}
+                      </div>
+                      {items.length === 0 ? (
+                        <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                          {empty}
+                        </div>
+                      ) : (
+                        <ul className="flex flex-col gap-1">
+                          {items.map((item) => (
+                            <li key={item.id}>
+                              <Link
+                                to={`/campaign/${item.id}`}
+                                className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-surface-highlight/60"
+                              >
+                                <div className="min-w-0 truncate text-foreground">
+                                  {item.name}
+                                </div>
+                                {'totalVotes' in item && (
+                                  <div className="font-mono text-[11px] text-muted-foreground">
+                                    {item.totalVotes} votes
+                                  </div>
+                                )}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
-            ))}
-            <Button variant="ghost" className="w-full justify-between" onClick={() => navigate('/team-activity')}>
-              Open Team Activity
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
+            </Panel>
+
+            <Panel
+              title="Recent movement"
+              rightSlot={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/team-activity')}
+                  className="-mr-2"
+                >
+                  Open activity
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              }
+            >
+              {data.recentMovement.length === 0 ? (
+                <PanelEmpty>No recent movement.</PanelEmpty>
+              ) : (
+                <ul className="flex flex-col">
+                  {data.recentMovement.map((event) => (
+                    <MovementRow key={event.id} event={event} />
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Dashboard primitives — used only here, so kept local rather than exported.
+// Panel: titled card with optional icon + right slot. PanelList: stacked rows
+// with dividers, matches the OperatorHome list rhythm at lower density.
+// ────────────────────────────────────────────────────────────────────────────
+
+function Panel({
+  title,
+  icon,
+  rightSlot,
+  children,
+  className,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm',
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="font-heading text-sm font-semibold text-foreground">
+            {title}
+          </h2>
+        </div>
+        {rightSlot}
       </div>
-    </OperatorLayout>
+      <div className="flex flex-1 flex-col">{children}</div>
+    </div>
+  );
+}
+
+function PanelList({ children }: { children: React.ReactNode }) {
+  return (
+    <ul className="flex flex-col divide-y divide-border/60">
+      {Array.isArray(children)
+        ? children.map((child, idx) => (
+            <li key={idx} className="contents">
+              {child}
+            </li>
+          ))
+        : children}
+    </ul>
+  );
+}
+
+function PanelEmpty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-5 py-6 text-sm text-muted-foreground">{children}</div>
+  );
+}
+
+const MOVEMENT_LABEL: Record<ActivityEvent['kind'], string> = {
+  campaign_created: 'Campaign created',
+  participant_finished: 'Participant finished',
+  ratings_recomputed: 'Ratings recomputed',
+};
+
+function DashboardSkeleton() {
+  return (
+    <div className="mt-6 flex flex-col gap-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm"
+          >
+            <Skeleton className="h-2.5 w-28" />
+            <Skeleton className="h-8 w-16" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div
+            key={i}
+            className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          >
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+            <ul className="divide-y divide-border">
+              {Array.from({ length: 4 }).map((_, j) => (
+                <li
+                  key={j}
+                  className="flex items-center justify-between gap-3 px-5 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-7 rounded-md" />
+                    <div className="flex flex-col gap-1.5">
+                      <Skeleton className="h-3 w-36" />
+                      <Skeleton className="h-2.5 w-24" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-3 w-10" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MovementRow({ event }: { event: ActivityEvent }) {
+  const content = (
+    <div className="flex items-center justify-between gap-4 px-5 py-3">
+      <div className="min-w-0">
+        <div className="truncate text-sm text-foreground">{event.label}</div>
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {MOVEMENT_LABEL[event.kind]}
+        </div>
+      </div>
+      <div className="shrink-0 text-[11px] text-muted-foreground">
+        {formatDistanceToNow(new Date(event.at), { addSuffix: true })}
+      </div>
+    </div>
+  );
+
+  if (event.campaignId) {
+    return (
+      <li>
+        <Link
+          to={`/campaign/${event.campaignId}`}
+          className="block border-t border-border/60 first:border-t-0 hover:bg-surface-highlight/40"
+        >
+          {content}
+        </Link>
+      </li>
+    );
+  }
+  return (
+    <li className="border-t border-border/60 first:border-t-0">{content}</li>
   );
 }

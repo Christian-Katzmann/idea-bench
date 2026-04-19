@@ -100,7 +100,9 @@ describe('CampaignDashboard', () => {
 
     renderCampaignDashboard();
 
-    await user.click(await screen.findByRole('button', { name: /^close$/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /close campaign/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/closed/i)).toBeInTheDocument();
@@ -122,7 +124,9 @@ describe('CampaignDashboard', () => {
 
     renderCampaignDashboard();
 
-    await user.click(await screen.findByRole('button', { name: /export csv/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /export votes as csv/i }),
+    );
 
     expect(openSpy).toHaveBeenCalledWith(
       '/api/campaigns/campaign-1/export',

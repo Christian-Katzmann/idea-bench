@@ -1,31 +1,28 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import OperatorLayout from '../components/layout/OperatorLayout';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Loader2,
+  Play,
+  Plus,
+  Rocket,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
+import { AppShell } from '../components/layout/app-shell';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
-import { Card, CardContent } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import {
-  Check,
-  ChevronRight,
-  Loader2,
-  Play,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-} from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { PageHeader } from '../components/ui/page-header';
 import { ApiError, apiFetch, type ModelLibraryData } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 const SUGGESTED_TAGS = [
   'translation',
@@ -38,6 +35,14 @@ const SUGGESTED_TAGS = [
 ];
 
 const MIN_MODELS = 4; // Tournament requires exactly 4 per bracket.
+
+const STEPS = [
+  { n: 1, label: 'Basics' },
+  { n: 2, label: 'Prompts' },
+  { n: 3, label: 'Models' },
+  { n: 4, label: 'Generate' },
+  { n: 5, label: 'Launch' },
+] as const;
 
 interface SlotOkEvent {
   promptId: string;
@@ -73,14 +78,12 @@ export default function CreateCampaign() {
   useDocumentTitle('New Campaign');
   const [step, setStep] = useState(1);
 
-  // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [prompts, setPrompts] = useState([{ text: '', context: '' }]);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
 
-  // Generation state
   const [createError, setCreateError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationDone, setGenerationDone] = useState(false);
@@ -89,23 +92,32 @@ export default function CreateCampaign() {
   const [slots, setSlots] = useState<Record<string, SlotEvent>>({});
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const { data: modelLibrary, error: modelsError, isLoading: modelsLoading } = useQuery({
+  const [activateError, setActivateError] = useState<string | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
+
+  const {
+    data: modelLibrary,
+    error: modelsError,
+    isLoading: modelsLoading,
+  } = useQuery({
     queryKey: ['models', 'enabled', 'name', 'campaign-create'],
-    queryFn: () => apiFetch<ModelLibraryData>('/api/models?status=enabled&sort=name'),
+    queryFn: () =>
+      apiFetch<ModelLibraryData>('/api/models?status=enabled&sort=name'),
   });
 
   useEffect(() => {
-    const selectableIds = new Set((modelLibrary?.rows ?? []).map((row) => row.providerModelId));
+    const selectableIds = new Set(
+      (modelLibrary?.rows ?? []).map((row) => row.providerModelId),
+    );
     if (selectableIds.size === 0) return;
-    setSelectedModels((prev) => prev.filter((providerModelId) => selectableIds.has(providerModelId)));
+    setSelectedModels((prev) =>
+      prev.filter((providerModelId) => selectableIds.has(providerModelId)),
+    );
   }, [modelLibrary]);
 
   if (modelsError instanceof ApiError && modelsError.status === 401) {
     navigate('/login', { state: { from: '/campaign/new' }, replace: true });
   }
-
-  const handleNext = () => setStep((s) => Math.min(5, s + 1));
-  const handleBack = () => setStep((s) => Math.max(1, s - 1));
 
   const toggleCategory = (cat: string) => {
     setCategories((prev) =>
@@ -130,7 +142,6 @@ export default function CreateCampaign() {
     setIsGenerating(true);
 
     try {
-      // Step A: create the campaign in the DB (prompts + models in one shot).
       const createRes = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -163,7 +174,6 @@ export default function CreateCampaign() {
       const created = (await createRes.json()) as CreatedCampaign;
       setCampaign(created);
 
-      // Step B: open the SSE stream and consume generation events.
       await runGeneration(created.id, {
         onStart: (total) => setSlotTotal(total),
         onSlot: (ev) =>
@@ -188,9 +198,6 @@ export default function CreateCampaign() {
     selectedModels,
     navigate,
   ]);
-
-  const [activateError, setActivateError] = useState<string | null>(null);
-  const [isActivating, setIsActivating] = useState(false);
 
   const handleLaunch = async () => {
     if (!campaign || isActivating) return;
@@ -220,494 +227,663 @@ export default function CreateCampaign() {
   const failed = slotValues.filter((s) => s.status === 'error').length;
   const pct = slotTotal ? Math.round((slotsReceived / slotTotal) * 100) : 0;
 
-  const MODELS = (modelLibrary?.rows ?? []).filter((model) => model.enabled && !model.legacy);
+  const MODELS = (modelLibrary?.rows ?? []).filter(
+    (model) => model.enabled && !model.legacy,
+  );
+
+  const canProgress =
+    (step === 1 && !!name) ||
+    (step === 2 && prompts[0].text.trim().length > 0) ||
+    (step === 3 && selectedModels.length >= MIN_MODELS) ||
+    (step === 4 && generationDone) ||
+    step === 5;
 
   return (
-    <OperatorLayout>
-      <div className="max-w-3xl mx-auto w-full">
-        {/* Stepper */}
-        <div className="flex items-center justify-between mb-8 relative">
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-px bg-border -z-10" />
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div
-              key={s}
-              className="flex flex-col items-center gap-2 bg-background px-2"
-            >
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
-                  step === s
-                    ? 'bg-primary text-primary-foreground'
-                    : step > s
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card border border-border text-muted-foreground',
-                )}
-              >
-                {step > s ? <Check className="w-4 h-4" /> : s}
-              </div>
-              <span
-                className={cn(
-                  'text-xs font-medium uppercase tracking-wider',
-                  step >= s ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {s === 1
-                  ? 'Basics'
-                  : s === 2
-                    ? 'Prompts'
-                    : s === 3
-                      ? 'Models'
-                      : s === 4
-                        ? 'Generate'
-                        : 'Launch'}
-              </span>
-            </div>
-          ))}
-        </div>
+    <AppShell
+      breadcrumb={[{ label: 'Campaigns', to: '/' }, { label: 'New' }]}
+    >
+      <PageHeader
+        title="New campaign"
+        description="Configure the evaluation, generate outputs, and activate the share link."
+      />
 
-        <Card className="shadow-none border-border bg-card rounded-xl">
-          <CardContent className="p-8">
+      <div className="mx-auto mt-6 w-full max-w-3xl">
+        <Stepper activeStep={step} />
+
+        <div className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="px-6 py-7 md:px-8 md:py-8">
             {step === 1 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div>
-                  <h2 className="text-[28px] font-semibold tracking-tight mb-1">
-                    Campaign Basics
-                  </h2>
-                  <p className="text-muted-foreground text-sm">
-                    Define what you are evaluating.
-                  </p>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="name"
-                      className="text-muted-foreground text-xs uppercase tracking-wider"
-                    >
-                      Campaign Name
-                    </Label>
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Customer Support Response Quality"
-                      className="bg-background border-border"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="desc"
-                      className="text-muted-foreground text-xs uppercase tracking-wider"
-                    >
-                      Description (shown to voters)
-                    </Label>
-                    <Textarea
-                      id="desc"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Briefly explain what voters should look for..."
-                      className="h-24 bg-background border-border"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                      Categories
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      {SUGGESTED_TAGS.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant={
-                            categories.includes(tag) ? 'default' : 'outline'
-                          }
-                          className={cn(
-                            'cursor-pointer',
-                            categories.includes(tag)
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-background border-border text-muted-foreground hover:bg-foreground/5',
-                          )}
-                          onClick={() => toggleCategory(tag)}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <StepBasics
+                name={name}
+                description={description}
+                categories={categories}
+                onName={setName}
+                onDescription={setDescription}
+                onToggleCategory={toggleCategory}
+              />
             )}
 
             {step === 2 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div>
-                  <h2 className="text-[28px] font-semibold tracking-tight mb-1">
-                    Prompts & Context
-                  </h2>
-                  <p className="text-muted-foreground text-sm">
-                    Add the prompts you want to evaluate.
-                  </p>
-                </div>
-                <div className="space-y-6">
-                  {prompts.map((prompt, idx) => (
-                    <div
-                      key={idx}
-                      className="p-5 border border-border bg-background rounded-xl space-y-4 relative group"
-                    >
-                      {prompts.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-400 hover:bg-red-500/10"
-                          onClick={() =>
-                            setPrompts((p) => p.filter((_, i) => i !== idx))
-                          }
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor={`prompt-text-${idx}`}
-                          className="text-muted-foreground text-xs uppercase tracking-wider"
-                        >
-                          Prompt {idx + 1}
-                        </Label>
-                        <Textarea
-                          id={`prompt-text-${idx}`}
-                          value={prompt.text}
-                          onChange={(e) => {
-                            const newP = [...prompts];
-                            newP[idx].text = e.target.value;
-                            setPrompts(newP);
-                          }}
-                          placeholder="Enter the prompt text..."
-                          className="bg-card border-border"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor={`prompt-context-${idx}`}
-                          className="text-muted-foreground text-xs uppercase tracking-wider"
-                        >
-                          Context (Optional)
-                        </Label>
-                        <Textarea
-                          id={`prompt-context-${idx}`}
-                          value={prompt.context}
-                          onChange={(e) => {
-                            const newP = [...prompts];
-                            newP[idx].context = e.target.value;
-                            setPrompts(newP);
-                          }}
-                          placeholder="Background information or system instructions..."
-                          className="h-20 text-sm bg-card border-border"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      setPrompts([...prompts, { text: '', context: '' }])
-                    }
-                    className="w-full border-dashed border-border bg-background hover:bg-foreground/5 text-foreground"
-                  >
-                    <Plus className="w-4 h-4 mr-2" /> Add another prompt
-                  </Button>
-                </div>
-              </div>
+              <StepPrompts
+                prompts={prompts}
+                onChange={setPrompts}
+              />
             )}
 
             {step === 3 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div>
-                  <h2 className="text-[28px] font-semibold tracking-tight mb-1">
-                    Select Models
-                  </h2>
-                  <p className="text-muted-foreground text-sm">
-                    Choose which models to pit against each other. Tournaments
-                    require at least {MIN_MODELS}.
-                  </p>
-                </div>
-                {modelsLoading ? (
-                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                    Loading available models...
-                  </div>
-                ) : modelsError && !(modelsError instanceof ApiError && modelsError.status === 401) ? (
-                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                    {modelsError instanceof Error ? modelsError.message : String(modelsError)}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    {MODELS.map((model) => (
-                      <div
-                        key={model.providerModelId}
-                        onClick={() => toggleModel(model.providerModelId)}
-                        className={cn(
-                          'p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between',
-                          selectedModels.includes(model.providerModelId)
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border bg-background hover:border-border/80 text-foreground',
-                        )}
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">
-                            {model.displayName}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
-                            {model.providerModelId}
-                          </div>
-                        </div>
-                        {selectedModels.includes(model.providerModelId) && (
-                          <Check className="w-4 h-4 shrink-0" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  {selectedModels.length} selected · need at least {MIN_MODELS}
-                </div>
-              </div>
+              <StepModels
+                models={MODELS}
+                selected={selectedModels}
+                loading={modelsLoading}
+                error={modelsError}
+                onToggle={toggleModel}
+              />
             )}
 
             {step === 4 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div>
-                  <h2 className="text-[28px] font-semibold tracking-tight mb-1">
-                    Generate & Preview
-                  </h2>
-                  <p className="text-muted-foreground text-sm">
-                    Running every prompt through every model via OpenRouter.
-                    This creates the campaign and pre-generates all outputs
-                    participants will vote on.
-                  </p>
-                </div>
-
-                <div className="bg-background p-6 rounded-xl border border-border space-y-4">
-                  <div className="flex justify-center gap-8 text-sm">
-                    <div>
-                      <span className="font-mono font-semibold text-foreground">
-                        {prompts.filter((p) => p.text.trim()).length}
-                      </span>{' '}
-                      <span className="text-muted-foreground">Prompts</span>
-                    </div>
-                    <div>
-                      <span className="font-mono font-semibold text-foreground">
-                        {selectedModels.length}
-                      </span>{' '}
-                      <span className="text-muted-foreground">Models</span>
-                    </div>
-                    <div>
-                      <span className="font-mono font-semibold text-foreground">
-                        {prompts.filter((p) => p.text.trim()).length *
-                          selectedModels.length}
-                      </span>{' '}
-                      <span className="text-muted-foreground">
-                        Total Generations
-                      </span>
-                    </div>
-                  </div>
-
-                  {!isGenerating && slotsReceived === 0 && (
-                    <Button
-                      onClick={handleGenerate}
-                      size="lg"
-                      className="w-full max-w-sm mx-auto block bg-foreground text-background hover:bg-foreground/90"
-                    >
-                      <Play className="w-4 h-4 mr-2" /> Start Generation
-                    </Button>
-                  )}
-
-                  {(isGenerating || slotsReceived > 0) && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground flex items-center gap-2">
-                          {isGenerating ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />{' '}
-                              Generating...
-                            </>
-                          ) : generationDone ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />{' '}
-                              Done
-                            </>
-                          ) : null}
-                        </span>
-                        <span className="font-mono font-medium">
-                          {slotsReceived}/{slotTotal} · {pct}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-border rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      {(succeeded > 0 || failed > 0) && (
-                        <div className="text-xs text-muted-foreground flex gap-3">
-                          <span className="text-emerald-500">
-                            ✓ {succeeded} succeeded
-                          </span>
-                          {failed > 0 && (
-                            <span className="text-red-400">
-                              ✗ {failed} failed
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {createError && (
-                    <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{createError}</span>
-                    </div>
-                  )}
-                  {generateError && (
-                    <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{generateError}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Output preview */}
-                {slotValues.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Outputs as they arrive
-                    </div>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {slotValues.map((slot) => (
-                        <div
-                          key={slotKey(
-                            slot.promptId,
-                            slot.campaignModelId,
-                          )}
-                          className={cn(
-                            'p-3 rounded-md border text-sm',
-                            slot.status === 'ok'
-                              ? 'bg-background border-border'
-                              : 'bg-red-500/5 border-red-500/30',
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-foreground">
-                              {slot.modelDisplayName}
-                            </span>
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {slot.status === 'ok'
-                                ? `${slot.tokensOut ?? '?'} tok · ${slot.latencyMs}ms`
-                                : `error · ${slot.latencyMs}ms`}
-                            </span>
-                          </div>
-                          {slot.status === 'ok' ? (
-                            <div className="whitespace-pre-wrap text-foreground/90 font-mono text-xs leading-relaxed line-clamp-3">
-                              {slot.output}
-                            </div>
-                          ) : (
-                            <div className="text-red-400 text-xs">
-                              <span className="uppercase font-medium">
-                                {slot.kind}
-                              </span>
-                              : {slot.message}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <StepGenerate
+                promptCount={prompts.filter((p) => p.text.trim()).length}
+                modelCount={selectedModels.length}
+                isGenerating={isGenerating}
+                generationDone={generationDone}
+                slotsReceived={slotsReceived}
+                slotTotal={slotTotal}
+                succeeded={succeeded}
+                failed={failed}
+                pct={pct}
+                slotValues={slotValues}
+                createError={createError}
+                generateError={generateError}
+                onStart={handleGenerate}
+              />
             )}
 
             {step === 5 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-8">
-                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
-                  <Check className="w-8 h-8" />
-                </div>
-                <h2 className="text-[28px] font-semibold tracking-tight">
-                  Ready to launch
-                </h2>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  Campaign &quot;{name}&quot; is a draft with {succeeded}{' '}
-                  successful generations
-                  {failed > 0 ? ` and ${failed} failures to review` : ''}.
-                  Launch activates it and makes the share link live.
-                </p>
-                {activateError && (
-                  <div className="max-w-md mx-auto p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-start gap-2 text-left">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{activateError}</span>
+              <StepLaunch
+                name={name}
+                succeeded={succeeded}
+                failed={failed}
+                activateError={activateError}
+              />
+            )}
+          </div>
+
+          <footer className="flex items-center justify-between border-t border-border bg-surface-highlight/30 px-6 py-4 md:px-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={step === 1 || isGenerating}
+            >
+              <ArrowLeft className="size-3.5" />
+              Back
+            </Button>
+            {step < 5 ? (
+              <Button
+                size="sm"
+                onClick={() => setStep((s) => Math.min(5, s + 1))}
+                disabled={!canProgress || isGenerating}
+              >
+                Next
+                <ArrowRight className="size-3.5" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleLaunch}
+                disabled={isActivating || failed > 0}
+                title={
+                  failed > 0
+                    ? 'Fix failed generations before launching'
+                    : undefined
+                }
+              >
+                {isActivating ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Activating…
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="size-3.5" />
+                    Launch campaign
+                  </>
+                )}
+              </Button>
+            )}
+          </footer>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Stepper
+// ────────────────────────────────────────────────────────────────────────────
+
+function Stepper({ activeStep }: { activeStep: number }) {
+  return (
+    <ol
+      aria-label="Wizard progress"
+      className="relative flex items-center justify-between"
+    >
+      <span
+        aria-hidden
+        className="absolute left-4 right-4 top-3.5 -z-10 h-px bg-border"
+      />
+      {STEPS.map(({ n, label }) => {
+        const isActive = activeStep === n;
+        const isDone = activeStep > n;
+        return (
+          <li
+            key={n}
+            className="flex flex-col items-center gap-1.5 bg-background px-2"
+          >
+            <div
+              aria-current={isActive ? 'step' : undefined}
+              className={cn(
+                'flex size-7 items-center justify-center rounded-full border text-xs font-medium transition-colors',
+                isDone
+                  ? 'border-foreground bg-foreground text-background'
+                  : isActive
+                    ? 'border-foreground bg-card text-foreground ring-4 ring-foreground/10'
+                    : 'border-border bg-card text-muted-foreground',
+              )}
+            >
+              {isDone ? <Check className="size-3.5" /> : n}
+            </div>
+            <span
+              className={cn(
+                'text-[10px] font-medium uppercase tracking-wide',
+                activeStep >= n ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Steps
+// ────────────────────────────────────────────────────────────────────────────
+
+function StepBasics({
+  name,
+  description,
+  categories,
+  onName,
+  onDescription,
+  onToggleCategory,
+}: {
+  name: string;
+  description: string;
+  categories: string[];
+  onName: (v: string) => void;
+  onDescription: (v: string) => void;
+  onToggleCategory: (t: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <StepHeader
+        title="Campaign basics"
+        description="Name it, describe it, tag it."
+      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="name" className="text-[10px] uppercase tracking-wide">
+          Campaign name
+        </Label>
+        <Input
+          id="name"
+          value={name}
+          onChange={(e) => onName(e.target.value)}
+          placeholder="e.g. Customer support response quality"
+          autoFocus
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="desc" className="text-[10px] uppercase tracking-wide">
+          Description <span className="text-muted-foreground/70">(shown to voters)</span>
+        </Label>
+        <Textarea
+          id="desc"
+          value={description}
+          onChange={(e) => onDescription(e.target.value)}
+          placeholder="Briefly explain what voters should look for…"
+          className="min-h-24"
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label className="text-[10px] uppercase tracking-wide">Categories</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {SUGGESTED_TAGS.map((tag) => {
+            const on = categories.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => onToggleCategory(tag)}
+                className={cn(
+                  'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition-colors',
+                  on
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {on && <Check className="size-3" />}
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepPrompts({
+  prompts,
+  onChange,
+}: {
+  prompts: Array<{ text: string; context: string }>;
+  onChange: (p: Array<{ text: string; context: string }>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <StepHeader
+        title="Prompts & context"
+        description="Add the prompts you want to evaluate. Each prompt runs against every selected model."
+      />
+      <div className="flex flex-col gap-4">
+        {prompts.map((prompt, idx) => (
+          <div
+            key={idx}
+            className="group relative flex flex-col gap-3 rounded-lg border border-border bg-surface-highlight/30 p-4"
+          >
+            {prompts.length > 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  onChange(prompts.filter((_, i) => i !== idx))
+                }
+                aria-label="Remove prompt"
+                className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-card hover:text-foreground group-hover:opacity-100"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor={`prompt-text-${idx}`}
+                className="text-[10px] uppercase tracking-wide"
+              >
+                Prompt {idx + 1}
+              </Label>
+              <Textarea
+                id={`prompt-text-${idx}`}
+                value={prompt.text}
+                onChange={(e) => {
+                  const next = [...prompts];
+                  next[idx].text = e.target.value;
+                  onChange(next);
+                }}
+                placeholder="Enter the prompt text…"
+                className="min-h-20 bg-card"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor={`prompt-context-${idx}`}
+                className="text-[10px] uppercase tracking-wide"
+              >
+                Context <span className="text-muted-foreground/70">(optional)</span>
+              </Label>
+              <Textarea
+                id={`prompt-context-${idx}`}
+                value={prompt.context}
+                onChange={(e) => {
+                  const next = [...prompts];
+                  next[idx].context = e.target.value;
+                  onChange(next);
+                }}
+                placeholder="Background info or system instructions…"
+                className="min-h-16 bg-card text-sm"
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChange([...prompts, { text: '', context: '' }])}
+          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card py-3 text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+        >
+          <Plus className="size-4" />
+          Add another prompt
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepModels({
+  models,
+  selected,
+  loading,
+  error,
+  onToggle,
+}: {
+  models: ModelLibraryData['rows'];
+  selected: string[];
+  loading: boolean;
+  error: unknown;
+  onToggle: (id: string) => void;
+}) {
+  const isAuthError = error instanceof ApiError && error.status === 401;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <StepHeader
+        title="Select models"
+        description={`Pick the models to pit against each other. Tournaments require at least ${MIN_MODELS}.`}
+      />
+      {loading ? (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading available models…
+        </div>
+      ) : error && !isAuthError ? (
+        <ErrorAlert>{error instanceof Error ? error.message : String(error)}</ErrorAlert>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {models.map((model) => {
+            const on = selected.includes(model.providerModelId);
+            return (
+              <button
+                key={model.providerModelId}
+                type="button"
+                onClick={() => onToggle(model.providerModelId)}
+                className={cn(
+                  'group flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors',
+                  on
+                    ? 'border-foreground bg-surface-highlight/60'
+                    : 'border-border hover:border-foreground/20',
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">
+                    {model.displayName}
                   </div>
+                  <div className="truncate font-mono text-[11px] text-muted-foreground">
+                    {model.providerModelId}
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'flex size-5 shrink-0 items-center justify-center rounded-md border text-background transition-colors',
+                    on
+                      ? 'border-foreground bg-foreground'
+                      : 'border-border bg-transparent',
+                  )}
+                >
+                  {on && <Check className="size-3" />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="text-[11px] text-muted-foreground">
+        <span className="font-mono text-foreground">{selected.length}</span>{' '}
+        selected · need at least{' '}
+        <span className="font-mono">{MIN_MODELS}</span>
+      </div>
+    </div>
+  );
+}
+
+function StepGenerate({
+  promptCount,
+  modelCount,
+  isGenerating,
+  generationDone,
+  slotsReceived,
+  slotTotal,
+  succeeded,
+  failed,
+  pct,
+  slotValues,
+  createError,
+  generateError,
+  onStart,
+}: {
+  promptCount: number;
+  modelCount: number;
+  isGenerating: boolean;
+  generationDone: boolean;
+  slotsReceived: number;
+  slotTotal: number;
+  succeeded: number;
+  failed: number;
+  pct: number;
+  slotValues: SlotEvent[];
+  createError: string | null;
+  generateError: string | null;
+  onStart: () => void;
+}) {
+  const total = promptCount * modelCount;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <StepHeader
+        title="Generate & preview"
+        description="Running every prompt through every model via OpenRouter. Participants vote on these cached outputs."
+      />
+
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-highlight/30 p-5">
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <Counter label="Prompts" value={promptCount} />
+          <Counter label="Models" value={modelCount} />
+          <Counter label="Generations" value={total} />
+        </div>
+
+        {!isGenerating && slotsReceived === 0 ? (
+          <Button onClick={onStart} className="mx-auto" size="lg">
+            <Play className="size-4" />
+            Start generation
+          </Button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Generating…
+                  </>
+                ) : generationDone ? (
+                  <>
+                    <CheckCircle2 className="size-3.5 text-success" />
+                    Complete
+                  </>
+                ) : null}
+              </span>
+              <span className="font-mono font-medium tabular-nums text-foreground">
+                {slotsReceived}/{slotTotal} · {pct}%
+              </span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full bg-foreground transition-all duration-300"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            {(succeeded > 0 || failed > 0) && (
+              <div className="flex items-center gap-4 text-[11px]">
+                <span className="flex items-center gap-1.5 text-success">
+                  <CheckCircle2 className="size-3" />
+                  {succeeded} succeeded
+                </span>
+                {failed > 0 && (
+                  <span className="flex items-center gap-1.5 text-destructive">
+                    <XCircle className="size-3" />
+                    {failed} failed
+                  </span>
                 )}
               </div>
             )}
+          </div>
+        )}
 
-            {/* Navigation */}
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
-              <Button
-                variant="ghost"
-                onClick={handleBack}
-                disabled={step === 1 || isGenerating}
-                className="text-muted-foreground hover:text-foreground hover:bg-foreground/5"
-              >
-                Back
-              </Button>
-              {step < 5 ? (
-                <Button
-                  onClick={handleNext}
-                  disabled={
-                    (step === 1 && !name) ||
-                    (step === 2 && !prompts[0].text) ||
-                    (step === 3 && selectedModels.length < MIN_MODELS) ||
-                    (step === 4 && !generationDone) ||
-                    isGenerating
-                  }
-                  className="bg-foreground text-background hover:bg-foreground/90"
-                >
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleLaunch}
-                  disabled={isActivating || failed > 0}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  title={
-                    failed > 0
-                      ? 'Fix failed generations before launching'
-                      : undefined
-                  }
-                >
-                  {isActivating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />{' '}
-                      Activating...
-                    </>
-                  ) : (
-                    'Launch campaign'
-                  )}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {createError && <ErrorAlert>{createError}</ErrorAlert>}
+        {generateError && <ErrorAlert>{generateError}</ErrorAlert>}
       </div>
-    </OperatorLayout>
+
+      {slotValues.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Outputs as they arrive
+          </div>
+          <ul className="flex max-h-96 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border bg-card p-2">
+            {slotValues.map((slot) => (
+              <li
+                key={slotKey(slot.promptId, slot.campaignModelId)}
+                className={cn(
+                  'rounded-md border px-3 py-2 text-xs',
+                  slot.status === 'ok'
+                    ? 'border-border bg-surface-highlight/40'
+                    : 'border-destructive/30 bg-destructive/5',
+                )}
+              >
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {slot.modelDisplayName}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {slot.status === 'ok'
+                      ? `${slot.tokensOut ?? '?'} tok · ${slot.latencyMs}ms`
+                      : `error · ${slot.latencyMs}ms`}
+                  </span>
+                </div>
+                {slot.status === 'ok' ? (
+                  <div className="line-clamp-3 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    {slot.output}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-destructive">
+                    <span className="font-mono uppercase">{slot.kind}</span>:{' '}
+                    {slot.message}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
+
+function StepLaunch({
+  name,
+  succeeded,
+  failed,
+  activateError,
+}: {
+  name: string;
+  succeeded: number;
+  failed: number;
+  activateError: string | null;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-4 py-6 text-center">
+      <div className="flex size-14 items-center justify-center rounded-full border border-success/25 bg-success/10 text-success">
+        <Check className="size-6" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <h2 className="font-heading text-xl font-semibold text-foreground">
+          Ready to launch
+        </h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Campaign <span className="font-medium text-foreground">"{name}"</span>{' '}
+          is staged with{' '}
+          <span className="font-mono text-foreground">{succeeded}</span>{' '}
+          successful generation{succeeded === 1 ? '' : 's'}
+          {failed > 0 ? (
+            <>
+              {' '}
+              and{' '}
+              <span className="font-mono text-destructive">{failed}</span>{' '}
+              failure{failed === 1 ? '' : 's'} to review
+            </>
+          ) : null}
+          . Launching activates the share link.
+        </p>
+      </div>
+      {activateError && (
+        <div className="w-full max-w-md text-left">
+          <ErrorAlert>{activateError}</ErrorAlert>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Local primitives
+// ────────────────────────────────────────────────────────────────────────────
+
+function StepHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <h2 className="font-heading text-lg font-semibold text-foreground">
+        {title}
+      </h2>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function Counter({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+        {value}
+      </div>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function ErrorAlert({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// SSE plumbing — unchanged from original. Fetch + ReadableStream instead of
+// EventSource because EventSource is GET-only and /generate is POST.
+// ────────────────────────────────────────────────────────────────────────────
 
 function slotKey(promptId: string, campaignModelId: string): string {
   return `${promptId}:${campaignModelId}`;
 }
 
-/**
- * Consume the SSE stream from /api/campaigns/:id/generate. Uses fetch +
- * ReadableStream because EventSource is GET-only. The protocol is small
- * enough that hand-parsing SSE frames is simpler than pulling in a lib.
- */
 async function runGeneration(
   campaignId: string,
   handlers: {
@@ -737,7 +913,6 @@ async function runGeneration(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE events are separated by a blank line.
     let sep: number;
     while ((sep = buffer.indexOf('\n\n')) !== -1) {
       const frame = buffer.slice(0, sep);
@@ -766,7 +941,7 @@ function parseFrame(
   let event = 'message';
   const dataLines: string[] = [];
   for (const line of frame.split('\n')) {
-    if (line.startsWith(':')) continue; // comment / keep-alive
+    if (line.startsWith(':')) continue;
     if (line.startsWith('event:')) event = line.slice(6).trim();
     else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
   }

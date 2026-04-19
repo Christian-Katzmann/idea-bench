@@ -1,133 +1,291 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------
+   Tokens — GitSlip-native warm palette.
+
+   Tailwind 4's @theme inline expects each --color-* token to resolve
+   to a complete color value so opacity modifiers (`bg-primary/80`)
+   can rewrite it as color-mix(in oklab, <color> 80%, transparent).
+   That means the tokens point at `var(--clr-*)` where each --clr-*
+   is a hex defined in :root / .dark — NOT an rgb-triple with an
+   <alpha-value> placeholder (that was Tailwind-3 syntax).
+
+   A few custom CSS utilities (scanline-bg, glass-nav) still need
+   raw RGB triples for rgba() with inline alpha — those live in
+   --rgb-* variables below.
+--------------------------------------------------------------- */
 @theme inline {
+    /* Typography */
+    --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', Menlo, 'Courier New', monospace;
     --font-heading: var(--font-sans);
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Menlo', 'Courier New', monospace;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
+
+    /* shadcn semantic tokens → GitSlip values.
+       Primary = dark ink (Q5). Accent = forest green (status/links).
+       Destructive = muted red, surfaces only (Q4). */
+    --color-background: var(--clr-bg);
+    --color-foreground: var(--clr-fg);
+    --color-card: var(--clr-surface);
+    --color-card-foreground: var(--clr-fg);
+    --color-popover: var(--clr-surface);
+    --color-popover-foreground: var(--clr-fg);
+    --color-primary: var(--clr-fg);
+    --color-primary-foreground: var(--clr-bg);
+    --color-secondary: var(--clr-surface-highlight);
+    --color-secondary-foreground: var(--clr-fg);
+    --color-muted: var(--clr-surface-highlight);
+    --color-muted-foreground: var(--clr-fg-muted);
+    --color-accent: var(--clr-accent);
+    --color-accent-foreground: var(--clr-bg);
+    --color-destructive: var(--clr-destructive);
+    --color-destructive-foreground: var(--clr-bg);
+    --color-border: var(--clr-border);
+    --color-input: var(--clr-border);
+    --color-ring: var(--clr-accent);
+
+    /* GitSlip-native surfaces, exposed directly for bespoke components. */
+    --color-surface: var(--clr-surface);
+    --color-surface-highlight: var(--clr-surface-highlight);
+    --color-success: var(--clr-success);
+    --color-warning: var(--clr-warning);
+
+    /* Sidebar tokens (shadcn convention — Base UI reads these). */
+    --color-sidebar: var(--clr-bg);
+    --color-sidebar-foreground: var(--clr-fg);
+    --color-sidebar-border: var(--clr-border);
+    --color-sidebar-accent: var(--clr-surface);
+    --color-sidebar-accent-foreground: var(--clr-fg);
+    --color-sidebar-primary: var(--clr-fg);
+    --color-sidebar-primary-foreground: var(--clr-bg);
+    --color-sidebar-ring: var(--clr-accent);
+
+    /* Chart palette — restrained, derived from accent/success. */
+    --color-chart-1: var(--clr-accent);
+    --color-chart-2: var(--clr-fg);
+    --color-chart-3: #B4844C; /* warm ochre */
+    --color-chart-4: #8674AA; /* muted violet */
+    --color-chart-5: #6E6A62; /* warm stone */
+
+    /* Radii — bumped so rounded-xl lands on GitSlip geometry. */
+    --radius: 0.75rem;
+    --radius-sm: calc(var(--radius) * 0.5);
+    --radius-md: calc(var(--radius) * 0.66);
     --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-xl: calc(var(--radius) * 1.33);
     --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+    --radius-3xl: calc(var(--radius) * 2.4);
+    --radius-4xl: calc(var(--radius) * 3);
 }
 
+/* ---------------------------------------------------------------
+   Raw palette — GitSlip warm source of truth.
+   --clr-* are hex for Tailwind 4 token resolution.
+   --rgb-*  are RGB triples for custom rgba() / color-mix CSS.
+   Keep them in sync — both expressions of the same color.
+--------------------------------------------------------------- */
 :root {
-    --background: #ffffff;
-    --foreground: #09090b;
-    --card: #ffffff;
-    --card-foreground: #09090b;
-    --popover: #ffffff;
-    --popover-foreground: #09090b;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #f4f4f5;
-    --secondary-foreground: #09090b;
-    --muted: #f4f4f5;
-    --muted-foreground: #71717a;
-    --accent: #f4f4f5;
-    --accent-foreground: #09090b;
-    --destructive: #ef4444;
-    --destructive-foreground: #fafafa;
-    --border: #e4e4e7;
-    --input: #e4e4e7;
-    --ring: #3b82f6;
-    --chart-1: #3b82f6;
-    --chart-2: #2dd4bf;
-    --chart-3: #f59e0b;
-    --chart-4: #a855f7;
-    --chart-5: #ec4899;
-    --radius: 0.5rem;
-    --sidebar: #f4f4f5;
-    --sidebar-foreground: #09090b;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #e4e4e7;
-    --sidebar-accent-foreground: #09090b;
-    --sidebar-border: #e4e4e7;
-    --sidebar-ring: #3b82f6;
+    /* Light — warm paper (primary target per Q3) */
+    --clr-bg: #F7F6F3;
+    --clr-surface: #FFFFFF;
+    --clr-surface-highlight: #F4F3F0;
+    --clr-fg: #1F1B16;
+    --clr-fg-muted: #6E6A62;
+    --clr-border: #E8E6E1;
+    --clr-accent: #047857;
+    --clr-success: #22C55E;
+    --clr-warning: #B45309;
+    --clr-destructive: #B91C1C;
+
+    --rgb-bg: 247 246 243;
+    --rgb-surface: 255 255 255;
+    --rgb-surface-highlight: 244 243 240;
+    --rgb-fg: 31 27 22;
+    --rgb-fg-muted: 110 106 98;
+    --rgb-border: 232 230 225;
+    --rgb-accent: 4 120 87;
 }
 
 .dark {
-    --background: #09090b;
-    --foreground: #fafafa;
-    --card: #18181b;
-    --card-foreground: #fafafa;
-    --popover: #18181b;
-    --popover-foreground: #fafafa;
-    --primary: #3b82f6;
-    --primary-foreground: #fafafa;
-    --secondary: #27272a;
-    --secondary-foreground: #fafafa;
-    --muted: #27272a;
-    --muted-foreground: #a1a1aa;
-    --accent: #27272a;
-    --accent-foreground: #fafafa;
-    --destructive: #ef4444;
-    --destructive-foreground: #fafafa;
-    --border: #27272a;
-    --input: #27272a;
-    --ring: #3b82f6;
-    --chart-1: #3b82f6;
-    --chart-2: #2dd4bf;
-    --chart-3: #f59e0b;
-    --chart-4: #a855f7;
-    --chart-5: #ec4899;
-    --sidebar: #121214;
-    --sidebar-foreground: #fafafa;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #fafafa;
-    --sidebar-accent: #27272a;
-    --sidebar-accent-foreground: #fafafa;
-    --sidebar-border: #27272a;
-    --sidebar-ring: #3b82f6;
+    --clr-bg: #080706;
+    --clr-surface: #161512;
+    --clr-surface-highlight: #201E1A;
+    --clr-fg: #FAF9F7;
+    --clr-fg-muted: #A8A49C;
+    --clr-border: #2A2824;
+    --clr-accent: #10B981;
+    --clr-success: #22C55E;
+    --clr-warning: #FBBF24;
+    --clr-destructive: #F87171;
+
+    --rgb-bg: 8 7 6;
+    --rgb-surface: 22 21 18;
+    --rgb-surface-highlight: 32 30 26;
+    --rgb-fg: 250 249 247;
+    --rgb-fg-muted: 168 164 156;
+    --rgb-border: 42 40 36;
+    --rgb-accent: 16 185 129;
 }
 
+/* ---------------------------------------------------------------
+   Base layer
+--------------------------------------------------------------- */
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+    * {
+        @apply border-border outline-ring/50;
     }
-  body {
-    @apply bg-background text-foreground;
+    body {
+        @apply bg-background text-foreground antialiased;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        transition: background-color 0.3s, color 0.3s;
     }
-  html {
-    @apply font-sans;
+    html {
+        @apply font-sans;
+    }
+    ::selection {
+        background: rgb(var(--rgb-accent) / 0.2);
+        color: inherit;
+    }
+    .dark ::selection {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    /* Custom scrollbar — 6px, warm-tinted */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgb(var(--rgb-bg));
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgb(var(--rgb-border));
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgb(var(--rgb-fg-muted));
+    }
+}
+
+/* ---------------------------------------------------------------
+   GitSlip signature utilities — ported verbatim.
+--------------------------------------------------------------- */
+@layer components {
+    .glass-nav {
+        background: rgb(var(--rgb-bg) / 0.8);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgb(var(--rgb-border) / 0.5);
+    }
+
+    .text-glow {
+        text-shadow: 0 0 40px rgb(var(--rgb-fg) / 0.1);
+    }
+    .dark .text-glow {
+        text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
+    }
+
+    .grid-bg {
+        background-size: 40px 40px;
+        background-image:
+            linear-gradient(to right, rgb(var(--rgb-border) / 0.15) 1px, transparent 1px),
+            linear-gradient(to bottom, rgb(var(--rgb-border) / 0.15) 1px, transparent 1px);
+        mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+        -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+    }
+
+    .scanline-bg {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .scanline-bg::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background:
+            repeating-linear-gradient(
+                163deg,
+                transparent 0px,
+                transparent 11px,
+                rgba(92, 64, 42, 0.055) 11px,
+                rgba(92, 64, 42, 0.055) 12px
+            ),
+            repeating-linear-gradient(
+                163deg,
+                transparent 0px,
+                transparent 17px,
+                rgba(180, 195, 210, 0.07) 17px,
+                rgba(180, 195, 210, 0.07) 18px
+            );
+        mask-image: radial-gradient(
+            ellipse 80% 70% at 50% 50%,
+            transparent 0%,
+            rgba(0, 0, 0, 0.4) 40%,
+            black 100%
+        );
+        -webkit-mask-image: radial-gradient(
+            ellipse 80% 70% at 50% 50%,
+            transparent 0%,
+            rgba(0, 0, 0, 0.4) 40%,
+            black 100%
+        );
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .dark .scanline-bg::before {
+        background:
+            repeating-linear-gradient(
+                163deg,
+                transparent 0px,
+                transparent 11px,
+                rgba(0, 0, 0, 0.12) 11px,
+                rgba(0, 0, 0, 0.12) 12px
+            ),
+            repeating-linear-gradient(
+                163deg,
+                transparent 0px,
+                transparent 17px,
+                rgba(255, 250, 245, 0.045) 17px,
+                rgba(255, 250, 245, 0.045) 18px
+            );
+    }
+
+    .spotlight-card:hover::before {
+        opacity: 1;
+    }
+
+    .spotlight-card::before {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        padding: 1px;
+        background: radial-gradient(
+            800px circle at var(--mouse-x) var(--mouse-y),
+            rgba(255, 255, 255, 0.15),
+            transparent 40%
+        );
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+        z-index: 0;
+        mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+        -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        -webkit-mask-composite: xor;
     }
 }

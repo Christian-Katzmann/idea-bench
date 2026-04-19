@@ -1,24 +1,28 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import OperatorLayout from '../components/layout/OperatorLayout';
-import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import {
-  Plus,
-  Play,
-  CheckCircle2,
-  FileEdit,
-  Loader2,
   AlertTriangle,
+  Boxes,
+  ChevronRight,
+  ExternalLink,
+  Plus,
 } from 'lucide-react';
+import { AppShell } from '../components/layout/app-shell';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { EntityIcon } from '../components/ui/entity-icon';
+import { EmptyState } from '../components/ui/empty-state';
+import { PageHeader } from '../components/ui/page-header';
+import { Skeleton } from '../components/ui/skeleton';
+import { StatusBadge } from '../components/ui/status-badge';
 import {
   ApiError,
   apiFetch,
   type CampaignSummary,
 } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { cn } from '../lib/utils';
 
 export default function OperatorHome() {
   const navigate = useNavigate();
@@ -38,149 +42,173 @@ export default function OperatorHome() {
   }
 
   const campaigns = data ?? [];
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <Play className="w-4 h-4 text-emerald-500" />;
-      case 'completed':
-        return <CheckCircle2 className="w-4 h-4 text-muted-foreground" />;
-      case 'draft':
-        return <FileEdit className="w-4 h-4 text-amber-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return (
-          <Badge
-            variant="default"
-            className="bg-emerald-500 hover:bg-emerald-600"
-          >
-            Active
-          </Badge>
-        );
-      case 'completed':
-        return <Badge variant="secondary">Completed</Badge>;
-      case 'draft':
-        return (
-          <Badge
-            variant="outline"
-            className="text-amber-500 border-amber-500/20 bg-amber-500/10"
-          >
-            Draft
-          </Badge>
-        );
-      default:
-        return null;
-    }
-  };
+  const isFetchError =
+    error && !(error instanceof ApiError && error.status === 401);
 
   return (
-    <OperatorLayout>
-      <div className="flex items-end justify-between mb-2">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-tight mb-1">
-            Campaigns
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Manage your model evaluation campaigns.
-          </p>
-        </div>
-        <Button
-          onClick={() => navigate('/campaign/new')}
-          className="bg-foreground text-background hover:bg-foreground/90 font-semibold h-9 px-4 rounded-md"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Campaign
-        </Button>
-      </div>
+    <AppShell breadcrumb={[{ label: 'Campaigns' }]}>
+      <PageHeader
+        title="Campaigns"
+        description="Run blind pairwise evaluations across models."
+        action={
+          <Button onClick={() => navigate('/campaign/new')}>
+            <Plus className="size-4" />
+            New campaign
+          </Button>
+        }
+      />
 
-      {isLoading && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading campaigns...
-        </div>
-      )}
-
-      {error && !(error instanceof ApiError && error.status === 401) && (
-        <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+      {isFetchError && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>{error instanceof Error ? error.message : String(error)}</span>
         </div>
       )}
 
-      <div className="grid gap-4">
-        {campaigns.map((campaign) => (
-          <Card
-            key={campaign.id}
-            className="bg-card border-border hover:bg-foreground/5 transition-colors cursor-pointer rounded-xl"
-            onClick={() => navigate(`/campaign/${campaign.id}`)}
-          >
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="flex items-start gap-4">
-                <div className="mt-1">{getStatusIcon(campaign.status)}</div>
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="font-semibold text-lg">{campaign.name}</h3>
-                    {getStatusBadge(campaign.status)}
-                  </div>
-                  <p className="text-muted-foreground text-sm mb-3 line-clamp-1">
-                    {campaign.description}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {campaign.categories.map((cat) => (
-                      <Badge
-                        key={cat}
-                        variant="secondary"
-                        className="text-xs font-normal bg-foreground/5 text-muted-foreground border-border"
-                      >
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
+      <div className="mt-6">
+        {isLoading && <CampaignListSkeleton />}
 
-              <div className="text-right text-sm text-muted-foreground flex flex-col items-end gap-2">
-                <div className="font-medium text-foreground">
-                  {campaign.status === 'active'
-                    ? 'Running'
-                    : campaign.status === 'completed'
-                      ? 'Closed'
-                      : 'Not started'}
-                </div>
-                <div>
-                  Created{' '}
-                  {formatDistanceToNow(new Date(campaign.createdAt), {
-                    addSuffix: true,
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {!isLoading && !isFetchError && campaigns.length === 0 && (
+          <EmptyState
+            icon={Boxes}
+            title="No campaigns yet"
+            description="Create a campaign to start evaluating models pairwise."
+            action={
+              <Button onClick={() => navigate('/campaign/new')}>
+                <Plus className="size-4" />
+                Create campaign
+              </Button>
+            }
+          />
+        )}
 
-        {!isLoading && campaigns.length === 0 && (
-          <div className="text-center py-12 border border-dashed border-border rounded-xl bg-card/50">
-            <h3 className="text-lg font-medium text-foreground mb-1">
-              No campaigns yet
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Create your first campaign to start evaluating models.
-            </p>
-            <Button
-              onClick={() => navigate('/campaign/new')}
-              variant="outline"
-              className="border-border text-foreground hover:bg-foreground/5"
-            >
-              Create Campaign
-            </Button>
+        {!isLoading && campaigns.length > 0 && (
+          <div className="scanline-bg relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <ul className="relative z-[1] divide-y divide-border">
+              {campaigns.map((campaign) => (
+                <li key={campaign.id}>
+                  <CampaignRow campaign={campaign} />
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
-    </OperatorLayout>
+    </AppShell>
+  );
+}
+
+function CampaignRow({ campaign }: { campaign: CampaignSummary }) {
+  const inlineLabel = campaign.categories[0] ?? 'Evaluation';
+  const subtitle =
+    campaign.description?.trim() ||
+    `/vote/${campaign.shareSlug}`;
+
+  return (
+    <Link
+      to={`/campaign/${campaign.id}`}
+      className="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-surface-highlight/40 md:px-5 md:py-4"
+    >
+      <div className="flex min-w-0 items-center gap-4">
+        <EntityIcon name={campaign.name} size="md" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-medium text-foreground">
+              {campaign.name}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {inlineLabel}
+            </span>
+            {/* Public share-link quick access — visible on hover. Rendered
+                as a <button> because the whole row is already an <a> via
+                react-router's <Link>; nesting anchors fails hydration. */}
+            {campaign.status === 'active' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(
+                    `/vote/${campaign.shareSlug}`,
+                    '_blank',
+                    'noopener,noreferrer',
+                  );
+                }}
+                aria-label="Open public voting page"
+                className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+              >
+                <ExternalLink className="size-3" />
+              </button>
+            )}
+          </div>
+          <div className="truncate text-xs text-muted-foreground">
+            {subtitle}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-4 md:gap-8 lg:gap-12">
+        {/* Secondary categories — hidden on mobile to keep the row tight */}
+        <div className="hidden items-center gap-1.5 lg:flex">
+          {campaign.categories.slice(1, 3).map((cat) => (
+            <Badge
+              key={cat}
+              variant="outline"
+              className="text-[10px] tracking-wide"
+            >
+              {cat}
+            </Badge>
+          ))}
+        </div>
+        <div className="hidden text-right md:block">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {campaign.status === 'active'
+              ? 'Running'
+              : campaign.status === 'completed'
+              ? 'Closed'
+              : 'Not started'}
+          </div>
+          <div className="text-[11px] text-muted-foreground/80">
+            {formatDistanceToNow(new Date(campaign.createdAt), {
+              addSuffix: true,
+            })}
+          </div>
+        </div>
+        <StatusBadge state={campaign.status} />
+        <ChevronRight
+          className={cn(
+            'size-4 text-muted-foreground/40 transition-all',
+            'group-hover:translate-x-0.5 group-hover:text-muted-foreground',
+          )}
+        />
+      </div>
+    </Link>
+  );
+}
+
+function CampaignListSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <ul className="divide-y divide-border">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <li
+            key={i}
+            className="flex items-center justify-between gap-4 px-4 py-3.5 md:px-5 md:py-4"
+          >
+            <div className="flex min-w-0 items-center gap-4">
+              <Skeleton className="size-9 rounded-lg" />
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-2.5 w-64" />
+              </div>
+            </div>
+            <div className="hidden items-center gap-6 md:flex">
+              <Skeleton className="h-2.5 w-20" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

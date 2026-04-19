@@ -1,26 +1,21 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table';
-import {
-  Trophy,
-  ArrowRight,
   AlertTriangle,
-  Share2,
+  ArrowRight,
+  Crown,
+  Info,
   Loader2,
+  Share2,
 } from 'lucide-react';
-import { ModeToggle } from '../components/ModeToggle';
+import { ParticipantShell } from '../components/layout/participant-shell';
+import { Button } from '../components/ui/button';
+import { EntityIcon } from '../components/ui/entity-icon';
+import { StatusBadge } from '../components/ui/status-badge';
+import { toast } from '../components/ui/toast';
 import { apiFetch, type PersonalResults } from '../lib/api';
-import { STABILITY_LABELS, type Stability } from '../lib/stability';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { cn } from '../lib/utils';
 
 export default function PersonalResultsPage() {
   const { slug } = useParams();
@@ -32,195 +27,160 @@ export default function PersonalResultsPage() {
     enabled: !!slug,
   });
 
-  useDocumentTitle(data ? `Your Results · ${data.campaign.name}` : 'Your Results');
+  useDocumentTitle(
+    data ? `Your results · ${data.campaign.name}` : 'Your results',
+  );
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground gap-2">
-        <Loader2 className="w-5 h-5 animate-spin" /> Loading your results...
-      </div>
+      <ParticipantShell contentClassName="flex items-center justify-center">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading your results…
+        </div>
+      </ParticipantShell>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-sm p-4 rounded-md bg-red-500/10 border border-red-500/30 text-red-500">
-          {error instanceof Error ? error.message : 'Failed to load results'}
+      <ParticipantShell contentClassName="flex items-center justify-center px-4 py-12">
+        <div className="flex w-full max-w-sm items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {error instanceof Error ? error.message : 'Failed to load results'}
+          </span>
         </div>
-      </div>
+      </ParticipantShell>
     );
   }
 
-  const { campaign, totals, perPrompt, campaignRanking, groupAgreement, honesty } =
-    data;
+  const {
+    campaign,
+    totals,
+    perPrompt,
+    campaignRanking,
+    groupAgreement,
+    honesty,
+  } = data;
   const top = campaignRanking[0];
 
-  function PersonalStabilityBadge({ tier }: { tier: Stability }) {
-    const styles: Record<Stability, string> = {
-      stable: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-      preliminary: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
-      directional: 'bg-muted text-muted-foreground border-border',
-    };
-    return (
-      <span
-        className={`text-[10px] uppercase tracking-wider font-medium px-2 py-1 rounded border ${styles[tier]}`}
-        title={
-          tier === 'directional'
-            ? 'Fewer than 50 comparisons on this model in your votes.'
-            : tier === 'preliminary'
-              ? '50-200 comparisons. Directionally correct; still some uncertainty.'
-              : '200+ comparisons in your votes. Tight.'
-        }
-      >
-        {STABILITY_LABELS[tier]}
-      </span>
-    );
-  }
+  const handleShare = () => {
+    const line = top
+      ? `My top pick for "${campaign.name}" is ${top.displayName}.`
+      : `I voted in "${campaign.name}" on ModelArena.`;
+    navigator.clipboard.writeText(line);
+    toast.success('Summary copied to clipboard');
+  };
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-3xl mx-auto space-y-8">
-        <div className="flex justify-end">
-          <ModeToggle />
-        </div>
-
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Trophy className="w-8 h-8 text-primary" />
+    <ParticipantShell label={campaign.name} contentClassName="px-4 py-10">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        {/* Header */}
+        <header className="flex flex-col gap-3 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-accent/25 bg-accent/10 text-accent">
+            <Crown className="size-5" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Your Results
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+            Your results
           </h1>
-          <p className="text-lg text-muted-foreground">
-            Based on your {totals.battlesPlayed} battles across{' '}
-            {totals.tournamentsComplete} prompt
-            {totals.tournamentsComplete === 1 ? '' : 's'} in{' '}
-            <span className="font-medium text-foreground">{campaign.name}</span>
+          <p className="text-sm text-muted-foreground">
+            Based on your{' '}
+            <span className="font-mono text-foreground">
+              {totals.battlesPlayed}
+            </span>{' '}
+            battle{totals.battlesPlayed === 1 ? '' : 's'} across{' '}
+            <span className="font-mono text-foreground">
+              {totals.tournamentsComplete}
+            </span>{' '}
+            prompt{totals.tournamentsComplete === 1 ? '' : 's'}.
           </p>
-        </div>
+        </header>
 
         {honesty.directional && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3 text-amber-500">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5 rounded-lg border border-warning/25 bg-warning/10 px-4 py-3 text-xs text-warning">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
             <div>
-              <span className="font-semibold">
+              <div className="font-medium text-foreground">
                 Your sample is small — treat this as directional.
-              </span>
-              <p className="text-sm mt-1 opacity-90">
-                With fewer than 20 battles, your personal rankings have wide
-                uncertainty. The models at the top are generally preferred by
-                you, but exact orderings might shift with more data.
-              </p>
+              </div>
+              <div className="mt-0.5 opacity-90">
+                With fewer than 20 battles, personal rankings have wide
+                uncertainty. Top picks are generally preferred by you, but
+                exact orderings might shift with more data.
+              </div>
             </div>
           </div>
         )}
 
-        {/* Campaign-level ranking — B-T scoped to this participant's votes */}
-        <Card className="shadow-md border-border overflow-hidden">
-          <CardHeader className="bg-card text-card-foreground border-b border-border">
-            <CardTitle className="text-xl">Your Overall Preferences</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="w-16 text-center">Rank</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead className="text-right">Rating</TableHead>
-                  <TableHead className="text-right">Win rate</TableHead>
-                  <TableHead className="text-right">1sts / seen</TableHead>
-                  <TableHead className="w-28 text-right">Tier</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+        {/* Overall ranking */}
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <header className="border-b border-border px-5 py-3">
+            <h2 className="font-heading text-sm font-semibold text-foreground">
+              Your overall preferences
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              Bradley-Terry scored against your own votes.
+            </p>
+          </header>
+          {campaignRanking.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+              No completed tournaments yet.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-[32px_1.4fr_1fr_80px_90px_100px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div>#</div>
+                <div>Model</div>
+                <div>Rating · ±CI</div>
+                <div>Win rate</div>
+                <div>1sts / seen</div>
+                <div>Tier</div>
+              </div>
+              <ul className="divide-y divide-border/60">
                 {campaignRanking.map((r, idx) => (
-                  <TableRow
-                    key={r.campaignModelId}
-                    className={`${idx === 0 ? 'bg-primary/5' : ''} ${
-                      r.stability === 'directional' ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <TableCell className="text-center font-medium">
-                      {idx === 0 ? (
-                        <span className="text-primary text-lg">1</span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {idx + 1}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">
-                      {r.displayName}
-                      {idx === 0 && (
-                        <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-normal">
-                          Top Pick
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      {r.rating}
-                      {r.ciLow != null && r.ciHigh != null && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          ±{Math.round((r.ciHigh - r.ciLow) / 2)}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {r.winRate != null
-                        ? `${Math.round(r.winRate * 100)}%`
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground text-sm">
-                      {r.firstPlaceCount} / {r.appearances}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <PersonalStabilityBadge tier={r.stability} />
-                    </TableCell>
-                  </TableRow>
+                  <li key={r.campaignModelId}>
+                    <PersonalRatingRow rank={idx + 1} row={r} />
+                  </li>
                 ))}
-                {campaignRanking.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center text-muted-foreground py-6"
-                    >
-                      No completed tournaments yet.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              </ul>
+            </>
+          )}
+        </section>
 
         {/* Per-prompt rankings */}
         {perPrompt.length > 0 && (
-          <Card>
-            <CardHeader className="border-b border-border">
-              <CardTitle className="text-lg">Per-Prompt Rankings</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 divide-y divide-border">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h2 className="font-heading text-sm font-semibold text-foreground">
+                Per-prompt rankings
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                How each model placed inside a single prompt's tournament.
+              </p>
+            </header>
+            <ul className="divide-y divide-border/60">
               {perPrompt.map((p) => (
-                <div key={p.promptId} className="p-5">
-                  <div className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                <li key={p.promptId} className="flex flex-col gap-3 px-5 py-4">
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
                     {p.promptText}
-                  </div>
+                  </p>
                   {p.complete ? (
-                    <ol className="space-y-1.5">
+                    <ol className="flex flex-col gap-1">
                       {p.ranking.map((r) => (
                         <li
-                          key={r.rank + r.models.map((m) => m.displayName).join(',')}
+                          key={`${r.rank}-${r.models
+                            .map((m) => m.displayName)
+                            .join(',')}`}
                           className="flex items-baseline gap-3 text-sm"
                         >
-                          <span className="font-mono font-semibold text-muted-foreground w-6 text-right">
-                            {r.rank}.
+                          <span className="w-5 text-right font-mono text-[11px] font-semibold text-muted-foreground">
+                            {r.rank}
                           </span>
                           <span className="text-foreground">
                             {r.models.map((m) => m.displayName).join(' & ')}
                             {r.models.length > 1 && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                (tied)
+                              <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                tied
                               </span>
                             )}
                           </span>
@@ -229,62 +189,122 @@ export default function PersonalResultsPage() {
                     </ol>
                   ) : (
                     <div className="text-xs text-muted-foreground">
-                      In progress — {p.battlesPlayed} battle(s) played
+                      In progress — {p.battlesPlayed} battle
+                      {p.battlesPlayed === 1 ? '' : 's'} played
                     </div>
                   )}
-                </div>
+                </li>
               ))}
-            </CardContent>
-          </Card>
+            </ul>
+          </section>
         )}
 
         {/* Group alignment */}
-        <Card>
-          <CardContent className="p-6">
-            <h3 className="font-semibold text-foreground mb-2">
-              Group Alignment
-            </h3>
-            {groupAgreement.fraction != null ? (
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                You aligned with the majority on{' '}
-                <span className="font-medium text-emerald-500 text-lg">
-                  {Math.round(groupAgreement.fraction * 100)}%
-                </span>{' '}
-                of the {groupAgreement.samples} pair
-                {groupAgreement.samples === 1 ? '' : 's'} where enough other
-                voters had weighed in.
-              </p>
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                Not enough other votes on your pairs yet to compute agreement.
-                Check back once more people have voted.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-heading text-sm font-semibold text-foreground">
+            Group alignment
+          </h3>
+          {groupAgreement.fraction != null ? (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              You aligned with the majority on{' '}
+              <span className="font-mono text-foreground">
+                {Math.round(groupAgreement.fraction * 100)}%
+              </span>{' '}
+              of the{' '}
+              <span className="font-mono text-foreground">
+                {groupAgreement.samples}
+              </span>{' '}
+              pair{groupAgreement.samples === 1 ? '' : 's'} where enough other
+              voters had weighed in.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Not enough other votes on your pairs yet to compute agreement.
+              Check back once more people have voted.
+            </p>
+          )}
+        </section>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8 border-t border-border">
+        {/* Footer actions */}
+        <div className="flex flex-col items-center justify-center gap-2 border-t border-border pt-6 sm:flex-row">
           <Button
             variant="outline"
+            size="sm"
+            onClick={handleShare}
             className="w-full sm:w-auto"
-            onClick={() => {
-              const line = top
-                ? `My top pick for "${campaign.name}" is ${top.displayName}.`
-                : `I voted in "${campaign.name}" on ModelArena.`;
-              navigator.clipboard.writeText(line);
-            }}
           >
-            <Share2 className="w-4 h-4 mr-2" />
+            <Share2 className="size-3.5" />
             Copy summary
           </Button>
           <Button
-            className="w-full sm:w-auto"
+            size="sm"
             onClick={() => navigate(`/vote/${slug}`)}
+            className="w-full sm:w-auto"
           >
             Back to landing
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <ArrowRight className="size-3.5" />
           </Button>
         </div>
+      </div>
+    </ParticipantShell>
+  );
+}
+
+function PersonalRatingRow({
+  rank,
+  row,
+}: {
+  rank: number;
+  row: PersonalResults['campaignRanking'][number];
+}) {
+  const ciSpread =
+    row.ciLow != null && row.ciHigh != null
+      ? Math.round((row.ciHigh - row.ciLow) / 2)
+      : null;
+  return (
+    <div
+      className={cn(
+        'grid grid-cols-[32px_1.4fr_1fr_80px_90px_100px] items-center gap-3 px-5 py-3 text-sm transition-colors',
+        row.stability === 'directional' && 'opacity-70',
+        rank === 1 && 'bg-surface-highlight/50',
+      )}
+    >
+      <div className="font-mono text-xs text-muted-foreground">
+        {rank.toString().padStart(2, '0')}
+      </div>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <EntityIcon name={row.displayName} size="sm" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium text-foreground">
+              {row.displayName}
+            </span>
+            {rank === 1 && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+                Top pick
+              </span>
+            )}
+          </div>
+          <div className="truncate font-mono text-[11px] text-muted-foreground">
+            {row.providerModelId}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-baseline gap-1.5 font-mono">
+        <span className="font-semibold text-foreground">{row.rating}</span>
+        {ciSpread != null && (
+          <span className="text-[11px] text-muted-foreground">±{ciSpread}</span>
+        )}
+      </div>
+      <div className="font-mono text-foreground">
+        {row.winRate != null ? `${Math.round(row.winRate * 100)}%` : '—'}
+      </div>
+      <div className="font-mono text-[11px] text-muted-foreground">
+        <span className="text-foreground">{row.firstPlaceCount}</span> /{' '}
+        {row.appearances}
+      </div>
+      <div>
+        <StatusBadge state={row.stability} />
       </div>
     </div>
   );

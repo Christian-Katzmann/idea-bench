@@ -1,22 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import OperatorLayout from '../components/layout/OperatorLayout';
-import { Button } from '../components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import {
-  Copy,
-  ExternalLink,
   AlertTriangle,
+  Check,
+  Copy,
   Download,
-  StopCircle,
-  CheckCircle2,
+  ExternalLink,
+  Info,
   Loader2,
   RefreshCw,
+  StopCircle,
 } from 'lucide-react';
+import { AppShell } from '../components/layout/app-shell';
+import { Button } from '../components/ui/button';
+import { EntityIcon } from '../components/ui/entity-icon';
+import { PageHeader } from '../components/ui/page-header';
+import { Skeleton } from '../components/ui/skeleton';
+import { StatusBadge, type StatusState } from '../components/ui/status-badge';
+import { toast } from '../components/ui/toast';
 import { ApiError, apiFetch, type CampaignDetail } from '../lib/api';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { cn } from '../lib/utils';
 
 export default function CampaignDashboard() {
   const { id } = useParams();
@@ -42,8 +49,24 @@ export default function CampaignDashboard() {
         converged: boolean | null;
         elapsedMs: number;
       }>(`/api/campaigns/${id}/recompute`, { method: 'POST' }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['campaign', id] });
+      toast.success(
+        `Recomputed in ${result.elapsedMs}ms`,
+        {
+          details: `${result.totalVotes} votes · ${
+            result.iterations != null
+              ? `${result.iterations} iterations${result.converged ? ' (converged)' : ' (max)'}`
+              : 'no iterations'
+          }`,
+        },
+      );
+    },
+    onError: (err) => {
+      toast.error(
+        'Recompute failed',
+        { details: err instanceof Error ? err.message : String(err) },
+      );
     },
   });
 
@@ -60,6 +83,15 @@ export default function CampaignDashboard() {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['activity'] });
+      toast.success('Campaign closed', {
+        details: 'New participants can no longer start voting.',
+      });
+    },
+    onError: (err) => {
+      toast.error(
+        'Close failed',
+        { details: err instanceof Error ? err.message : String(err) },
+      );
     },
   });
 
@@ -83,6 +115,7 @@ export default function CampaignDashboard() {
   }, [data]);
 
   const handleCopyLink = () => {
+    if (!shareLink) return;
     navigator.clipboard.writeText(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -96,7 +129,6 @@ export default function CampaignDashboard() {
     ) {
       return;
     }
-
     closeCampaign.mutate();
   };
 
@@ -106,279 +138,434 @@ export default function CampaignDashboard() {
 
   if (isLoading) {
     return (
-      <OperatorLayout>
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading campaign...
-        </div>
-      </OperatorLayout>
+      <AppShell
+        breadcrumb={[{ label: 'Campaigns', to: '/' }, { label: 'Loading…' }]}
+      >
+        <CampaignDashboardSkeleton />
+      </AppShell>
     );
   }
 
   if (error && !(error instanceof ApiError && error.status === 401)) {
     return (
-      <OperatorLayout>
-        <div className="p-4 rounded-md bg-red-500/10 border border-red-500/30 text-red-500">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <div>
-              <div className="font-semibold">Failed to load campaign</div>
-              <div className="text-sm mt-1">
-                {error instanceof Error ? error.message : String(error)}
-              </div>
+      <AppShell
+        breadcrumb={[{ label: 'Campaigns', to: '/' }, { label: 'Error' }]}
+      >
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <div className="font-medium text-foreground">
+              Failed to load campaign
+            </div>
+            <div className="mt-0.5 text-xs">
+              {error instanceof Error ? error.message : String(error)}
             </div>
           </div>
         </div>
-      </OperatorLayout>
+      </AppShell>
     );
   }
 
   if (!data) return null;
 
-  function StabilityBadge({ tier }: { tier: Stability }) {
-    const styles: Record<Stability, string> = {
-      stable:
-        'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-      preliminary:
-        'bg-amber-500/10 text-amber-500 border-amber-500/30',
-      directional:
-        'bg-muted text-muted-foreground border-border',
-    };
-    return (
-      <span
-        className={`text-[10px] uppercase tracking-wider font-medium px-2 py-1 rounded border ${styles[tier]}`}
-        title={
-          tier === 'directional'
-            ? 'Fewer than 50 comparisons. Rating is directional only — treat with caution.'
-            : tier === 'preliminary'
-              ? 'Between 50 and 200 comparisons. Rating is directionally correct but confidence intervals are still wide.'
-              : '200+ comparisons. Rating has tightened up; treat as stable.'
-        }
-      >
-        {STABILITY_LABELS[tier]}
-      </span>
-    );
-  }
-
   const { campaign, stats } = data;
-  const totalVotes = stats.totalVotes;
-  const uniqueParticipants = stats.uniqueParticipants;
 
   return (
-    <OperatorLayout>
-      {/* Header */}
-      <div className="flex justify-between items-end">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-[28px] font-semibold tracking-tight">
-              {campaign.name}
-            </h1>
-            <span
-              className={`text-xs px-2.5 py-1 rounded-full border ${
-                campaign.status === 'active'
-                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                  : campaign.status === 'draft'
-                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                    : 'bg-foreground/5 text-muted-foreground border-border'
-              }`}
-            >
-              {campaign.status === 'active'
-                ? 'LIVE'
-                : campaign.status === 'draft'
-                  ? 'DRAFT'
-                  : 'CLOSED'}
-            </span>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {campaign.description}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleCopyLink}
-            disabled={campaign.status === 'draft'}
-            className="bg-foreground text-background hover:bg-foreground/90 font-semibold h-9 px-4 rounded-md disabled:opacity-50"
-          >
-            {copied ? (
-              <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" />
-            ) : (
-              <Copy className="w-4 h-4 mr-2" />
-            )}
-            {copied ? 'Copied!' : 'Copy Share Link'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              window.open(`/vote/${campaign.shareSlug}`, '_blank')
-            }
-            disabled={campaign.status === 'draft'}
-            className="border-border text-foreground hover:bg-foreground/5 h-9 px-4 rounded-md disabled:opacity-50"
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Preview
-          </Button>
-          {campaign.status === 'active' && (
+    <AppShell
+      breadcrumb={[
+        { label: 'Campaigns', to: '/' },
+        { label: campaign.name },
+      ]}
+    >
+      <PageHeader
+        title={
+          <span className="flex items-center gap-3">
+            <EntityIcon name={campaign.name} size="lg" />
+            <span className="min-w-0 truncate">{campaign.name}</span>
+            <StatusBadge state={campaign.status as StatusState} />
+          </span>
+        }
+        description={campaign.description || undefined}
+        size="lg"
+        action={
+          campaign.status === 'active' ? (
             <Button
               variant="outline"
-              onClick={handleCloseCampaign}
-              disabled={closeCampaign.isPending}
-              className="border-border text-red-400 hover:bg-red-500/10 hover:text-red-400 h-9 px-4 rounded-md"
+              size="sm"
+              onClick={() =>
+                window.open(
+                  `/vote/${campaign.shareSlug}`,
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
             >
-              {closeCampaign.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <StopCircle className="w-4 h-4 mr-2" />
-              )}
-              {closeCampaign.isPending ? 'Closing...' : 'Close'}
+              <ExternalLink className="size-3.5" />
+              Preview public page
             </Button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
-      {/* Stats Strip */}
-      <div className="grid grid-cols-4 gap-5">
-        <div className="bg-card border border-border p-5 rounded-xl">
-          <div className="text-xs text-muted-foreground mb-2">Total Votes</div>
-          <div className="text-2xl font-semibold font-mono">{totalVotes}</div>
-        </div>
-        <div className="bg-card border border-border p-5 rounded-xl">
-          <div className="text-xs text-muted-foreground mb-2">
-            Unique Participants
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Main column */}
+        <div className="flex flex-col gap-6">
+          {/* Stats strip */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile label="Total votes" value={stats.totalVotes} />
+            <StatTile
+              label="Unique participants"
+              value={stats.uniqueParticipants}
+            />
+            <StatTile
+              label="Elapsed"
+              value={formatDistanceToNow(new Date(campaign.createdAt))}
+              mono={false}
+            />
           </div>
-          <div className="text-2xl font-semibold font-mono">
-            {uniqueParticipants}
-          </div>
-        </div>
-        <div className="bg-card border border-border p-5 rounded-xl">
-          <div className="text-xs text-muted-foreground mb-2">Elapsed</div>
-          <div className="text-2xl font-semibold font-mono">
-            {formatDistanceToNow(new Date(campaign.createdAt))}
-          </div>
-        </div>
-        <div className="bg-card border border-border p-5 rounded-xl flex items-center justify-center">
-          <Button
-            variant="ghost"
-            onClick={handleExportCsv}
-            className="w-full h-full text-muted-foreground hover:text-foreground hover:bg-foreground/5"
-          >
-            <Download className="w-4 h-4 mr-2" /> Export CSV
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex-1 bg-card border border-border rounded-xl flex flex-col overflow-hidden">
-        <div className="bg-foreground/5 px-6 py-3 border-b border-border flex items-center justify-between gap-4">
-          <div className="grid grid-cols-[40px_1.5fr_1fr_1fr_1fr_140px] flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            <div>#</div>
-            <div>Model</div>
-            <div>Rating · 95% CI</div>
-            <div>Win rate</div>
-            <div>Sample</div>
-            <div>Tier</div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => recompute.mutate()}
-            disabled={recompute.isPending || campaign.status === 'draft'}
-            className="text-muted-foreground hover:text-foreground"
-            title="Run the Bradley-Terry solver + Fisher-info CIs over the full vote log"
-          >
-            {recompute.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            <span className="ml-2 text-xs">Recompute</span>
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {sortedRatings.map((rating, idx) => (
-            <div
-              key={rating.campaignModelId}
-              className={`px-6 py-4 border-b border-border grid grid-cols-[40px_1.5fr_1fr_1fr_1fr_140px] items-center text-sm hover:bg-foreground/5 transition-colors ${
-                rating.stability === 'directional' ? 'opacity-60' : ''
-              }`}
-            >
-              <div className="font-mono text-muted-foreground">
-                {(idx + 1).toString().padStart(2, '0')}
-              </div>
-              <div className="font-semibold">{rating.displayName}</div>
-              <div className="font-mono text-sm">
-                <span className="font-semibold">{rating.rating}</span>
-                {rating.ciLow != null && rating.ciHigh != null && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ±{Math.round((rating.ciHigh - rating.ciLow) / 2)}
-                  </span>
-                )}
-              </div>
-              <div className="font-mono">
-                {rating.winRate != null
-                  ? `${Math.round(rating.winRate * 100)}%`
-                  : '—'}
-              </div>
-              <div className="text-[13px] text-muted-foreground">
-                <span className="font-mono">{rating.gameCount}</span> comparisons
-              </div>
+          {/* Ratings table */}
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
               <div>
-                <StabilityBadge tier={rating.stability} />
+                <h2 className="font-heading text-sm font-semibold text-foreground">
+                  Model ratings
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Bradley-Terry strength with 95% confidence intervals.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => recompute.mutate()}
+                disabled={
+                  recompute.isPending || campaign.status === 'draft'
+                }
+                title="Run the Bradley-Terry solver + Fisher-info CIs over the full vote log"
+              >
+                {recompute.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                Recompute
+              </Button>
+            </header>
+
+            {sortedRatings.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                {campaign.status === 'draft'
+                  ? 'Activate the campaign and collect votes to populate the leaderboard.'
+                  : stats.totalVotes === 0
+                  ? 'No votes yet. Share the link and come back once people have voted.'
+                  : 'No ratings yet — hit Recompute to run the Bradley-Terry solver.'}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-[32px_1.5fr_1fr_80px_100px_120px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div>#</div>
+                  <div>Model</div>
+                  <div>Rating · ±CI</div>
+                  <div>Win rate</div>
+                  <div>Sample</div>
+                  <div>Stability</div>
+                </div>
+                <ul className="divide-y divide-border/60">
+                  {sortedRatings.map((rating, idx) => (
+                    <li key={rating.campaignModelId}>
+                      <RatingRow rating={rating} rank={idx + 1} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+
+          {/* Preference ≠ correctness caveat — kept inline because it's
+              critical product messaging, not a passing toast. */}
+          <div className="flex items-start gap-2.5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-warning">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <div>
+              <span className="font-medium text-foreground">
+                Preference ≠ correctness.
+              </span>{' '}
+              For high-stakes outputs, spot-check winners manually. Ratings
+              reflect blind preference, not verified accuracy.
+            </div>
+          </div>
+        </div>
+
+        {/* Right column — share card + actions */}
+        <aside className="flex flex-col gap-4">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h3 className="font-heading text-sm font-semibold text-foreground">
+                Public voting
+              </h3>
+            </header>
+            <div className="flex flex-col gap-4 px-5 py-4">
+              <KeyValue label="Status">
+                <StatusBadge state={campaign.status as StatusState} />
+              </KeyValue>
+              <KeyValue label="Share link">
+                <code className="truncate font-mono text-xs text-foreground">
+                  {campaign.shareSlug}
+                </code>
+              </KeyValue>
+              <KeyValue label="Created">
+                <span className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(campaign.createdAt), {
+                    addSuffix: true,
+                  })}
+                </span>
+              </KeyValue>
+              {campaign.closedAt && (
+                <KeyValue label="Closed">
+                  <span className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(campaign.closedAt), {
+                      addSuffix: true,
+                    })}
+                  </span>
+                </KeyValue>
+              )}
+              <div className="flex flex-col gap-2 pt-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleCopyLink}
+                  disabled={campaign.status === 'draft'}
+                  className="w-full"
+                >
+                  {copied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copied ? 'Copied' : 'Copy share link'}
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h3 className="font-heading text-sm font-semibold text-foreground">
+                Actions
+              </h3>
+            </header>
+            <div className="flex flex-col gap-2 px-5 py-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                className="w-full justify-start"
+              >
+                <Download className="size-3.5" />
+                Export votes as CSV
+              </Button>
+              {campaign.status === 'active' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCloseCampaign}
+                  disabled={closeCampaign.isPending}
+                  className="w-full justify-start"
+                >
+                  {closeCampaign.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <StopCircle className="size-3.5" />
+                  )}
+                  {closeCampaign.isPending ? 'Closing…' : 'Close campaign'}
+                </Button>
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </AppShell>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Local primitives
+// ────────────────────────────────────────────────────────────────────────────
+
+function CampaignDashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-11 rounded-lg" />
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-3 w-64" />
+        </div>
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex flex-col gap-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <Skeleton className="h-2.5 w-20" />
+                <Skeleton className="h-7 w-12" />
+              </div>
+            ))}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-7 w-24 rounded-md" />
+            </div>
+            <ul className="divide-y divide-border">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <li key={i} className="flex items-center gap-3 px-5 py-3">
+                  <Skeleton className="h-3 w-6" />
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="ml-auto h-3 w-12" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <aside className="flex flex-col gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+            >
+              <div className="border-b border-border px-5 py-3">
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <div className="flex flex-col gap-3 px-5 py-4">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="mt-1 h-9 w-full rounded-full" />
               </div>
             </div>
           ))}
-          {sortedRatings.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              {campaign.status === 'draft'
-                ? 'Activate the campaign and collect votes to populate the leaderboard.'
-                : totalVotes === 0
-                  ? 'No votes yet. Share the link and come back once people have voted.'
-                  : 'No ratings yet — hit Recompute to run the Bradley-Terry solver.'}
-            </div>
-          )}
-          {recompute.data && (
-            <div className="px-6 py-3 border-b border-border text-xs text-muted-foreground bg-foreground/5">
-              Recomputed in {recompute.data.elapsedMs}ms · {recompute.data.totalVotes} votes ·
-              {' '}
-              {recompute.data.iterations != null
-                ? `${recompute.data.iterations} iters${recompute.data.converged ? ' (converged)' : ' (max)'}`
-                : '—'}
-            </div>
-          )}
-          {recompute.error && (
-            <div className="mx-4 my-3 p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-sm rounded-md flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                Recompute failed:{' '}
-                {recompute.error instanceof Error
-                  ? recompute.error.message
-                  : String(recompute.error)}
-              </span>
-            </div>
-          )}
-          {closeCampaign.error && (
-            <div className="mx-4 my-3 p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-sm rounded-md flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                Close failed:{' '}
-                {closeCampaign.error instanceof Error
-                  ? closeCampaign.error.message
-                  : String(closeCampaign.error)}
-              </span>
-            </div>
-          )}
-        </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-auto py-4 px-6 text-xs text-muted-foreground border-t border-border flex justify-between items-center">
-          <div>
-            <span className="text-amber-500 mr-1.5">⚠</span>
-            <strong>Critical Warning:</strong> Preference ≠ correctness. For
-            high-stakes outputs, spot-check winners manually.
-          </div>
-          <div>
-            Slug: <span className="font-mono">{campaign.shareSlug}</span>
-          </div>
+function StatTile({
+  label,
+  value,
+  mono = true,
+}: {
+  label: string;
+  value: string | number;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={cn(
+          'mt-2 text-2xl font-semibold tracking-tight text-foreground',
+          mono && 'font-mono tabular-nums',
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function KeyValue({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="flex min-h-[20px] items-center">{children}</div>
+    </div>
+  );
+}
+
+function RatingRow({
+  rating,
+  rank,
+}: {
+  rating: CampaignDetail['ratings'][number];
+  rank: number;
+}) {
+  const ciSpread =
+    rating.ciLow != null && rating.ciHigh != null
+      ? Math.round((rating.ciHigh - rating.ciLow) / 2)
+      : null;
+  return (
+    <div
+      className={cn(
+        'grid grid-cols-[32px_1.5fr_1fr_80px_100px_120px] items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-surface-highlight/40',
+        rating.stability === 'directional' && 'opacity-70',
+        rank === 1 && 'bg-surface-highlight/30',
+      )}
+    >
+      <div className="font-mono text-xs text-muted-foreground">
+        {rank.toString().padStart(2, '0')}
+      </div>
+      <div className="min-w-0">
+        <div className="truncate font-medium text-foreground">
+          {rating.displayName}
+        </div>
+        <div className="truncate font-mono text-[11px] text-muted-foreground">
+          {rating.providerModelId}
         </div>
       </div>
-    </OperatorLayout>
+      <div className="flex items-baseline gap-1.5 font-mono">
+        <span className="font-semibold text-foreground">{rating.rating}</span>
+        {ciSpread != null && (
+          <span className="text-[11px] text-muted-foreground">±{ciSpread}</span>
+        )}
+      </div>
+      <div className="font-mono text-foreground">
+        {rating.winRate != null
+          ? `${Math.round(rating.winRate * 100)}%`
+          : '—'}
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        <span className="font-mono text-foreground">{rating.gameCount}</span>{' '}
+        games
+      </div>
+      <div>
+        <StabilityChip tier={rating.stability} />
+      </div>
+    </div>
+  );
+}
+
+function StabilityChip({ tier }: { tier: Stability }) {
+  const labels = {
+    stable:
+      'Fewer than 50 comparisons. Rating is directional only — treat with caution.',
+    preliminary:
+      'Between 50 and 200 comparisons. Rating is directionally correct but CIs are still wide.',
+    directional:
+      '200+ comparisons. Rating has tightened up; treat as stable.',
+  } satisfies Record<Stability, string>;
+
+  return (
+    <StatusBadge
+      state={tier}
+      label={STABILITY_LABELS[tier]}
+      className="cursor-default"
+      // Title lives on the inner element via aria-describedby in future;
+      // using native title here is acceptable for a read-only hint.
+    />
   );
 }

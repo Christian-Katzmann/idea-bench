@@ -1,22 +1,30 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import OperatorLayout from '../components/layout/OperatorLayout';
+import {
+  AlertTriangle,
+  ChevronRight,
+  Search,
+  Users,
+} from 'lucide-react';
+import { AppShell } from '../components/layout/app-shell';
+import { PageHeader } from '../components/ui/page-header';
+import { Skeleton } from '../components/ui/skeleton';
+import { EmptyState } from '../components/ui/empty-state';
+import { EntityIcon } from '../components/ui/entity-icon';
+import { StatusBadge } from '../components/ui/status-badge';
+import { Input } from '../components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { Button } from '../components/ui/button';
 import KpiCard from '../components/dashboard/KpiCard';
 import ModelAvailabilityToggle from '../components/models/ModelAvailabilityToggle';
 import ModelDetailPanel from '../components/models/ModelDetailPanel';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table';
 import {
   ApiError,
   apiFetch,
@@ -24,6 +32,7 @@ import {
   type ModelLibraryRow,
 } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { cn } from '../lib/utils';
 
 function buildLibraryUrl(search: string, status: string, sort: string) {
   const params = new URLSearchParams({ status, sort });
@@ -71,7 +80,7 @@ function applyRegistryPatch(
 export default function ModelLibrary() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  useDocumentTitle('Model Library');
+  useDocumentTitle('Models');
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState('all');
@@ -89,16 +98,25 @@ export default function ModelLibrary() {
   });
 
   const patchMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: { enabled?: boolean; legacy?: boolean } }) =>
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { enabled?: boolean; legacy?: boolean };
+    }) =>
       apiFetch(`/api/models/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(patch),
       }),
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries({ queryKey: ['models'] });
-      const previous = queryClient.getQueriesData<ModelLibraryData>({ queryKey: ['models'] });
+      const previous = queryClient.getQueriesData<ModelLibraryData>({
+        queryKey: ['models'],
+      });
       previous.forEach(([key, value]) => {
-        if (value) queryClient.setQueryData(key, applyRegistryPatch(value, id, patch));
+        if (value)
+          queryClient.setQueryData(key, applyRegistryPatch(value, id, patch));
       });
       return { previous };
     },
@@ -116,160 +134,170 @@ export default function ModelLibrary() {
     navigate('/login', { state: { from: '/models' }, replace: true });
   }
 
-  if (isLoading) {
-    return (
-      <OperatorLayout>
-        <div className="text-sm text-muted-foreground">Loading model library...</div>
-      </OperatorLayout>
-    );
-  }
-
-  if (error && !(error instanceof ApiError && error.status === 401)) {
-    return (
-      <OperatorLayout>
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {error instanceof Error ? error.message : String(error)}
-        </div>
-      </OperatorLayout>
-    );
-  }
-
-  if (!data) return null;
+  const isFetchError =
+    error && !(error instanceof ApiError && error.status === 401);
 
   return (
-    <OperatorLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-tight">Model Library</h1>
-          <p className="text-sm text-muted-foreground">
-            Live availability controls, cross-campaign usage, and practical guidance for the next campaign.
-          </p>
-        </div>
+    <AppShell breadcrumb={[{ label: 'Models' }]}>
+      <PageHeader
+        title="Models"
+        description="Availability, cross-campaign usage, and selection guidance."
+      />
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Total Models" value={data.summary.totalModels} />
-          <KpiCard label="Enabled" value={data.summary.enabled} />
-          <KpiCard label="Disabled" value={data.summary.disabled} />
-          <KpiCard label="Legacy" value={data.summary.legacy} />
+      {isFetchError && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>{error instanceof Error ? error.message : String(error)}</span>
         </div>
+      )}
 
-        <Card className="border-border bg-card rounded-xl shadow-none">
-          <CardHeader className="border-b border-border/80 pb-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <CardTitle className="text-lg">Catalog</CardTitle>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by model name or provider ID"
-                  className="min-w-[260px] bg-background"
-                />
-                <select
-                  aria-label="Model status filter"
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                  className="h-8 rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <option value="all">All statuses</option>
-                  <option value="enabled">Enabled</option>
-                  <option value="disabled">Disabled</option>
-                  <option value="legacy">Legacy</option>
-                  <option value="in-use">In use</option>
-                </select>
-                <select
-                  aria-label="Model sort order"
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value)}
-                  className="h-8 rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <option value="usage">Sort by usage</option>
-                  <option value="winRate">Sort by win rate</option>
-                  <option value="name">Sort by name</option>
-                </select>
+      {isLoading && !data && (
+        <div className="mt-6 flex flex-col gap-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm"
+              >
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="h-8 w-10" />
               </div>
+            ))}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-8 w-64 rounded-lg" />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-5">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Availability</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead>Win Signal</TableHead>
-                  <TableHead>Recommendation</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium text-foreground">{row.displayName}</div>
-                        <div className="mt-1 text-xs text-muted-foreground font-mono">
-                          {row.providerModelId}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <ModelAvailabilityToggle
-                          checked={row.enabled && !row.legacy}
-                          label={row.displayName}
-                          onChange={() =>
-                            patchMutation.mutate({
-                              id: row.id,
-                              patch: { enabled: !row.enabled },
-                            })
-                          }
-                        />
-                        <Badge variant="outline" className="capitalize border-border text-muted-foreground">
-                          {row.availability}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {row.usage.campaigns} campaigns
-                    </TableCell>
-                    <TableCell>
-                      {row.performance.winRate != null
-                        ? `${Math.round(row.performance.winRate * 100)}%`
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{row.recommendation}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setDetailRow(row)}>
-                        Details
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            <ul className="divide-y divide-border">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between gap-4 px-5 py-3.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-9 rounded-lg" />
+                    <div className="flex flex-col gap-1.5">
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-2.5 w-48" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <Skeleton className="h-5 w-9 rounded-full" />
+                    <Skeleton className="h-7 w-16 rounded-md" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
-        <Card className="border-border bg-card rounded-xl shadow-none">
-          <CardHeader className="border-b border-border/80 pb-4">
-            <CardTitle className="text-lg">Selection Guidance</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="flex flex-wrap gap-2 mb-3">
-              {data.rows
-                .filter((row) => data.guidance.recommendedIds.includes(row.id))
-                .map((row) => (
-                  <Badge key={row.id} variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
-                    {row.displayName}
-                  </Badge>
+      {data && (
+        <div className="mt-6 flex flex-col gap-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Total models" value={data.summary.totalModels} />
+            <KpiCard label="Enabled" value={data.summary.enabled} />
+            <KpiCard label="Disabled" value={data.summary.disabled} />
+            <KpiCard label="Legacy" value={data.summary.legacy} />
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <h2 className="font-heading text-sm font-semibold text-foreground">
+                Catalog
+              </h2>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search model or provider id"
+                    className="h-9 w-full pl-9 sm:w-64"
+                  />
+                </div>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger className="h-9 w-full sm:w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="enabled">Enabled</SelectItem>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                    <SelectItem value="legacy">Legacy</SelectItem>
+                    <SelectItem value="in-use">In use</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={sort} onValueChange={setSort}>
+                  <SelectTrigger className="h-9 w-full sm:w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usage">Sort by usage</SelectItem>
+                    <SelectItem value="winRate">Sort by win rate</SelectItem>
+                    <SelectItem value="name">Sort by name</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </header>
+
+            {data.rows.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No models match"
+                description="Adjust the search or filter to see the catalog."
+                className="m-5 border-dashed"
+              />
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {data.rows.map((row) => (
+                  <li key={row.id}>
+                    <ModelRow
+                      row={row}
+                      pending={patchMutation.isPending}
+                      onToggle={() =>
+                        patchMutation.mutate({
+                          id: row.id,
+                          patch: { enabled: !row.enabled },
+                        })
+                      }
+                      onOpen={() => setDetailRow(row)}
+                    />
+                  </li>
                 ))}
-            </div>
-            <p className="text-sm text-muted-foreground">{data.guidance.note}</p>
-          </CardContent>
-        </Card>
-      </div>
+              </ul>
+            )}
+          </div>
+
+          {data.guidance.recommendedIds.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <header className="border-b border-border px-5 py-3">
+                <h2 className="font-heading text-sm font-semibold text-foreground">
+                  Selection guidance
+                </h2>
+              </header>
+              <div className="flex flex-col gap-3 px-5 py-4 text-sm text-muted-foreground">
+                <div className="flex flex-wrap gap-2">
+                  {data.rows
+                    .filter((row) =>
+                      data.guidance.recommendedIds.includes(row.id),
+                    )
+                    .map((row) => (
+                      <span
+                        key={row.id}
+                        className="inline-flex h-6 items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-2.5 text-[11px] font-medium text-accent"
+                      >
+                        {row.displayName}
+                      </span>
+                    ))}
+                </div>
+                <p>{data.guidance.note}</p>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       <ModelDetailPanel
         row={detailRow}
@@ -282,6 +310,104 @@ export default function ModelLibrary() {
           patchMutation.mutate({ id: row.id, patch: { legacy } });
         }}
       />
-    </OperatorLayout>
+    </AppShell>
+  );
+}
+
+function ModelRow({
+  row,
+  pending,
+  onToggle,
+  onOpen,
+}: {
+  row: ModelLibraryRow;
+  pending: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  const winRatePct =
+    row.performance.winRate != null
+      ? `${Math.round(row.performance.winRate * 100)}%`
+      : '—';
+  return (
+    <div className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-surface-highlight/40">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <EntityIcon name={row.displayName} size="md" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-foreground">
+              {row.displayName}
+            </span>
+            {row.legacy && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Legacy
+              </span>
+            )}
+          </div>
+          <div className="truncate font-mono text-[11px] text-muted-foreground">
+            {row.providerModelId}
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden shrink-0 items-center gap-8 md:flex lg:gap-12">
+        <MetricCell
+          label="campaigns"
+          value={row.usage.campaigns}
+          muted={row.usage.campaigns === 0}
+        />
+        <MetricCell
+          label="win rate"
+          value={winRatePct}
+          muted={row.performance.winRate == null}
+        />
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {row.recommendation}
+        </span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <ModelAvailabilityToggle
+          checked={row.enabled && !row.legacy}
+          label={row.displayName}
+          disabled={pending || row.legacy}
+          onChange={onToggle}
+        />
+        <Button variant="ghost" size="sm" onClick={onOpen} className="gap-1">
+          Details
+          <ChevronRight
+            className={cn(
+              'size-3.5 transition-transform group-hover:translate-x-0.5',
+            )}
+          />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MetricCell({
+  label,
+  value,
+  muted,
+}: {
+  label: string;
+  value: string | number;
+  muted?: boolean;
+}) {
+  return (
+    <div className="text-right">
+      <div
+        className={cn(
+          'font-mono text-sm tabular-nums',
+          muted ? 'text-muted-foreground' : 'text-foreground',
+        )}
+      >
+        {value}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+    </div>
   );
 }

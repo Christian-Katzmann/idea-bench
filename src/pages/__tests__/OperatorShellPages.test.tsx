@@ -46,7 +46,8 @@ describe('Operator shell pages', () => {
 
     renderWithRouter(<TeamActivity />);
 
-    expect(await screen.findByText(/recent events/i)).toBeInTheDocument();
+    // Timeline section is always present; event labels come from the fixture.
+    expect(await screen.findByText(/timeline/i)).toBeInTheDocument();
   });
 
   it('renders configuration health cards without exposing secrets', async () => {
@@ -54,6 +55,7 @@ describe('Operator shell pages', () => {
 
     renderWithRouter(<ApiSettings />);
 
-    expect((await screen.findAllByText(/configuration health/i)).length).toBeGreaterThan(0);
+    // Health tiles render one per service — any of them proves the layout rendered.
+    expect((await screen.findAllByText(/database/i)).length).toBeGreaterThan(0);
   });
 });

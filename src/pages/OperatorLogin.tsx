@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { AlertTriangle, Github, Loader2, Mail } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Activity, Loader2 } from 'lucide-react';
-import { ModeToggle } from '../components/ModeToggle';
+import { BrandMark } from '../components/ui/brand-mark';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { useTheme } from '../components/ThemeProvider';
+import { Moon, Sun } from 'lucide-react';
 
 export default function OperatorLogin() {
   const navigate = useNavigate();
@@ -13,10 +15,10 @@ export default function OperatorLogin() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { theme, setTheme } = useTheme();
 
-  useDocumentTitle('Operator Sign In');
+  useDocumentTitle('Sign in');
 
-  // Where to bounce back to after login; defaults to operator home.
   const returnTo =
     (location.state as { from?: string } | null)?.from ?? '/';
 
@@ -44,25 +46,40 @@ export default function OperatorLogin() {
     }
   };
 
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 font-sans text-foreground relative">
-      <div className="absolute top-4 right-4">
-        <ModeToggle />
-      </div>
-      <div className="w-full max-w-sm bg-card rounded-2xl shadow-2xl overflow-hidden border border-border">
-        <div className="p-8 text-center border-b border-border bg-sidebar">
-          <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4 border border-primary/30">
-            <Activity className="w-6 h-6 text-primary" />
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 font-sans text-foreground">
+      <button
+        type="button"
+        onClick={() => setTheme(nextTheme)}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-highlight hover:text-foreground"
+      >
+        {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      </button>
+
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        {/* Brand header — mark + product name, nothing else */}
+        <div className="flex flex-col items-center gap-3 text-center">
+          <BrandMark size="xl" />
+          <div>
+            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
+              ModelArena
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Operator sign in
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">ModelArena</h1>
-          <p className="text-muted-foreground text-sm mt-1">Operator sign-in</p>
         </div>
-        <div className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+
+        {/* Primary card — password is the dominant affordance (Q6). */}
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
+            <div className="flex flex-col gap-2">
               <Label
                 htmlFor="pw"
-                className="text-muted-foreground text-xs uppercase tracking-wider"
+                className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
               >
                 Password
               </Label>
@@ -71,27 +88,69 @@ export default function OperatorLogin() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-12 bg-background border-border"
                 autoFocus
+                placeholder="••••••••"
               />
             </div>
             {error && (
-              <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
-                {error}
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
             <Button
               type="submit"
               disabled={!password.trim() || busy}
-              className="w-full h-12 text-lg font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
+              className="w-full"
             >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sign in'}
+              {busy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                'Sign in'
+              )}
             </Button>
           </form>
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Participant voting links don't require this.
-          </p>
+
+          {/* Alternative mechanisms — de-emphasized per Q6. Not wired up. */}
+          <div className="flex flex-col gap-2 border-t border-border bg-surface-highlight/40 px-6 py-4">
+            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+              <span className="h-px flex-1 bg-border" />
+              Or continue with
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled
+                className="flex-1"
+                title="Not available yet"
+              >
+                <Github className="size-3.5" />
+                GitHub
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled
+                className="flex-1"
+                title="Not available yet"
+              >
+                <Mail className="size-3.5" />
+                Email link
+              </Button>
+            </div>
+          </div>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Participant voting links don't require this.
+        </p>
       </div>
     </div>
   );

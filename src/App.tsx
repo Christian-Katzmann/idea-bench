@@ -16,10 +16,11 @@ import ParticipantLanding from './pages/ParticipantLanding';
 import VotingInterface from './pages/VotingInterface';
 import PersonalResults from './pages/PersonalResults';
 import { ThemeProvider } from './components/ThemeProvider';
+import { Toaster } from './components/ui/toast';
 
 export default function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
       <BrowserRouter>
         <Routes>
           {/* Auth */}
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      <Toaster />
     </ThemeProvider>
   );
 }

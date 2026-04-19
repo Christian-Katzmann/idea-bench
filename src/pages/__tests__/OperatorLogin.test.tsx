@@ -7,6 +7,6 @@ describe('OperatorLogin', () => {
     renderWithRouter(<OperatorLogin />, { route: '/login' });
 
     expect(screen.getByRole('heading', { name: /modelarena/i })).toBeInTheDocument();
-    expect(document.title).toBe('Operator Sign In · ModelArena');
+    expect(document.title).toBe('Sign in · ModelArena');
   });
 });

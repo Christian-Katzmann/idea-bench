@@ -1,23 +1,29 @@
-import { Card, CardContent } from '../ui/card';
-
-interface KpiCardProps {
+/**
+ * GitSlip-style KPI tile.
+ * Uppercase small-caps label + large monospaced number + optional hint.
+ * Uses a plain rounded-xl card surface rather than the full shadcn <Card>
+ * so the tile is denser and the number carries visual weight on its own.
+ */
+export default function KpiCard({
+  label,
+  value,
+  hint,
+}: {
   label: string;
   value: string | number;
   hint?: string;
-}
-
-export default function KpiCard({ label, value, hint }: KpiCardProps) {
+}) {
   return (
-    <Card className="border-border bg-card rounded-xl shadow-none">
-      <CardContent className="p-5">
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-          {label}
-        </div>
-        <div className="text-2xl font-semibold font-mono tracking-tight text-foreground">
-          {value}
-        </div>
-        {hint && <div className="mt-2 text-xs text-muted-foreground">{hint}</div>}
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="mb-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-foreground">
+        {value}
+      </div>
+      {hint && (
+        <div className="mt-2 text-xs text-muted-foreground">{hint}</div>
+      )}
+    </div>
   );
 }

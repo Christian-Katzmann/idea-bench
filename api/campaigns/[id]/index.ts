@@ -31,6 +31,7 @@ export default toVercelHandler(withOperator(async (request: Request) => {
       campaign: detail.campaign,
       stats: detail.stats,
       models: detail.models,
+      prompts: detail.prompts,
       ratings: detail.ratings,
     },
     200,

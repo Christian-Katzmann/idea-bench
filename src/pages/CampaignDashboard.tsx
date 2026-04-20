@@ -8,7 +8,6 @@ import {
   Copy,
   Download,
   ExternalLink,
-  FileText,
   Info,
   Loader2,
   RefreshCw,
@@ -44,6 +43,11 @@ export default function CampaignDashboard() {
     queryKey: ['campaign', id],
     queryFn: () => apiFetch<CampaignDetail>(`/api/campaigns/${id}`),
     enabled: !!id,
+    // Mirror OperatorDashboard's polling so single-campaign ratings tick in
+    // place as votes arrive. Background tabs pause; mutations
+    // (recompute/close) still invalidate immediately via onSuccess.
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
   });
 
   useDocumentTitle(data?.campaign.name ?? 'Campaign');
@@ -387,33 +391,33 @@ export default function CampaignDashboard() {
         {/* Prompts ----------------------------------------------------- */}
         <TabsContent value="prompts" className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <header className="border-b border-border px-5 py-3">
-              <h2 className="font-heading text-sm font-semibold text-foreground">
-                Prompts
-              </h2>
-              <p className="text-[11px] text-muted-foreground">
-                The questions voters see. One tournament runs per prompt.
-              </p>
-            </header>
-            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-highlight text-muted-foreground">
-                <FileText className="size-5" />
-              </div>
-              <div className="max-w-sm">
-                <div className="text-sm font-medium text-foreground">
-                  {stats.promptCount}{' '}
-                  {stats.promptCount === 1 ? 'prompt' : 'prompts'} configured
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Full prompt content isn't returned by{' '}
-                  <code className="font-mono text-[11px] text-foreground">
-                    /api/campaigns/:id
-                  </code>{' '}
-                  yet. Extending the detail endpoint to include prompt
-                  bodies will light up this view.
+            <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+              <div>
+                <h2 className="font-heading text-sm font-semibold text-foreground">
+                  Prompts
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                  The questions voters see. One tournament runs per prompt.
                 </p>
               </div>
-            </div>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                {data.prompts.length}{' '}
+                {data.prompts.length === 1 ? 'prompt' : 'prompts'}
+              </span>
+            </header>
+            {data.prompts.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                No prompts configured yet.
+              </div>
+            ) : (
+              <ol className="divide-y divide-border/60">
+                {data.prompts.map((prompt) => (
+                  <li key={prompt.id}>
+                    <PromptRow prompt={prompt} index={prompt.orderIndex + 1} />
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
         </TabsContent>
 
@@ -705,6 +709,58 @@ function ActionRow({
         {isPending && pendingLabel ? pendingLabel : actionLabel}
       </Button>
     </li>
+  );
+}
+
+function PromptRow({
+  prompt,
+  index,
+}: {
+  prompt: CampaignDetail['prompts'][number];
+  index: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasContext = !!prompt.context && prompt.context.trim().length > 0;
+  return (
+    <article className="flex gap-4 px-5 py-4">
+      <div className="font-mono text-xs text-muted-foreground tabular-nums">
+        {index.toString().padStart(2, '0')}
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {prompt.text}
+        </p>
+        {prompt.categoryTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {prompt.categoryTags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md border border-border bg-surface-highlight/60 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {hasContext && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {expanded ? 'Hide context' : 'Show context'}
+            </button>
+            {expanded && (
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface-highlight/40 px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground">
+                {prompt.context}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 

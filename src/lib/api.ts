@@ -79,6 +79,13 @@ export interface CampaignDetail {
     providerModelId: string;
     displayName: string;
   }>;
+  prompts: Array<{
+    id: string;
+    orderIndex: number;
+    text: string;
+    context: string | null;
+    categoryTags: string[];
+  }>;
   ratings: Array<{
     category: string;
     rating: number;

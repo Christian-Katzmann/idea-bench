@@ -52,6 +52,22 @@ function createCampaignDetail(status: 'active' | 'completed' = 'active') {
         displayName: 'GPT-5',
       },
     ],
+    prompts: [
+      {
+        id: 'p-1',
+        orderIndex: 0,
+        text: 'Summarize this support ticket in two sentences.',
+        context: 'You are a support quality auditor.',
+        categoryTags: ['summarization'],
+      },
+      {
+        id: 'p-2',
+        orderIndex: 1,
+        text: 'Reply professionally to the customer.',
+        context: null,
+        categoryTags: [],
+      },
+    ],
     ratings: [
       {
         category: 'overall',
@@ -132,6 +148,46 @@ describe('CampaignDashboard', () => {
       expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
     });
     expect(document.title).toBe('Support QA · ModelArena');
+  });
+
+  it('renders prompt text + tags + collapsible context on the Prompts tab', async () => {
+    const user = userEvent.setup();
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        body: createCampaignDetail('active'),
+      },
+    ]);
+
+    renderCampaignDashboard();
+
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /prompts/i }),
+    );
+
+    expect(
+      await screen.findByText(
+        /summarize this support ticket in two sentences\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/reply professionally to the customer\./i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('summarization')).toBeInTheDocument();
+
+    // Context is hidden behind a "Show context" toggle. The auditor copy
+    // shouldn't be visible until the user expands it.
+    expect(
+      screen.queryByText(/you are a support quality auditor\./i),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: /show context/i }),
+    );
+
+    expect(
+      await screen.findByText(/you are a support quality auditor\./i),
+    ).toBeInTheDocument();
   });
 
   it('opens the csv export endpoint from the operator page', async () => {

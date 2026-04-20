@@ -1,4 +1,4 @@
-import { and, count, countDistinct, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, countDistinct, eq, inArray, sql } from 'drizzle-orm';
 import { stabilityFor, type Stability } from '../../lib/stability.js';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
@@ -25,6 +25,14 @@ export interface CampaignLeaderboardRow {
   displayName: string;
 }
 
+export interface CampaignPromptRow {
+  id: string;
+  orderIndex: number;
+  text: string;
+  context: string | null;
+  categoryTags: string[];
+}
+
 export interface CampaignDetailData {
   campaign: {
     id: string;
@@ -48,6 +56,7 @@ export interface CampaignDetailData {
     providerModelId: string;
     displayName: string;
   }>;
+  prompts: CampaignPromptRow[];
   ratings: CampaignLeaderboardRow[];
 }
 
@@ -62,15 +71,22 @@ export async function buildCampaignDetail(
     .limit(1);
   if (!campaign) return null;
 
-  const [models, promptCount, voteStats, ratings] = await Promise.all([
+  const [models, promptRows, voteStats, ratings] = await Promise.all([
     db
       .select()
       .from(schema.campaignModels)
       .where(eq(schema.campaignModels.campaignId, id)),
     db
-      .select({ n: count() })
+      .select({
+        id: schema.prompts.id,
+        orderIndex: schema.prompts.orderIndex,
+        text: schema.prompts.text,
+        context: schema.prompts.context,
+        categoryTags: schema.prompts.categoryTags,
+      })
       .from(schema.prompts)
-      .where(eq(schema.prompts.campaignId, id)),
+      .where(eq(schema.prompts.campaignId, id))
+      .orderBy(asc(schema.prompts.orderIndex)),
     db
       .select({
         totalVotes: count(schema.votes.id),
@@ -151,7 +167,7 @@ export async function buildCampaignDetail(
       closedAt: campaign.closedAt,
     },
     stats: {
-      promptCount: promptCount[0]?.n ?? 0,
+      promptCount: promptRows.length,
       modelCount: models.length,
       totalVotes: voteStats[0]?.totalVotes ?? 0,
       uniqueParticipants: voteStats[0]?.uniqueParticipants ?? 0,
@@ -161,6 +177,13 @@ export async function buildCampaignDetail(
       id: model.id,
       providerModelId: model.providerModelId,
       displayName: model.displayName,
+    })),
+    prompts: promptRows.map((prompt) => ({
+      id: prompt.id,
+      orderIndex: prompt.orderIndex,
+      text: prompt.text,
+      context: prompt.context,
+      categoryTags: prompt.categoryTags ?? [],
     })),
     ratings: enrichedRatings,
   };

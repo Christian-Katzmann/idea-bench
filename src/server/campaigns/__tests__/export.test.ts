@@ -27,6 +27,7 @@ describe('buildCampaignResultsCsv', () => {
           displayName: 'GPT-5',
         },
       ],
+      prompts: [],
       ratings: [
         {
           category: 'overall',

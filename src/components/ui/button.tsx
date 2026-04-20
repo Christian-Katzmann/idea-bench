@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
  * GitSlip-style button.
  *
  * Conventions:
- * - `default`      → dark pill on light surface. Primary CTA ("New Campaign",
- *                    "Add Domain"). rounded-full, h-10.
+ * - `default`      → dark rounded button on light surface. Primary CTA
+ *                    ("New Campaign", "Add Domain"). rounded-lg, h-10.
  * - `outline`      → bordered secondary action on surface. rounded-lg.
  * - `secondary`    → subtle filled action. Same geometry as outline.
  * - `ghost`        → color-only hover, no chrome. For icon buttons and
@@ -25,7 +25,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary",
+          "rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary",
         outline:
           "rounded-lg border border-border bg-card text-foreground hover:bg-surface-highlight hover:border-border aria-expanded:bg-surface-highlight",
         secondary:

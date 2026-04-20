@@ -81,12 +81,21 @@ interface CreatedCampaign {
 }
 
 /**
- * Controls which AUTHORING UI the operator sees for a prompt's text —
- * simple textarea vs structured (instructions + input + output format).
+ * Controls which AUTHORING UI the operator sees for a prompt's text.
+ *   - 'simple'   plain textarea; the blob IS the prompt. Default.
+ *   - 'advanced' instructions + input + output format fields; produces
+ *                a PromptStructured payload on save so the voter UI can
+ *                render each field with distinct typography.
+ *
+ * The on-screen label for 'advanced' used to be "Structured" — renamed
+ * to "Advanced" so it reads as a progressive disclosure toggle rather
+ * than a data-shape label. The PromptStructured data type is unchanged;
+ * it's the wire shape, not the UX word.
+ *
  * Distinct from `PromptEvalMode` below, which controls how voters see
  * and rate the generated output.
  */
-type PromptAuthoringMode = 'simple' | 'structured';
+type PromptAuthoringMode = 'simple' | 'advanced';
 
 /**
  * Evaluation mode for a prompt — how voters rate the model outputs.
@@ -161,7 +170,10 @@ const DEFAULT_QUALITATIVE_CONFIG: QualitativeConfig = {
  */
 function emptyPrompt(previousEvalMode: PromptEvalMode = 'tournament'): PromptDraft {
   return {
-    mode: 'structured',
+    // Simple is the default authoring mode — plain textarea, lowest
+    // friction for the common case. Operators who need instructions /
+    // input / output format as separate fields toggle into 'advanced'.
+    mode: 'simple',
     text: '',
     context: '',
     instructions: '',
@@ -232,7 +244,7 @@ function evalModeConfigForApi(p: PromptDraft): Record<string, unknown> | undefin
 function flattenPrompt(
   p: PromptDraft,
 ): { text: string; structured?: PromptStructured } | null {
-  if (p.mode === 'structured') {
+  if (p.mode === 'advanced') {
     const instructions = p.instructions.trim();
     if (!instructions) return null;
     const input = p.input.trim();
@@ -878,12 +890,15 @@ function ModeToggle({
   value: PromptAuthoringMode;
   onChange: (mode: PromptAuthoringMode) => void;
 }) {
+  // Simple listed first so it reads as the progressive default;
+  // Advanced is the opt-in for structured prompts (instructions / input
+  // / output format as separate fields).
   return (
     <div
       className="inline-flex h-7 items-center rounded-md border border-border bg-card p-0.5 text-[11px] font-medium"
       role="tablist"
     >
-      {(['structured', 'simple'] as const).map((mode) => {
+      {(['simple', 'advanced'] as const).map((mode) => {
         const on = value === mode;
         return (
           <button

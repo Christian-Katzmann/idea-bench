@@ -67,10 +67,12 @@ describe('CreateCampaign', () => {
 
     await user.type(screen.getByLabelText(/campaign name/i), 'Test campaign');
     await user.click(screen.getByRole('button', { name: /next/i }));
-    // Structured mode is the default; the Instructions field is what
-    // the submit button gates on (required, populates `text` for the LLM).
+    // Simple is the default authoring mode now; the "Prompt text"
+    // textarea is what populates `text` for the LLM. Advanced mode
+    // exposes Instructions / Input / Output-format as separate fields,
+    // but it's opt-in.
     await user.type(
-      screen.getByLabelText(/instructions/i),
+      screen.getByLabelText(/prompt text/i),
       'Compare these responses',
     );
     await user.click(screen.getByRole('button', { name: /next/i }));

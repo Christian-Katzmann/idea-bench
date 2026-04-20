@@ -200,6 +200,27 @@ export interface DashboardLeaderboardRow {
   stability: 'directional' | 'preliminary' | 'stable';
 }
 
+export interface CampaignMatchup {
+  aCampaignModelId: string;
+  bCampaignModelId: string;
+  aWins: number;
+  bWins: number;
+  ties: number;
+}
+
+export interface CampaignPulseBucket {
+  hour: string;
+  votes: number;
+}
+
+export interface CampaignRecentVote {
+  at: string;
+  aCampaignModelId: string;
+  bCampaignModelId: string;
+  winnerCampaignModelId: string | null;
+  isTie: boolean;
+}
+
 export interface DashboardLeaderboardCampaign {
   id: string;
   name: string;
@@ -207,6 +228,9 @@ export interface DashboardLeaderboardCampaign {
   totalVotes: number;
   updatedAt: string | null;
   ratings: DashboardLeaderboardRow[];
+  matchups: CampaignMatchup[];
+  pulseBuckets: CampaignPulseBucket[];
+  recentVotes: CampaignRecentVote[];
 }
 
 export interface DashboardSummary {

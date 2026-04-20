@@ -14,7 +14,7 @@ import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { StatusBadge, type StatusState } from '../components/ui/status-badge';
 import KpiCard from '../components/dashboard/KpiCard';
-import { Leaderboard } from '../components/dashboard/leaderboard/Leaderboard';
+import { Spotlight } from '../components/dashboard/leaderboard/Spotlight';
 import { LeaderboardSkeleton } from '../components/dashboard/leaderboard/LeaderboardSkeleton';
 import {
   ApiError,
@@ -98,7 +98,7 @@ export default function OperatorDashboard() {
             <KpiCard label="Unique participants" value={data.kpis.uniqueParticipants} />
           </div>
 
-          <Leaderboard leaderboards={data.leaderboards} />
+          <Spotlight leaderboards={data.leaderboards} />
 
           <Panel
             title="Recent campaigns"

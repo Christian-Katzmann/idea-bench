@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import type { DashboardLeaderboardCampaign } from '@/lib/api';
+import { STABILITY_THRESHOLDS } from '@/lib/stability';
 import { LeaderboardRow } from './LeaderboardRow';
 
 /**
@@ -75,6 +76,18 @@ export function LeaderboardTable({
           />
         );
       })}
+
+      <div
+        className="col-span-full flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/70 bg-surface-highlight/40 px-4 py-2 text-[11px] text-muted-foreground/80"
+        title="Bradley-Terry · logistic · 95% CI via Fisher information · recomputed after each finished participant"
+      >
+        <span>Bradley-Terry · 95% CI via Fisher info</span>
+        <span className="tabular-nums">
+          Stable ≥ {STABILITY_THRESHOLDS.stable} · Preliminary{' '}
+          {STABILITY_THRESHOLDS.preliminary}–{STABILITY_THRESHOLDS.stable - 1} ·
+          Directional &lt; {STABILITY_THRESHOLDS.preliminary}
+        </span>
+      </div>
     </div>
   );
 }

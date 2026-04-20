@@ -5,6 +5,20 @@ import {
   loadAnalyticsSnapshot,
   type AnalyticsSnapshot,
 } from '../models/library.js';
+import {
+  loadCampaignInsights,
+  type CampaignInsights,
+  type CampaignMatchup,
+  type CampaignPulseBucket,
+  type CampaignRecentVote,
+} from './insights.js';
+
+export type {
+  CampaignInsights,
+  CampaignMatchup,
+  CampaignPulseBucket,
+  CampaignRecentVote,
+};
 
 /** One row on the dashboard's rich leaderboard — a single model within one
  *  campaign, with its Bradley-Terry rating, 95% CI bounds, vote count, and
@@ -22,8 +36,9 @@ export interface DashboardLeaderboardRow {
   stability: Stability;
 }
 
-/** A featured campaign on the dashboard leaderboard. One tab per campaign,
- *  ordered by recent vote volume. Rows are the campaign's overall ratings. */
+/** A featured campaign on the dashboard leaderboard. The Spotlight component
+ *  shows one of these at a time; `matchups` and `pulse*` power its
+ *  Matchups and Pulse tabs alongside the primary leaderboard table. */
 export interface DashboardLeaderboardCampaign {
   id: string;
   name: string;
@@ -31,6 +46,9 @@ export interface DashboardLeaderboardCampaign {
   totalVotes: number;
   updatedAt: string | null;
   ratings: DashboardLeaderboardRow[];
+  matchups: CampaignMatchup[];
+  pulseBuckets: CampaignPulseBucket[];
+  recentVotes: CampaignRecentVote[];
 }
 
 export interface DashboardSummary {
@@ -85,6 +103,9 @@ export async function buildDashboardSummary(
   input: AnalyticsSnapshot | ReturnType<typeof getDb>,
 ): Promise<DashboardSummary> {
   const snapshot = isSnapshot(input) ? input : await loadAnalyticsSnapshot(input);
+  // Insights need a live db (raw vote scans). Test fixtures pass a snapshot
+  // directly with no db handle — return an empty insights map in that case.
+  const dbForInsights = isSnapshot(input) ? null : input;
   const library = await buildModelLibrary(snapshot, {
     status: 'all',
     sort: 'winRate',
@@ -214,14 +235,23 @@ export async function buildDashboardSummary(
   const winStatsByCampaignModelId =
     snapshot.voteAggregates?.performanceByCampaignModelId ?? new Map();
 
-  const leaderboards: DashboardLeaderboardCampaign[] = snapshot.campaigns
+  const featured = snapshot.campaigns
     .filter((campaign) => campaign.status === 'active')
     .map((campaign) => ({
       campaign,
       totalVotes: voteCountByCampaignId.get(campaign.id) ?? 0,
     }))
     .sort((a, b) => b.totalVotes - a.totalVotes)
-    .slice(0, MAX_FEATURED_LEADERBOARDS)
+    .slice(0, MAX_FEATURED_LEADERBOARDS);
+
+  const insightsByCampaignId: Map<string, CampaignInsights> = dbForInsights
+    ? await loadCampaignInsights(
+        dbForInsights,
+        featured.map((f) => f.campaign.id),
+      )
+    : new Map();
+
+  const leaderboards: DashboardLeaderboardCampaign[] = featured
     .map(({ campaign, totalVotes: campaignVotes }) => {
       const campaignModels = campaignModelsByCampaignId.get(campaign.id) ?? [];
       const ratings = ratingsByCampaignId.get(campaign.id) ?? [];
@@ -268,6 +298,7 @@ export async function buildDashboardSummary(
         }
       }
 
+      const insights = insightsByCampaignId.get(campaign.id);
       return {
         id: campaign.id,
         name: campaign.name,
@@ -278,6 +309,9 @@ export async function buildDashboardSummary(
             ? new Date(latestComputedAt).toISOString()
             : null,
         ratings: rows,
+        matchups: insights?.matchups ?? [],
+        pulseBuckets: insights?.pulseBuckets ?? [],
+        recentVotes: insights?.recentVotes ?? [],
       } satisfies DashboardLeaderboardCampaign;
     });
 

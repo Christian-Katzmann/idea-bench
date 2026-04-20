@@ -69,6 +69,31 @@ export const votingModeEnum = pgEnum('voting_mode', [
   'hybrid',
 ]);
 
+/**
+ * Evaluation mode for a single prompt. Tournament is the legacy default;
+ * every prompt created before the multi-mode migration is `tournament`.
+ * The five additional modes ship over Plan 01 Phases 1–2:
+ *   - 'slider'         per-model 1–N Likert score
+ *   - 'approve_reject' per-model boolean pass/fail
+ *   - 'best_of_n'      participant picks one model's output from all N
+ *   - 'multi_axis'     per-model per-dimension scores against a rubric
+ *   - 'qualitative'    per-model free-text feedback (no numeric signal)
+ *
+ * Stored on `prompts.mode`; mode-specific settings live in
+ * `prompts.mode_config` (jsonb). Each mode has its own response table
+ * (see slider_responses, approve_reject_responses, best_of_n_responses,
+ * multi_axis_responses, qualitative_responses); the legacy tournament
+ * path continues to write through `tournaments` + `votes`.
+ */
+export const promptModeEnum = pgEnum('prompt_mode', [
+  'tournament',
+  'slider',
+  'approve_reject',
+  'best_of_n',
+  'multi_axis',
+  'qualitative',
+]);
+
 export const modelRegistry = pgTable('model_registry', {
   id: uuid('id').primaryKey().defaultRandom(),
   providerModelId: text('provider_model_id').notNull().unique(),
@@ -165,6 +190,34 @@ export interface PromptStructured {
   outputFormat?: string;
 }
 
+/**
+ * Per-mode settings for a prompt. Shape depends on `prompts.mode`:
+ *
+ *   tournament       → null (no config)
+ *   slider           → { min, max, minLabel?, maxLabel? }
+ *   approve_reject   → { approveLabel?, rejectLabel? }
+ *   best_of_n        → {} (N equals the campaign's model count)
+ *   multi_axis       → { dimensions: [{ key, label, min, max }] }
+ *   qualitative      → { prompt?, required }
+ *
+ * Validation happens at the API layer — the jsonb column is intentionally
+ * loose so new fields can land without migrations.
+ */
+export type PromptModeConfig =
+  | null
+  | { min: number; max: number; minLabel?: string; maxLabel?: string }
+  | { approveLabel?: string; rejectLabel?: string }
+  | Record<string, never>
+  | {
+      dimensions: Array<{
+        key: string;
+        label: string;
+        min: number;
+        max: number;
+      }>;
+    }
+  | { prompt?: string; required: boolean };
+
 export const prompts = pgTable(
   'prompts',
   {
@@ -177,6 +230,14 @@ export const prompts = pgTable(
     context: text('context'),
     structured: jsonb('structured').$type<PromptStructured>(),
     categoryTags: text('category_tags').array().notNull().default([]),
+    /**
+     * Per-prompt evaluation mode. Defaults to 'tournament' so every prompt
+     * created before Plan 01 Phase 1 keeps the existing bracket behavior.
+     * New prompts default to the last-used mode in the campaign creation
+     * UI (client-side default, not schema-level).
+     */
+    mode: promptModeEnum('mode').notNull().default('tournament'),
+    modeConfig: jsonb('mode_config').$type<PromptModeConfig>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -359,6 +420,212 @@ export const votes = pgTable(
   ],
 );
 
+// ===========================================================================
+// Multi-mode response tables (Plan 01 Phase 0 — shipped empty; handlers
+// populate them in Phase 1+). The legacy tournament stack above
+// (tournaments + votes) is unaffected and continues to serve
+// `mode='tournament'` prompts.
+//
+// Key invariants across all five:
+//   - Keyed by (participant, prompt[, campaign_model]) depending on mode.
+//   - Uniqueness prevents double-submission.
+//   - `campaignId` denormalized on every row for cheap per-campaign scans
+//     in the ratings pipeline.
+//   - `sessionId` mirrors the tournament convention for diagnostics
+//     (one UUID per /vote/:slug visit).
+// ===========================================================================
+
+/**
+ * Slider mode: one numeric score per (participant, prompt, campaign_model).
+ * Score range is determined by the prompt's mode_config.min/max; stored
+ * here as a raw integer. Mean + variance per model is the aggregate.
+ */
+export const sliderResponses = pgTable(
+  'slider_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    promptId: uuid('prompt_id')
+      .notNull()
+      .references(() => prompts.id, { onDelete: 'cascade' }),
+    campaignModelId: uuid('campaign_model_id')
+      .notNull()
+      .references(() => campaignModels.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    score: integer('score').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uniq_slider_response').on(
+      t.participantId,
+      t.promptId,
+      t.campaignModelId,
+    ),
+    index('slider_responses_campaign').on(t.campaignId),
+    index('slider_responses_prompt').on(t.promptId),
+  ],
+);
+
+/**
+ * Approve/Reject mode: one boolean per (participant, prompt, campaign_model).
+ * Pass rate per model is the aggregate; Wilson CI for confidence bounds.
+ */
+export const approveRejectResponses = pgTable(
+  'approve_reject_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    promptId: uuid('prompt_id')
+      .notNull()
+      .references(() => prompts.id, { onDelete: 'cascade' }),
+    campaignModelId: uuid('campaign_model_id')
+      .notNull()
+      .references(() => campaignModels.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    approved: boolean('approved').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uniq_approve_reject_response').on(
+      t.participantId,
+      t.promptId,
+      t.campaignModelId,
+    ),
+    index('approve_reject_responses_campaign').on(t.campaignId),
+    index('approve_reject_responses_prompt').on(t.promptId),
+  ],
+);
+
+/**
+ * Best-of-N mode: one chosen campaign_model per (participant, prompt).
+ * Unlike the other response tables, this is keyed on (participant, prompt)
+ * without the model_id — the participant sees all N and picks exactly one.
+ * Win rate per model is the aggregate; binomial CI for bounds.
+ */
+export const bestOfNResponses = pgTable(
+  'best_of_n_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    promptId: uuid('prompt_id')
+      .notNull()
+      .references(() => prompts.id, { onDelete: 'cascade' }),
+    chosenCampaignModelId: uuid('chosen_campaign_model_id')
+      .notNull()
+      .references(() => campaignModels.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uniq_best_of_n_response').on(t.participantId, t.promptId),
+    index('best_of_n_responses_campaign').on(t.campaignId),
+    index('best_of_n_responses_prompt').on(t.promptId),
+  ],
+);
+
+/**
+ * Multi-axis mode: per-dimension scores per (participant, prompt, model).
+ * `scores` is a jsonb map: { [dimensionKey]: number }. Dimension keys
+ * must match the prompt's mode_config.dimensions[].key (enforced at the
+ * API layer). Per-dimension mean + variance per model is the aggregate.
+ */
+export interface MultiAxisScores {
+  [dimensionKey: string]: number;
+}
+
+export const multiAxisResponses = pgTable(
+  'multi_axis_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    promptId: uuid('prompt_id')
+      .notNull()
+      .references(() => prompts.id, { onDelete: 'cascade' }),
+    campaignModelId: uuid('campaign_model_id')
+      .notNull()
+      .references(() => campaignModels.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    scores: jsonb('scores').$type<MultiAxisScores>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uniq_multi_axis_response').on(
+      t.participantId,
+      t.promptId,
+      t.campaignModelId,
+    ),
+    index('multi_axis_responses_campaign').on(t.campaignId),
+    index('multi_axis_responses_prompt').on(t.promptId),
+  ],
+);
+
+/**
+ * Qualitative mode: free-text feedback per (participant, prompt, model).
+ * No numeric aggregate — V1 exposes the raw text list; later an NLP
+ * clustering pass surfaces themes. Text is optional at the row level
+ * (the prompt's mode_config.required flag decides UI enforcement).
+ */
+export const qualitativeResponses = pgTable(
+  'qualitative_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    promptId: uuid('prompt_id')
+      .notNull()
+      .references(() => prompts.id, { onDelete: 'cascade' }),
+    campaignModelId: uuid('campaign_model_id')
+      .notNull()
+      .references(() => campaignModels.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    text: text('text').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uniq_qualitative_response').on(
+      t.participantId,
+      t.promptId,
+      t.campaignModelId,
+    ),
+    index('qualitative_responses_campaign').on(t.campaignId),
+    index('qualitative_responses_prompt').on(t.promptId),
+  ],
+);
+
 /**
  * Denormalized per-category rating cache. Only GLOBAL ratings — personal
  * ratings are computed transiently on the results page.
@@ -451,7 +718,20 @@ export type NewRating = typeof ratings.$inferInsert;
 export type MagicLink = typeof magicLinks.$inferSelect;
 export type NewMagicLink = typeof magicLinks.$inferInsert;
 
+export type SliderResponse = typeof sliderResponses.$inferSelect;
+export type NewSliderResponse = typeof sliderResponses.$inferInsert;
+export type ApproveRejectResponse = typeof approveRejectResponses.$inferSelect;
+export type NewApproveRejectResponse =
+  typeof approveRejectResponses.$inferInsert;
+export type BestOfNResponse = typeof bestOfNResponses.$inferSelect;
+export type NewBestOfNResponse = typeof bestOfNResponses.$inferInsert;
+export type MultiAxisResponse = typeof multiAxisResponses.$inferSelect;
+export type NewMultiAxisResponse = typeof multiAxisResponses.$inferInsert;
+export type QualitativeResponse = typeof qualitativeResponses.$inferSelect;
+export type NewQualitativeResponse = typeof qualitativeResponses.$inferInsert;
+
 export type BracketPosition = (typeof bracketPositionEnum.enumValues)[number];
 export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];
 export type VoteWinner = (typeof voteWinnerEnum.enumValues)[number];
 export type VotingMode = (typeof votingModeEnum.enumValues)[number];
+export type PromptMode = (typeof promptModeEnum.enumValues)[number];

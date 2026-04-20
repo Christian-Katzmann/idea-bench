@@ -172,21 +172,46 @@ export default function VotingInterface() {
   // NextResp under tsconfig `strict: false`. Behaves like the original.
   const battle = nextQ.data as NextBattlePayload;
 
+  const tournamentCurrent = Math.min(
+    battle.progress.tournamentsDone + 1,
+    battle.progress.tournamentsTotal,
+  );
+
+  // Label node: on desktop, the battle's semantic label (e.g. "Semis · 2 of 3").
+  // On mobile, the desktop right-side progress bar is hidden to save topbar
+  // real estate, so the label slot carries a compact "Prompt N of M" + bar
+  // instead — the voter otherwise has no sense of depth through a session.
+  const shellLabel = (
+    <>
+      <span className="hidden sm:inline">
+        {battle.battle.label} · {battle.battle.reason}
+      </span>
+      <span className="flex items-center gap-2 sm:hidden">
+        <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+          Prompt{' '}
+          <span className="text-foreground">{tournamentCurrent}</span> of{' '}
+          {battle.progress.tournamentsTotal}
+        </span>
+        <div className="h-1 w-16 overflow-hidden rounded-full bg-border/60">
+          <div
+            className="h-full bg-foreground transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </span>
+    </>
+  );
+
   return (
     <ParticipantShell
-      label={`${battle.battle.label} · ${battle.battle.reason}`}
+      label={shellLabel}
       rightSlot={
         <>
           <div className="hidden min-w-40 items-center gap-2 sm:flex">
             <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
               Prompt{' '}
-              <span className="text-foreground">
-                {Math.min(
-                  battle.progress.tournamentsDone + 1,
-                  battle.progress.tournamentsTotal,
-                )}
-              </span>{' '}
-              of {battle.progress.tournamentsTotal}
+              <span className="text-foreground">{tournamentCurrent}</span> of{' '}
+              {battle.progress.tournamentsTotal}
             </span>
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-border/60">
               <div
@@ -207,7 +232,7 @@ export default function VotingInterface() {
           </button>
         </>
       }
-      contentClassName="flex flex-col overflow-hidden"
+      contentClassName="flex flex-col md:overflow-hidden"
     >
       {/* Prompt strip */}
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
@@ -235,9 +260,14 @@ export default function VotingInterface() {
         </div>
       </section>
 
-      {/* Battle area — side-by-side outputs + primary vote row + tie/both-bad row */}
-      <section className="relative flex-1 overflow-hidden bg-background px-4 pb-4 pt-6 md:px-6">
-        <div className="mx-auto flex h-full max-w-5xl flex-col gap-3">
+      {/* Battle area — side-by-side outputs + primary vote row + tie/both-bad row.
+          On desktop the section is a viewport-filling pane: each output column
+          scrolls inside a clamped grid cell. On mobile the section flows with
+          the page — the voter scrolls through A then B naturally and votes via
+          the fixed bottom action bar (see MobileVoteBar below). pb-24 reserves
+          space so the last line of output isn't hidden under the bar. */}
+      <section className="relative flex-1 bg-background px-4 pt-6 pb-28 md:overflow-hidden md:px-6 md:pb-4">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 md:h-full">
           <AnimatePresence mode="wait">
             <motion.div
               key={`${battle.tournament.id}:${battle.battle.position}`}
@@ -245,7 +275,7 @@ export default function VotingInterface() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.02 }}
               transition={{ duration: 0.15 }}
-              className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2"
+              className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-2"
             >
               <OutputColumn
                 label="Model A"
@@ -266,7 +296,9 @@ export default function VotingInterface() {
             </motion.div>
           </AnimatePresence>
 
-          <div className="flex shrink-0 items-center justify-center gap-2 border-t border-border/50 pt-3">
+          {/* Desktop tertiary row — hidden on mobile where these actions live
+              in the fixed bottom bar instead. */}
+          <div className="hidden shrink-0 items-center justify-center gap-2 border-t border-border/50 pt-3 md:flex">
             <TertiaryVoteButton
               disabled={isBusy}
               onClick={() => handleVote('tie')}
@@ -307,6 +339,8 @@ export default function VotingInterface() {
           </div>
         </div>
       </section>
+
+      <MobileVoteBar disabled={isBusy} onVote={handleVote} />
     </ParticipantShell>
   );
 }
@@ -344,10 +378,16 @@ function OutputColumn({
           <span className="ml-1 opacity-70">tokens</span>
         </span>
       </header>
-      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[14px] leading-[1.65] text-foreground">
+      {/* On desktop the body is a scrollable pane within a clamped grid cell;
+          on mobile it flows with the page so the voter scrolls naturally
+          through A then B and votes via the fixed bottom bar. */}
+      <div className="flex-1 whitespace-pre-wrap px-4 py-4 text-[14px] leading-[1.65] text-foreground md:overflow-y-auto">
         {output}
       </div>
-      <div className="shrink-0 border-t border-border bg-surface-highlight/30 p-3">
+      {/* Per-card "A/B is better" footer — desktop only. On mobile, the
+          unified MobileVoteBar at the bottom of the page owns all four
+          decisions so voters never have to scroll back to vote. */}
+      <div className="hidden shrink-0 border-t border-border bg-surface-highlight/30 p-3 md:block">
         <Button
           onClick={onVote}
           disabled={disabled}
@@ -481,5 +521,64 @@ function TertiaryVoteButton({
       <span>{children}</span>
       <KeyHint>{hint}</KeyHint>
     </Button>
+  );
+}
+
+/**
+ * Fixed bottom action bar — mobile only. Four equal-width zones so every
+ * decision is a single thumb-tap without scrolling back. A/B get primary
+ * style (most-chosen outcome), Tie / Both bad get outline (secondary but
+ * still first-class). Height clears the Apple HIG 44px minimum; the bar
+ * pads env(safe-area-inset-bottom) so it floats above the home indicator.
+ *
+ * Hidden on md+ where the per-card footer buttons + desktop tertiary row
+ * remain the primary interaction pattern.
+ */
+function MobileVoteBar({
+  disabled,
+  onVote,
+}: {
+  disabled: boolean;
+  onVote: (choice: VoteChoice) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Vote"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      <div className="grid grid-cols-4 gap-2 px-3 py-3">
+        <Button
+          onClick={() => onVote('A')}
+          disabled={disabled}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          A better
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onVote('tie')}
+          disabled={disabled}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          Tie
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onVote('both_bad')}
+          disabled={disabled}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          Both bad
+        </Button>
+        <Button
+          onClick={() => onVote('B')}
+          disabled={disabled}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          B better
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -3,6 +3,8 @@ import { activateCampaignWebHandler } from '../../../src/server/routes/campaigns
 import { closeCampaignWebHandler } from '../../../src/server/routes/campaigns/close.js';
 import { exportCampaignCsvWebHandler } from '../../../src/server/routes/campaigns/exportCsv.js';
 import { exportCampaignParticipantsCsvWebHandler } from '../../../src/server/routes/campaigns/exportParticipantsCsv.js';
+import { exportCampaignResponsesCsvWebHandler } from '../../../src/server/routes/campaigns/exportResponsesCsv.js';
+import { qualitativeResponsesWebHandler } from '../../../src/server/routes/campaigns/qualitativeResponses.js';
 import { generateCampaignWebHandler } from '../../../src/server/routes/campaigns/generate.js';
 import { previewCampaignWebHandler } from '../../../src/server/routes/campaigns/preview.js';
 import { recomputeCampaignWebHandler } from '../../../src/server/routes/campaigns/recompute.js';
@@ -12,6 +14,8 @@ const actionHandlers: Record<string, WebHandler> = {
   close: closeCampaignWebHandler,
   export: exportCampaignCsvWebHandler,
   'export-participants': exportCampaignParticipantsCsvWebHandler,
+  'export-responses': exportCampaignResponsesCsvWebHandler,
+  'qualitative-responses': qualitativeResponsesWebHandler,
   generate: generateCampaignWebHandler,
   preview: previewCampaignWebHandler,
   recompute: recomputeCampaignWebHandler,

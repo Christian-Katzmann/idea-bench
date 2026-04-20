@@ -22,6 +22,7 @@ import { ApproveRejectStepView } from '../components/voting/ApproveRejectStepVie
 import { BestOfNStepView } from '../components/voting/BestOfNStepView';
 import { MultiAxisStepView } from '../components/voting/MultiAxisStepView';
 import { QualitativeStepView } from '../components/voting/QualitativeStepView';
+import { ModeIndicator } from '../components/voting/ModeIndicator';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
 
@@ -267,6 +268,10 @@ export default function VotingInterface() {
       }
       contentClassName="flex flex-col md:overflow-hidden"
     >
+      {/* Mode indicator — tournament mode. Phase 3 addition so voters
+          in a mixed-mode campaign have a consistent "you're in tournament
+          mode now" cue alongside the other modes' own indicators. */}
+      <ModeIndicator mode="tournament" />
       {/* Prompt strip */}
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-2.5">

@@ -31,6 +31,7 @@ export interface CampaignPromptRow {
   text: string;
   context: string | null;
   categoryTags: string[];
+  mode: schema.PromptMode;
 }
 
 export interface CampaignDetailData {
@@ -90,6 +91,7 @@ export async function buildCampaignDetail(
         text: schema.prompts.text,
         context: schema.prompts.context,
         categoryTags: schema.prompts.categoryTags,
+        mode: schema.prompts.mode,
       })
       .from(schema.prompts)
       .where(eq(schema.prompts.campaignId, id))
@@ -205,6 +207,7 @@ export async function buildCampaignDetail(
       text: prompt.text,
       context: prompt.context,
       categoryTags: prompt.categoryTags ?? [],
+      mode: prompt.mode,
     })),
     ratings: enrichedRatings,
   };

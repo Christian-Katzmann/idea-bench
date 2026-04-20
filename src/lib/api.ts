@@ -91,6 +91,7 @@ export interface CampaignDetail {
     text: string;
     context: string | null;
     categoryTags: string[];
+    mode: PromptMode;
   }>;
   ratings: Array<{
     category: string;
@@ -110,6 +111,29 @@ export interface CampaignDetail {
     campaignModelId: string;
     providerModelId: string;
     displayName: string;
+  }>;
+}
+
+/**
+ * Payload from GET /api/campaigns/:id/qualitative-responses — powers
+ * the Comments tab on the campaign dashboard.
+ */
+export interface QualitativeResponsesData {
+  campaign: { id: string; name: string; shareSlug: string };
+  prompts: Array<{
+    id: string;
+    orderIndex: number;
+    text: string;
+    mode: PromptMode;
+  }>;
+  models: Array<{ id: string; displayName: string; providerModelId: string }>;
+  responses: Array<{
+    id: string;
+    promptId: string;
+    campaignModelId: string;
+    email: string | null;
+    text: string;
+    createdAt: string;
   }>;
 }
 
@@ -343,6 +367,12 @@ export interface PersonalResults {
     battlesPlayed: number;
     tournamentsComplete: number;
     tournamentsStarted: number;
+    /**
+     * Count of responses the participant left on non-tournament prompts
+     * (slider, approve_reject, best_of_n, multi_axis, qualitative).
+     * Zero for tournament-only campaigns.
+     */
+    nonTournamentResponses: number;
   };
   perPrompt: Array<{
     promptId: string;
@@ -375,6 +405,19 @@ export interface PersonalResults {
   personalBT: { iterations: number; converged: boolean };
   groupAgreement: { fraction: number | null; samples: number };
   honesty: { directional: boolean };
+  /**
+   * What the participant contributed on non-tournament prompts, grouped
+   * by mode. Empty for tournament-only campaigns. The server omits modes
+   * with zero responses so the client can just iterate this array.
+   */
+  contributionsByMode: Array<{
+    mode: PromptMode;
+    promptsCount: number;
+    responseCount: number;
+    /** Mode-specific extras: slider has averageScore; approve_reject has
+     *  approvedCount + rejectedCount. Others have no extras in Phase 3. */
+    extra?: Record<string, number | string>;
+  }>;
 }
 
 export interface ActivityEvent {

@@ -30,10 +30,34 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { toast } from '../components/ui/toast';
-import { ApiError, apiFetch, type CampaignDetail, type VotingMode } from '../lib/api';
+import { ApiError, apiFetch, type CampaignDetail, type PromptMode, type VotingMode } from '../lib/api';
+import { QualitativeReader } from '../components/dashboard/QualitativeReader';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
+
+/** Short human-readable labels for each evaluation mode — used in the
+ *  Ratings tab composition summary and the per-panel ModeBadge. Kept in
+ *  sync with the matching object in the voter-side ModeIndicator. */
+const MODE_DISPLAY_NAMES: Record<string, string> = {
+  tournament: 'Tournament',
+  slider: 'Slider',
+  approve_reject: 'Approve / reject',
+  best_of_n: 'Best of N',
+  multi_axis: 'Multi-axis',
+  qualitative: 'Qualitative',
+};
+
+/** Small pill badge identifying an evaluation mode. Sits in each
+ *  per-mode leaderboard panel's header so operators can scan panels
+ *  without reading the copy. */
+function ModeBadge({ mode }: { mode: PromptMode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {MODE_DISPLAY_NAMES[mode] ?? mode}
+    </span>
+  );
+}
 
 export default function CampaignDashboard() {
   const { id } = useParams();
@@ -209,6 +233,31 @@ export default function CampaignDashboard() {
   }, [data]);
 
   /**
+   * Per-mode prompt count for the "campaign composition" summary. The
+   * Ratings tab leads with this when more than one mode is in play, so
+   * the operator knows why some panels appear and others don't.
+   */
+  const promptsByMode = useMemo(() => {
+    if (!data) return new Map<string, number>();
+    const counts = new Map<string, number>();
+    for (const p of data.prompts) {
+      counts.set(p.mode, (counts.get(p.mode) ?? 0) + 1);
+    }
+    return counts;
+  }, [data]);
+
+  /**
+   * Total count of models-in-any-leaderboard across all modes. Drives
+   * the Ratings tab badge (so tournament-only campaigns keep the old
+   * number, but mixed-mode campaigns show the full total).
+   */
+  const totalRatingCount =
+    sortedRatings.length +
+    sortedSliderRatings.length +
+    sortedApproveRejectRatings.length +
+    sortedBestOfNRatings.length;
+
+  /**
    * Multi-axis ratings grouped by dimension. Categories are encoded as
    * `multi_axis:<dim>:<category>`; here we pull every row whose
    * secondary category segment is `overall`, bucket by dimension, and
@@ -260,6 +309,14 @@ export default function CampaignDashboard() {
   const handleExportParticipantsCsv = () => {
     window.open(
       `/api/campaigns/${id}/export-participants`,
+      '_blank',
+      'noopener',
+    );
+  };
+
+  const handleExportResponsesCsv = () => {
+    window.open(
+      `/api/campaigns/${id}/export-responses`,
       '_blank',
       'noopener',
     );
@@ -341,9 +398,9 @@ export default function CampaignDashboard() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="ratings">
             Ratings
-            {sortedRatings.length > 0 && (
+            {totalRatingCount > 0 && (
               <span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/80">
-                {sortedRatings.length}
+                {totalRatingCount}
               </span>
             )}
           </TabsTrigger>
@@ -355,6 +412,12 @@ export default function CampaignDashboard() {
               </span>
             )}
           </TabsTrigger>
+          {/* Comments tab — only shown when the campaign has at least one
+              qualitative prompt. For tournament-only campaigns the tab is
+              invisible so the UI stays focused. */}
+          {data.prompts.some((p) => p.mode === 'qualitative') && (
+            <TabsTrigger value="comments">Comments</TabsTrigger>
+          )}
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
@@ -457,15 +520,43 @@ export default function CampaignDashboard() {
 
         {/* Ratings ----------------------------------------------------- */}
         <TabsContent value="ratings" className="flex flex-col gap-4">
+          {/* Composition summary — only shown when the campaign has more
+              than one evaluation mode in play. Orients the operator
+              before they scroll through the stacked per-mode panels
+              below. Single-mode campaigns stay clean; no row added. */}
+          {promptsByMode.size > 1 && (
+            <section className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-[11px] text-muted-foreground">
+              <span className="font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Campaign composition
+              </span>
+              {Array.from(promptsByMode.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([mode, count]) => (
+                  <span
+                    key={mode}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-highlight px-2 py-0.5 font-medium text-foreground"
+                  >
+                    {MODE_DISPLAY_NAMES[mode] ?? mode}
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {count}
+                    </span>
+                  </span>
+                ))}
+            </section>
+          )}
+
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-              <div>
-                <h2 className="font-heading text-sm font-semibold text-foreground">
-                  Model ratings
-                </h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Bradley-Terry strength with 95% confidence intervals.
-                </p>
+              <div className="flex items-center gap-2">
+                <ModeBadge mode="tournament" />
+                <div>
+                  <h2 className="font-heading text-sm font-semibold text-foreground">
+                    Model ratings
+                  </h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    Bradley-Terry strength with 95% confidence intervals.
+                  </p>
+                </div>
               </div>
               <Button
                 variant="ghost"
@@ -529,6 +620,7 @@ export default function CampaignDashboard() {
               here for display. */}
           {sortedSliderRatings.length > 0 && (
             <ModeScorecard
+              mode="slider"
               title="Slider ratings"
               description="Mean score per model, higher is better. Error bars are ±1.96·SE."
               rows={sortedSliderRatings}
@@ -544,6 +636,7 @@ export default function CampaignDashboard() {
 
           {sortedApproveRejectRatings.length > 0 && (
             <ModeScorecard
+              mode="approve_reject"
               title="Approve / reject results"
               description="Pass rate per model (share of approvals). Bounds are Wilson 95% intervals."
               rows={sortedApproveRejectRatings}
@@ -559,6 +652,7 @@ export default function CampaignDashboard() {
 
           {sortedBestOfNRatings.length > 0 && (
             <ModeScorecard
+              mode="best_of_n"
               title="Best-of-N results"
               description="Win rate per model (share of times picked). Bounds are Wilson 95% intervals."
               rows={sortedBestOfNRatings}
@@ -574,14 +668,17 @@ export default function CampaignDashboard() {
 
           {multiAxisByDimension.length > 0 && (
             <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-              <header className="border-b border-border px-5 py-3">
-                <h2 className="font-heading text-sm font-semibold text-foreground">
-                  Multi-axis ratings
-                </h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Mean score per model on each dimension, higher is better.
-                  Error bars are ±1.96·SE.
-                </p>
+              <header className="flex items-start gap-2 border-b border-border px-5 py-3">
+                <ModeBadge mode="multi_axis" />
+                <div>
+                  <h2 className="font-heading text-sm font-semibold text-foreground">
+                    Multi-axis ratings
+                  </h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    Mean score per model on each dimension, higher is better.
+                    Error bars are ±1.96·SE.
+                  </p>
+                </div>
               </header>
               <div className="flex flex-col gap-4 p-4">
                 {multiAxisByDimension.map((group) => (
@@ -663,6 +760,13 @@ export default function CampaignDashboard() {
           </section>
         </TabsContent>
 
+        {/* Comments ---------------------------------------------------- */}
+        {data.prompts.some((p) => p.mode === 'qualitative') && (
+          <TabsContent value="comments" className="flex flex-col gap-4">
+            <QualitativeReader campaignId={campaign.id} />
+          </TabsContent>
+        )}
+
         {/* Settings ---------------------------------------------------- */}
         <TabsContent value="settings" className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -743,6 +847,13 @@ export default function CampaignDashboard() {
                 description="One row per voter: email (blank for anonymous), start/finish time, votes cast."
                 actionLabel="Export"
                 onClick={handleExportParticipantsCsv}
+              />
+              <ActionRow
+                icon={<Download className="size-4" />}
+                title="Export responses as CSV"
+                description="One row per response event across all evaluation modes — tournament votes, slider scores, approve/reject decisions, best-of-N picks, multi-axis scores, qualitative comments. Use this for external analysis."
+                actionLabel="Export"
+                onClick={handleExportResponsesCsv}
               />
               {campaign.status === 'active' && (
                 <ActionRow
@@ -1162,6 +1273,7 @@ function StabilityChip({ tier }: { tier: Stability }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function ModeScorecard({
+  mode,
   title,
   description,
   rows,
@@ -1169,6 +1281,7 @@ function ModeScorecard({
   formatRange,
   sampleLabel,
 }: {
+  mode: PromptMode;
   title: string;
   description: string;
   rows: CampaignDetail['ratings'];
@@ -1178,11 +1291,14 @@ function ModeScorecard({
 }) {
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <header className="border-b border-border px-5 py-3">
-        <h2 className="font-heading text-sm font-semibold text-foreground">
-          {title}
-        </h2>
-        <p className="text-[11px] text-muted-foreground">{description}</p>
+      <header className="flex items-start gap-2 border-b border-border px-5 py-3">
+        <ModeBadge mode={mode} />
+        <div>
+          <h2 className="font-heading text-sm font-semibold text-foreground">
+            {title}
+          </h2>
+          <p className="text-[11px] text-muted-foreground">{description}</p>
+        </div>
       </header>
       <ul className="divide-y divide-border/60">
         {rows.map((r, idx) => {

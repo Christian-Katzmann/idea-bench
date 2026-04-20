@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-react';
 import { ParticipantShell } from '../layout/participant-shell';
 import { PromptDisplay } from '../prompt/PromptDisplay';
 import { Button } from '../ui/button';
+import { ModeIndicator } from './ModeIndicator';
 import { apiFetch, type SliderStep } from '../../lib/api';
 
 /**
@@ -153,6 +154,7 @@ export function SliderStepView({
       }
       contentClassName="flex flex-col md:overflow-hidden"
     >
+      <ModeIndicator mode="slider" />
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
         <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">

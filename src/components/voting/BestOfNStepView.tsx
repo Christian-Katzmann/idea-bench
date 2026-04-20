@@ -5,6 +5,7 @@ import { Check, Loader2, X } from 'lucide-react';
 import { ParticipantShell } from '../layout/participant-shell';
 import { PromptDisplay } from '../prompt/PromptDisplay';
 import { Button } from '../ui/button';
+import { ModeIndicator } from './ModeIndicator';
 import { apiFetch, type BestOfNStep } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
@@ -134,6 +135,7 @@ export function BestOfNStepView({
       }
       contentClassName="flex flex-col"
     >
+      <ModeIndicator mode="best_of_n" />
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">

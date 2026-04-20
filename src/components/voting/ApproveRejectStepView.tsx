@@ -6,6 +6,7 @@ import { ParticipantShell } from '../layout/participant-shell';
 import { PromptDisplay } from '../prompt/PromptDisplay';
 import { Button } from '../ui/button';
 import { KeyHint } from '../ui/key-hint';
+import { ModeIndicator } from './ModeIndicator';
 import { apiFetch, type ApproveRejectStep } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
@@ -138,6 +139,7 @@ export function ApproveRejectStepView({
       }
       contentClassName="flex flex-col md:overflow-hidden"
     >
+      <ModeIndicator mode="approve_reject" />
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
         <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">

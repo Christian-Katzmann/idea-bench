@@ -13,9 +13,49 @@ import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { StatusBadge } from '../components/ui/status-badge';
 import { toast } from '../components/ui/toast';
-import { apiFetch, type PersonalResults } from '../lib/api';
+import { apiFetch, type PersonalResults, type PromptMode } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
+
+/**
+ * Human labels for the six evaluation modes. Displayed in the
+ * "What you contributed" section on personal results.
+ */
+const MODE_LABELS: Record<PromptMode, string> = {
+  tournament: 'Tournament',
+  slider: 'Slider',
+  approve_reject: 'Approve / reject',
+  best_of_n: 'Best of N',
+  multi_axis: 'Multi-axis',
+  qualitative: 'Qualitative',
+};
+
+/**
+ * Render a one-liner describing a contribution. Each mode has its own
+ * copy; falls back to "N prompts" when no mode-specific extras exist.
+ */
+function describeContribution(
+  c: PersonalResults['contributionsByMode'][number],
+): string {
+  const promptText = `${c.promptsCount} prompt${c.promptsCount === 1 ? '' : 's'}`;
+  if (c.mode === 'slider') {
+    const avg = c.extra?.averageScore;
+    return avg != null
+      ? `${promptText} · your average score: ${avg}`
+      : promptText;
+  }
+  if (c.mode === 'approve_reject') {
+    const approved = c.extra?.approvedCount ?? 0;
+    const rejected = c.extra?.rejectedCount ?? 0;
+    return `${promptText} · ${approved} approved, ${rejected} rejected`;
+  }
+  if (c.mode === 'best_of_n') return promptText;
+  if (c.mode === 'multi_axis') return promptText;
+  if (c.mode === 'qualitative') {
+    return `${promptText} · ${c.responseCount} comment${c.responseCount === 1 ? '' : 's'} left`;
+  }
+  return promptText;
+}
 
 export default function PersonalResultsPage() {
   const { slug } = useParams();
@@ -61,8 +101,12 @@ export default function PersonalResultsPage() {
     campaignRanking,
     groupAgreement,
     honesty,
+    contributionsByMode,
   } = data;
   const top = campaignRanking[0];
+  const hasTournamentActivity = totals.battlesPlayed > 0;
+  const hasNonTournamentActivity =
+    (contributionsByMode?.length ?? 0) > 0 || totals.nonTournamentResponses > 0;
 
   const handleShare = () => {
     const line = top
@@ -84,15 +128,43 @@ export default function PersonalResultsPage() {
             Your results
           </h1>
           <p className="text-sm text-muted-foreground">
-            Based on your{' '}
-            <span className="font-mono text-foreground">
-              {totals.battlesPlayed}
-            </span>{' '}
-            battle{totals.battlesPlayed === 1 ? '' : 's'} across{' '}
-            <span className="font-mono text-foreground">
-              {totals.tournamentsComplete}
-            </span>{' '}
-            prompt{totals.tournamentsComplete === 1 ? '' : 's'}.
+            {hasTournamentActivity && hasNonTournamentActivity ? (
+              <>
+                Based on your{' '}
+                <span className="font-mono text-foreground">
+                  {totals.battlesPlayed}
+                </span>{' '}
+                battle{totals.battlesPlayed === 1 ? '' : 's'} and{' '}
+                <span className="font-mono text-foreground">
+                  {totals.nonTournamentResponses}
+                </span>{' '}
+                other response
+                {totals.nonTournamentResponses === 1 ? '' : 's'}.
+              </>
+            ) : hasTournamentActivity ? (
+              <>
+                Based on your{' '}
+                <span className="font-mono text-foreground">
+                  {totals.battlesPlayed}
+                </span>{' '}
+                battle{totals.battlesPlayed === 1 ? '' : 's'} across{' '}
+                <span className="font-mono text-foreground">
+                  {totals.tournamentsComplete}
+                </span>{' '}
+                prompt{totals.tournamentsComplete === 1 ? '' : 's'}.
+              </>
+            ) : hasNonTournamentActivity ? (
+              <>
+                Based on your{' '}
+                <span className="font-mono text-foreground">
+                  {totals.nonTournamentResponses}
+                </span>{' '}
+                response
+                {totals.nonTournamentResponses === 1 ? '' : 's'}.
+              </>
+            ) : (
+              <>You haven't voted yet.</>
+            )}
           </p>
         </header>
 
@@ -104,7 +176,7 @@ export default function PersonalResultsPage() {
                 Your sample is small — treat this as directional.
               </div>
               <div className="mt-0.5 opacity-90">
-                With fewer than 20 battles, personal rankings have wide
+                With fewer than 20 responses, personal rankings have wide
                 uncertainty. Top picks are generally preferred by you, but
                 exact orderings might shift with more data.
               </div>
@@ -112,7 +184,13 @@ export default function PersonalResultsPage() {
           </div>
         )}
 
-        {/* Overall ranking */}
+        {/* Overall B-T ranking — tournament-derived, so skip the whole
+            section for participants who only did non-tournament modes.
+            The `contributionsByMode` section below surfaces their work
+            instead. Also soften the copy when honesty is in a good
+            place: the "Bradley-Terry" label is meaningful to operators
+            but mostly jargon to voters. */}
+        {hasTournamentActivity && (
         <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <header className="border-b border-border px-5 py-3">
             <h2 className="font-heading text-sm font-semibold text-foreground">
@@ -149,6 +227,47 @@ export default function PersonalResultsPage() {
             </>
           )}
         </section>
+        )}
+
+        {/* What you contributed — non-tournament modes.
+            Rendered when the participant interacted with any mode other
+            than tournament. Tournament activity is summarized by the
+            B-T ranking above; this section fills in the rest so a
+            participant who only did slider/approve-reject/etc. doesn't
+            see an empty page. */}
+        {contributionsByMode && contributionsByMode.length > 0 && (
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <header className="border-b border-border px-5 py-3">
+              <h2 className="font-heading text-sm font-semibold text-foreground">
+                What you contributed
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                Your responses on non-tournament prompts in this campaign.
+              </p>
+            </header>
+            <ul className="divide-y divide-border/60">
+              {contributionsByMode.map((c) => (
+                <li
+                  key={c.mode}
+                  className="flex items-center justify-between gap-3 px-5 py-3"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">
+                      {MODE_LABELS[c.mode] ?? c.mode}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {describeContribution(c)}
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {c.responseCount} response
+                    {c.responseCount === 1 ? '' : 's'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Per-prompt rankings */}
         {perPrompt.length > 0 && (

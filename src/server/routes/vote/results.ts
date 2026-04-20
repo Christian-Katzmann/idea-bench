@@ -54,9 +54,21 @@ export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
     .limit(1);
   if (!participant) return json({ error: 'participant not started' }, 409);
 
-  // Pull all of this participant's tournaments + votes + the
-  // generations referenced, plus the campaign models (for display names).
-  const [tournaments, votes, campaignModels, prompts] = await Promise.all([
+  // Pull all of this participant's tournament data + the campaign models
+  // and prompts (needed for labels). In parallel, pull their
+  // non-tournament mode contributions so the results page can summarize
+  // what they actually did across a mixed-mode campaign.
+  const [
+    tournaments,
+    votes,
+    campaignModels,
+    prompts,
+    sliderResponses,
+    approveRejectResponses,
+    bestOfNResponses,
+    multiAxisResponses,
+    qualitativeResponses,
+  ] = await Promise.all([
     db
       .select()
       .from(schema.tournaments)
@@ -73,6 +85,26 @@ export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
       .select()
       .from(schema.prompts)
       .where(eq(schema.prompts.campaignId, campaign.id)),
+    db
+      .select()
+      .from(schema.sliderResponses)
+      .where(eq(schema.sliderResponses.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.approveRejectResponses)
+      .where(eq(schema.approveRejectResponses.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.bestOfNResponses)
+      .where(eq(schema.bestOfNResponses.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.multiAxisResponses)
+      .where(eq(schema.multiAxisResponses.participantId, participant.id)),
+    db
+      .select()
+      .from(schema.qualitativeResponses)
+      .where(eq(schema.qualitativeResponses.participantId, participant.id)),
   ]);
 
   const modelsById = new Map(campaignModels.map((m) => [m.id, m]));
@@ -273,6 +305,69 @@ export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
   const groupAgreement =
     agreementSamples > 0 ? agreementMatches / agreementSamples : null;
 
+  // Per-mode contribution summary for mixed-mode campaigns. Counts the
+  // prompts the participant interacted with and the raw response count
+  // in each mode. Empty modes are omitted so tournament-only campaigns
+  // don't get extra UI noise.
+  //
+  // For slider: averageScore is the mean of this participant's own
+  // ratings — a personal "you rated these this way" reminder, not a
+  // global aggregate. Null when no responses.
+  const contributionsByMode: Array<{
+    mode: schema.PromptMode;
+    promptsCount: number;
+    responseCount: number;
+    extra?: Record<string, number | string>;
+  }> = [];
+
+  function countPrompts<T extends { promptId: string }>(rows: T[]): number {
+    return new Set(rows.map((r) => r.promptId)).size;
+  }
+
+  if (sliderResponses.length > 0) {
+    const avg =
+      sliderResponses.reduce((s, r) => s + r.score, 0) / sliderResponses.length;
+    contributionsByMode.push({
+      mode: 'slider',
+      promptsCount: countPrompts(sliderResponses),
+      responseCount: sliderResponses.length,
+      extra: { averageScore: Number(avg.toFixed(2)) },
+    });
+  }
+  if (approveRejectResponses.length > 0) {
+    const approved = approveRejectResponses.filter((r) => r.approved).length;
+    contributionsByMode.push({
+      mode: 'approve_reject',
+      promptsCount: countPrompts(approveRejectResponses),
+      responseCount: approveRejectResponses.length,
+      extra: {
+        approvedCount: approved,
+        rejectedCount: approveRejectResponses.length - approved,
+      },
+    });
+  }
+  if (bestOfNResponses.length > 0) {
+    contributionsByMode.push({
+      mode: 'best_of_n',
+      promptsCount: countPrompts(bestOfNResponses),
+      responseCount: bestOfNResponses.length,
+    });
+  }
+  if (multiAxisResponses.length > 0) {
+    contributionsByMode.push({
+      mode: 'multi_axis',
+      promptsCount: countPrompts(multiAxisResponses),
+      responseCount: multiAxisResponses.length,
+    });
+  }
+  if (qualitativeResponses.length > 0) {
+    contributionsByMode.push({
+      mode: 'qualitative',
+      promptsCount: countPrompts(qualitativeResponses),
+      responseCount: qualitativeResponses.length,
+    });
+  }
+
   return json(
     {
       campaign: {
@@ -283,6 +378,16 @@ export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
         battlesPlayed: votes.length,
         tournamentsComplete: perPrompt.filter((t) => t.complete).length,
         tournamentsStarted: perPrompt.length,
+        // New: non-tournament contribution roll-ups. Makes the results
+        // page render cleanly for participants who only did slider/
+        // approve_reject/etc. (otherwise the tournament-centric copy
+        // above would lie about "battles played").
+        nonTournamentResponses:
+          sliderResponses.length +
+          approveRejectResponses.length +
+          bestOfNResponses.length +
+          multiAxisResponses.length +
+          qualitativeResponses.length,
       },
       perPrompt,
       campaignRanking,
@@ -295,9 +400,23 @@ export const voteResultsWebHandler = withParticipant(async (request, ctx) => {
         samples: agreementSamples,
       },
       // Preserve the honesty framing — flag low-sample personal results.
+      // Sample spans tournament battles + any non-tournament responses;
+      // someone who did 30 slider ratings shouldn't see the 'directional'
+      // warning even with 0 battles.
       honesty: {
-        directional: votes.length < 20,
+        directional:
+          votes.length +
+            sliderResponses.length +
+            approveRejectResponses.length +
+            bestOfNResponses.length +
+            multiAxisResponses.length +
+            qualitativeResponses.length <
+          20,
       },
+      // Per-mode participation summary; empty for tournament-only
+      // campaigns. Consumer renders a "What you contributed" section
+      // beside the tournament rankings.
+      contributionsByMode,
     },
     200,
   );

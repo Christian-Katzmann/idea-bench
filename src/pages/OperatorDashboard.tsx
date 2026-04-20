@@ -53,8 +53,10 @@ export default function OperatorDashboard() {
     // Keep the live leaderboard's vote ticker and row-flash animations
     // fed by fresh data. The endpoint is Runtime-Cache-backed (5min TTL) and
     // invalidated on vote-submit / recompute, so the effective cadence is
-    // "as fast as the server has new numbers."
-    refetchInterval: 20_000,
+    // "as fast as the server has new numbers." 5 s is the leaderboard's
+    // perceptual "live" floor — closer to vote-arrival latency than the
+    // earlier 20 s. Background tabs pause to avoid wasted serverless calls.
+    refetchInterval: 5_000,
     refetchIntervalInBackground: false,
   });
 

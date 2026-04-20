@@ -47,6 +47,11 @@ export default function TeamActivity() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['activity'],
     queryFn: () => apiFetch<ActivityFeed>('/api/operator/activity'),
+    // Activity is the auditor's view; less time-critical than the dashboard
+    // leaderboard, so a slower poll keeps freshness honest without burning
+    // serverless invocations.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   if (error instanceof ApiError && error.status === 401) {

@@ -52,15 +52,23 @@ export default function VotingInterface() {
         method: 'POST',
         body: JSON.stringify(args),
       }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['vote-next', slug] });
+    onSuccess: () => {
+      // Fire-and-forget the invalidation. Awaiting it keeps `submit.isPending`
+      // truthy through the entire next-battle refetch (~150–300 ms extra),
+      // which makes the new battle's vote buttons mount in their disabled
+      // state and re-enable visibly. Letting it run in the background lets
+      // the mutation settle the moment the server acks; the buttons stay
+      // disabled via `nextQ.isFetching` until the new battle is on screen.
+      qc.invalidateQueries({ queryKey: ['vote-next', slug] });
     },
   });
+
+  const isBusy = submit.isPending || nextQ.isFetching;
 
   const handleVote = useCallback(
     (winner: VoteChoice) => {
       if (!nextQ.data || nextQ.data.done) return;
-      if (submit.isPending) return;
+      if (submit.isPending || nextQ.isFetching) return;
       const b = nextQ.data as NextBattlePayload;
       submit.mutate({
         tournamentId: b.tournament.id,
@@ -70,7 +78,7 @@ export default function VotingInterface() {
         winner,
       });
     },
-    [nextQ.data, submit],
+    [nextQ.data, nextQ.isFetching, submit],
   );
 
   // Keyboard shortcuts. A/←, B/→, T/↑, X/↓.
@@ -239,7 +247,7 @@ export default function VotingInterface() {
                 side="A"
                 output={battle.generationA.output}
                 tokens={battle.generationA.tokensOut}
-                disabled={submit.isPending}
+                disabled={isBusy}
                 onVote={() => handleVote('A')}
               />
               <OutputColumn
@@ -247,7 +255,7 @@ export default function VotingInterface() {
                 side="B"
                 output={battle.generationB.output}
                 tokens={battle.generationB.tokensOut}
-                disabled={submit.isPending}
+                disabled={isBusy}
                 onVote={() => handleVote('B')}
               />
             </motion.div>
@@ -255,14 +263,14 @@ export default function VotingInterface() {
 
           <div className="flex shrink-0 items-center justify-center gap-2">
             <TertiaryVoteButton
-              disabled={submit.isPending}
+              disabled={isBusy}
               onClick={() => handleVote('tie')}
               hint="T"
             >
               Tie
             </TertiaryVoteButton>
             <TertiaryVoteButton
-              disabled={submit.isPending}
+              disabled={isBusy}
               onClick={() => handleVote('both_bad')}
               hint="X"
             >
@@ -271,12 +279,27 @@ export default function VotingInterface() {
           </div>
 
           {submit.error && (
-            <div className="shrink-0 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+            <div
+              role="alert"
+              className="shrink-0 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive"
+            >
               {submit.error instanceof Error
                 ? submit.error.message
                 : 'Submit failed'}
             </div>
           )}
+
+          {/* Screen-reader-only status: announces submission state and the
+              new battle. Visually hidden so sighted users see only the
+              choreographed transition; keyboard + screen-reader users get
+              the otherwise-silent state changes verbally. */}
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {submit.isPending
+              ? 'Submitting vote.'
+              : nextQ.isFetching
+              ? 'Loading next battle.'
+              : `Battle ${battle.battle.label}. ${battle.battle.reason}.`}
+          </div>
         </div>
       </section>
     </ParticipantShell>

@@ -128,7 +128,10 @@ export default function PersonalResultsPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-[32px_1.4fr_1fr_80px_90px_100px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {/* Header is desktop-only — on mobile each row stacks its
+                  metrics under contextual labels, so a separate header
+                  band would be redundant noise. */}
+              <div className="hidden grid-cols-[32px_1.4fr_1fr_80px_90px_100px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
                 <div>#</div>
                 <div>Model</div>
                 <div>Rating · ±CI</div>
@@ -264,48 +267,82 @@ function PersonalRatingRow({
   return (
     <div
       className={cn(
-        'grid grid-cols-[32px_1.4fr_1fr_80px_90px_100px] items-center gap-3 px-5 py-3 text-sm transition-colors',
+        'flex flex-col gap-2 px-5 py-3 text-sm transition-colors sm:grid sm:grid-cols-[32px_1.4fr_1fr_80px_90px_100px] sm:items-center sm:gap-3',
         row.stability === 'directional' && 'opacity-70',
         rank === 1 && 'bg-surface-highlight/50',
       )}
     >
-      <div className="font-mono text-xs text-muted-foreground">
-        {rank.toString().padStart(2, '0')}
-      </div>
-      <div className="flex min-w-0 items-center gap-2.5">
-        <EntityIcon name={row.displayName} size="sm" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate font-medium text-foreground">
-              {row.displayName}
-            </span>
-            {rank === 1 && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
-                Top pick
+      {/* Rank + model name + rating live on the first row (mobile) and
+          inline (desktop). On mobile the rating is right-aligned so the
+          eye lands on the score immediately after the model name. */}
+      <div className="flex items-center gap-3 sm:contents">
+        <div className="font-mono text-xs text-muted-foreground">
+          {rank.toString().padStart(2, '0')}
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <EntityIcon name={row.displayName} size="sm" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate font-medium text-foreground">
+                {row.displayName}
               </span>
-            )}
-          </div>
-          <div className="truncate font-mono text-[11px] text-muted-foreground">
-            {row.providerModelId}
+              {rank === 1 && (
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+                  Top pick
+                </span>
+              )}
+            </div>
+            <div className="truncate font-mono text-[11px] text-muted-foreground">
+              {row.providerModelId}
+            </div>
           </div>
         </div>
+        <div className="flex shrink-0 items-baseline gap-1.5 font-mono sm:flex-none">
+          <span className="font-semibold text-foreground">{row.rating}</span>
+          {ciSpread != null && (
+            <span className="text-[11px] text-muted-foreground">
+              ±{ciSpread}
+            </span>
+          )}
+        </div>
       </div>
-      <div className="flex items-baseline gap-1.5 font-mono">
-        <span className="font-semibold text-foreground">{row.rating}</span>
-        {ciSpread != null && (
-          <span className="text-[11px] text-muted-foreground">±{ciSpread}</span>
-        )}
+
+      {/* Secondary stats — shown inline on desktop, stacked under the
+          model row on mobile with explicit labels (since the header
+          band is hidden below sm). */}
+      <div className="ml-9 flex items-center justify-between gap-3 text-[11px] text-muted-foreground sm:contents sm:ml-0 sm:text-sm">
+        <MobileStat label="Win rate">
+          <span className="font-mono text-foreground sm:text-foreground">
+            {row.winRate != null ? `${Math.round(row.winRate * 100)}%` : '—'}
+          </span>
+        </MobileStat>
+        <MobileStat label="1sts / seen">
+          <span className="font-mono">
+            <span className="text-foreground">{row.firstPlaceCount}</span> /{' '}
+            {row.appearances}
+          </span>
+        </MobileStat>
+        <div className="sm:contents">
+          <StatusBadge state={row.stability} />
+        </div>
       </div>
-      <div className="font-mono text-foreground">
-        {row.winRate != null ? `${Math.round(row.winRate * 100)}%` : '—'}
-      </div>
-      <div className="font-mono text-[11px] text-muted-foreground">
-        <span className="text-foreground">{row.firstPlaceCount}</span> /{' '}
-        {row.appearances}
-      </div>
-      <div>
-        <StatusBadge state={row.stability} />
-      </div>
+    </div>
+  );
+}
+
+function MobileStat({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 sm:contents">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
+        {label}
+      </span>
+      {children}
     </div>
   );
 }

@@ -67,7 +67,12 @@ describe('CreateCampaign', () => {
 
     await user.type(screen.getByLabelText(/campaign name/i), 'Test campaign');
     await user.click(screen.getByRole('button', { name: /next/i }));
-    await user.type(screen.getByLabelText(/prompt 1/i), 'Compare these responses');
+    // Structured mode is the default; the Instructions field is what
+    // the submit button gates on (required, populates `text` for the LLM).
+    await user.type(
+      screen.getByLabelText(/instructions/i),
+      'Compare these responses',
+    );
     await user.click(screen.getByRole('button', { name: /next/i }));
 
     expect(await screen.findByText(/^GPT-5$/)).toBeInTheDocument();

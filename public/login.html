@@ -128,6 +128,42 @@
       warm('/api/campaigns');
       warm('/api/operator/dashboard');
     })();
+
+    // Pre-fetch the SPA shell + entry bundle. Vite emits hashed asset
+    // names (index-<hash>.js, vendor-react-<hash>.js …) so this static
+    // file can't list them. Workaround: fetch /index.html, parse out the
+    // referenced .js / .css URLs, emit <link rel="modulepreload"> for
+    // each. By the time the user submits the password the SPA's first
+    // chunks are already in cache — post-login first paint skips the
+    // bundle download. Cheap (one HTML fetch + N preload hints), idem-
+    // potent (force-cache), and silent on failure.
+    (function () {
+      try {
+        fetch('/', { credentials: 'omit', cache: 'force-cache' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (html) {
+            if (!html) return;
+            var re = /<(?:script|link)\b[^>]*(?:src|href)=["']([^"']+\.(?:js|css))["']/g;
+            var seen = Object.create(null);
+            var m;
+            while ((m = re.exec(html))) {
+              var url = m[1];
+              if (seen[url] || !url.indexOf('http')) continue;
+              seen[url] = true;
+              var link = document.createElement('link');
+              if (url.indexOf('.css', url.length - 4) !== -1) {
+                link.rel = 'preload';
+                link.as = 'style';
+              } else {
+                link.rel = 'modulepreload';
+              }
+              link.href = url;
+              document.head.appendChild(link);
+            }
+          })
+          .catch(function () {});
+      } catch (e) { /* ignore */ }
+    })();
   </script>
   <script>
     (function () {

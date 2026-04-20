@@ -35,6 +35,18 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Mobile: 44×44 icon-only tap target (below md). Meets Apple HIG
+            minimum and gives mobile operators a one-tap path to the command
+            palette instead of drawer → "Search" row. */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          aria-label="Open search"
+          className="flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-highlight hover:text-foreground md:hidden"
+        >
+          <Search className="size-5" />
+        </button>
+        {/* Desktop: full search pill with ⌘K hint. */}
         <button
           type="button"
           onClick={onOpenPalette}

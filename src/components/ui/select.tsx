@@ -2,9 +2,37 @@
 
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
+import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+
+/**
+ * Formalized size variants for `SelectTrigger`. The existing data-attr-
+ * based sizing still drives the CSS (via `data-[size=...]` selectors in
+ * the base classes), so consumers that pass `size="sm"` keep working
+ * unchanged. The cva wrapper adds static type inference so downstream
+ * code can reference `VariantProps<typeof selectTriggerVariants>`.
+ */
+const selectTriggerVariants = cva(
+  [
+    "flex w-fit items-center justify-between gap-2 rounded-lg border border-border bg-card py-1 pr-2.5 pl-3.5 text-sm text-foreground whitespace-nowrap transition-colors outline-none select-none",
+    "hover:border-border",
+    "focus-visible:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent/20",
+    "disabled:cursor-not-allowed disabled:opacity-50",
+    "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20",
+    "data-placeholder:text-muted-foreground",
+    "data-[size=default]:h-10 data-[size=sm]:h-8",
+    "*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  ].join(" "),
+  {
+    variants: {
+      size: { default: "", sm: "" },
+    },
+    defaultVariants: { size: "default" },
+  }
+)
 
 const Select = SelectPrimitive.Root
 
@@ -33,25 +61,13 @@ function SelectTrigger({
   size = "default",
   children,
   ...props
-}: SelectPrimitive.Trigger.Props & {
-  size?: "sm" | "default"
-}) {
+}: SelectPrimitive.Trigger.Props &
+  VariantProps<typeof selectTriggerVariants>) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
-      data-size={size}
-      className={cn(
-        "flex w-fit items-center justify-between gap-2 rounded-lg border border-border bg-card py-1 pr-2.5 pl-3.5 text-sm text-foreground whitespace-nowrap transition-colors outline-none select-none",
-        "hover:border-border",
-        "focus-visible:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent/20",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20",
-        "data-placeholder:text-muted-foreground",
-        "data-[size=default]:h-10 data-[size=sm]:h-8",
-        "*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5",
-        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      data-size={size ?? "default"}
+      className={cn(selectTriggerVariants({ size }), className)}
       {...props}
     >
       {children}
@@ -215,5 +231,6 @@ export {
   SelectScrollUpButton,
   SelectSeparator,
   SelectTrigger,
+  selectTriggerVariants,
   SelectValue,
 }

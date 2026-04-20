@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
@@ -41,9 +41,8 @@ import { createSSEStream, sseHeaders } from '../../sse.js';
  * stored too — `output` stays null, `error` is populated.
  *
  * Retry semantics: calling this endpoint again runs the full fan-out
- * again. An idempotent "only retry failed slots" path is deferred —
- * the operator can re-click Generate and let all slots re-run, which
- * is fine at the campaign sizes we care about.
+ * again. Pass `?only=failed` to re-run just the slots whose prior
+ * attempt recorded an error (leaving successes untouched).
  *
  * Campaign state: only allowed when status='draft'. Generating against
  * an active campaign is rejected — it would mutate the outputs that
@@ -54,10 +53,12 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
     return new Response('method not allowed', { status: 405 });
   }
 
-  const campaignId = extractCampaignId(new URL(request.url));
+  const url = new URL(request.url);
+  const campaignId = extractCampaignId(url);
   if (!campaignId) {
     return json({ error: 'missing campaign id in URL' }, 400);
   }
+  const onlyFailed = url.searchParams.get('only') === 'failed';
 
   const db = getDb();
 
@@ -68,7 +69,8 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
       .where(eq(schema.campaigns.id, campaignId))
       .limit(1)
   )[0];
-  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  if (!campaign || campaign.deletedAt)
+    return json({ error: 'campaign not found' }, 404);
   if (campaign.status !== 'draft') {
     return json(
       {
@@ -98,14 +100,45 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
 
   // One slot per (prompt, campaign_model). Ordered so the UI progress
   // feels deterministic even though the calls fan out concurrently.
-  const slots = prompts
+  let slots = prompts
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .flatMap((p) =>
       campaignModels.map((m) => ({ prompt: p, model: m })),
     );
 
+  if (onlyFailed) {
+    const promptIds = prompts.map((p) => p.id);
+    const modelIds = campaignModels.map((m) => m.id);
+    const failedRows =
+      promptIds.length === 0 || modelIds.length === 0
+        ? []
+        : await db
+            .select({
+              promptId: schema.generations.promptId,
+              campaignModelId: schema.generations.campaignModelId,
+            })
+            .from(schema.generations)
+            .where(
+              and(
+                inArray(schema.generations.promptId, promptIds),
+                inArray(schema.generations.campaignModelId, modelIds),
+                isNotNull(schema.generations.error),
+              ),
+            );
+    const failedSet = new Set(
+      failedRows.map((r) => `${r.promptId}:${r.campaignModelId}`),
+    );
+    slots = slots.filter((s) =>
+      failedSet.has(`${s.prompt.id}:${s.model.id}`),
+    );
+  }
+
   const stream = createSSEStream(async (send, signal) => {
     send('start', { total: slots.length });
+    if (slots.length === 0) {
+      send('done', { succeeded: 0, failed: 0, total: 0 });
+      return;
+    }
 
     let succeeded = 0;
     let failed = 0;

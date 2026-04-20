@@ -29,6 +29,13 @@
       "when": 1776662848071,
       "tag": "0003_lumpy_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776665632754,
+      "tag": "0004_regular_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

@@ -39,7 +39,7 @@ async function handler(request: Request): Promise<Response> {
     return json({ error: 'invalid password' }, 401);
   }
 
-  const token = signOperatorCookie();
+  const token = signOperatorCookie({ method: 'password', identity: 'operator' });
   const cookie = buildSetCookie(OPERATOR_COOKIE_NAME, token, {
     maxAgeMs: OPERATOR_COOKIE_MAX_AGE_MS,
     path: '/',

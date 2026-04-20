@@ -25,10 +25,15 @@ export const PARTICIPANT_COOKIE_NAME = 'participant_id';
 export const OPERATOR_COOKIE_MAX_AGE_MS = 30 * ONE_DAY_MS;
 export const PARTICIPANT_COOKIE_MAX_AGE_MS = 365 * ONE_DAY_MS;
 
-interface OperatorPayload {
+export type OperatorMethod = 'password' | 'github' | 'email';
+
+export interface OperatorPayload {
   kind: 'op';
   iat: number; // issued-at, ms since epoch
   exp: number; // expiry, ms since epoch
+  method: OperatorMethod;
+  /** Email for `github`/`email` methods; literal `'operator'` for password. */
+  identity: string;
 }
 
 interface ParticipantPayload {
@@ -95,11 +100,16 @@ function verify(token: string | undefined): Payload | null {
   }
 }
 
-export function signOperatorCookie(now = Date.now()): string {
+export function signOperatorCookie(
+  input: { method: OperatorMethod; identity: string },
+  now = Date.now(),
+): string {
   return sign<OperatorPayload>({
     kind: 'op',
     iat: now,
     exp: now + OPERATOR_COOKIE_MAX_AGE_MS,
+    method: input.method,
+    identity: input.identity,
   });
 }
 
@@ -110,7 +120,9 @@ export function verifyOperatorCookie(
   const p = verify(token);
   if (!p || p.kind !== 'op') return null;
   if (p.exp < now) return null;
-  return p;
+  if (typeof (p as OperatorPayload).method !== 'string') return null;
+  if (typeof (p as OperatorPayload).identity !== 'string') return null;
+  return p as OperatorPayload;
 }
 
 export function signParticipantCookie(cookieId: string, now = Date.now()): string {

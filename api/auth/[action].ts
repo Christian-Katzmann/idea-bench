@@ -1,10 +1,22 @@
 import { type WebHandler, toVercelHandler } from '../../src/server/vercel-adapter.js';
 import { loginWebHandler } from '../../src/server/routes/auth/login.js';
 import { logoutWebHandler } from '../../src/server/routes/auth/logout.js';
+import {
+  githubAuthorizeWebHandler,
+  githubCallbackWebHandler,
+} from '../../src/server/routes/auth/github.js';
+import {
+  magicLinkSendWebHandler,
+  magicLinkVerifyWebHandler,
+} from '../../src/server/routes/auth/magic-link.js';
 
 const actionHandlers: Record<string, WebHandler> = {
   login: loginWebHandler,
   logout: logoutWebHandler,
+  github: githubAuthorizeWebHandler,
+  'github-callback': githubCallbackWebHandler,
+  'email-send': magicLinkSendWebHandler,
+  'email-verify': magicLinkVerifyWebHandler,
 };
 
 const authActionWebHandler: WebHandler = async (request) => {

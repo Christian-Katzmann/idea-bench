@@ -46,12 +46,34 @@ into the participant flow at `http://localhost:3000/vote/<slug>`.
 | `npm run db:studio` | Launch Drizzle Studio against `DATABASE_URL`. |
 | `npm run db:seed` | Wipe and re-seed the demo data. **Refuses to run in `NODE_ENV=production`** unless `ALLOW_PROD_SEED=1`. |
 
+## Operator auth
+
+Three sign-in methods, all issuing the same `operator_session` cookie
+(HMAC-signed, 30-day expiry). Enable the ones you want by populating the
+relevant env vars; anything unset stays hidden/disabled in the UI.
+
+| Method | Env vars | Notes |
+|---|---|---|
+| Password | `OPERATOR_PASSWORD` | Always available. Constant-time compare + 400ms delay on mismatch. |
+| GitHub OAuth | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OPERATOR_GITHUB_LOGINS` | Register an OAuth App at `github.com/settings/developers` with callback `${origin}/api/auth/github-callback`. The allowlist matches either the GitHub login OR any verified email on the account. |
+| Email magic link | `OPERATOR_EMAILS`, `RESEND_API_KEY`, optional `RESEND_SENDER_ADDRESS` | Resend-backed. 15-min single-use tokens; `sha256(token)` stored server-side. Sender defaults to the Resend sandbox (delivers only to the account's verified email); set `RESEND_SENDER_ADDRESS=auth@your-domain` once your domain is verified in Resend. |
+
+Cookie payload: `{ kind: 'op', method, identity, iat, exp }`. `method` is
+one of `password | github | email`; `identity` is the user's email
+(GitHub/magic link) or literal `'operator'` (password). Handlers receive
+this via `withOperator`'s context. Rotating `AUTH_SECRET` invalidates every
+outstanding cookie — acceptable because there's exactly one operator.
+
+Per-IP rate limiting (5 attempts / 15 min) guards the GitHub callback, email
+send, and email verify endpoints. In-memory sliding window — acceptable
+given magic links are single-use and short-lived.
+
 ## Architecture
 
 - Vite SPA frontend (`src/`).
-- Vercel Functions for the API (`api/`, coming in Phase 2).
+- Vercel Functions for the API (`api/`).
 - Neon Postgres via `@neondatabase/serverless` + Drizzle ORM.
-- Operator auth: password-cookie middleware (HMAC-signed, 30-day expiry).
+- Operator auth: password / GitHub OAuth / email magic link — see above.
 - Participant auth: anonymous, HMAC-signed cookie for vote dedup.
 
 See `src/server/` for DB and auth primitives. Client-safe utilities live

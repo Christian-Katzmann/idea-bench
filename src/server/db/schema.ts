@@ -362,6 +362,29 @@ export const ratings = pgTable(
   ],
 );
 
+/**
+ * Magic-link tokens for the email sign-in flow.
+ *
+ * We store `sha256(token_raw)` so a DB leak can't replay links. The raw
+ * token lives only in the email body. Rows are single-use (marked via
+ * `consumed_at`) and expire after 15 minutes. A nightly purge of
+ * `expires_at < now() - interval '1 day'` would be reasonable; for now
+ * the table is small enough to ignore.
+ */
+export const magicLinks = pgTable(
+  'magic_links',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    email: text('email').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('magic_links_expires_at_idx').on(t.expiresAt)],
+);
+
 // Types exported for use in API handlers and helpers.
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
@@ -381,6 +404,8 @@ export type Vote = typeof votes.$inferSelect;
 export type NewVote = typeof votes.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
+export type MagicLink = typeof magicLinks.$inferSelect;
+export type NewMagicLink = typeof magicLinks.$inferInsert;
 
 export type BracketPosition = (typeof bracketPositionEnum.enumValues)[number];
 export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];

@@ -20,11 +20,11 @@ import {
   signParticipantCookie,
   verifyOperatorCookie,
   verifyParticipantCookie,
+  type OperatorMethod,
 } from './cookies.js';
 
 export interface OperatorHandlerContext {
-  /** Placeholder — there is exactly one operator; no identity to carry. */
-  operator: true;
+  operator: { method: OperatorMethod; identity: string };
 }
 
 export interface ParticipantHandlerContext {
@@ -61,7 +61,9 @@ export function withOperator(handler: OperatorHandler) {
         },
       );
     }
-    return handler(req, { operator: true });
+    return handler(req, {
+      operator: { method: session.method, identity: session.identity },
+    });
   };
 }
 

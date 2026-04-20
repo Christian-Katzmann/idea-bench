@@ -1,12 +1,14 @@
-import { Check, CircleDashed, Loader2, XCircle, Zap } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 /**
- * Semantic status chip for ModelArena state machines.
+ * Editorial-stamp status mark.
  *
- * Maps domain states to the GitSlip chip conventions — all rounded-full,
- * 10px uppercase, color-tinted border + background + text.
+ * Reads as marginalia rather than UI: small-caps tinted text sitting on
+ * a hairline rule, no fill, no icon, no pill. Palette maps onto the
+ * warm paper tokens — accent green for go-states, burnt-sienna warning
+ * for in-progress, warm stone for archival, destructive brick for
+ * failure. Tracking is wider than `tracking-wide` so the letters read
+ * as a small-caps stamp, not a button label.
  *
  * Campaign states: `active` / `draft` / `completed`
  * Deployment/run states: `live` / `building` / `failed`
@@ -24,23 +26,25 @@ export type StatusState =
   | "preliminary"
   | "stable"
 
-type StatusConfig = {
-  variant: React.ComponentProps<typeof Badge>["variant"]
-  label: string
-  icon?: React.ComponentType<{ className?: string }>
-  iconSpin?: boolean
+type StatusTone = "go" | "progress" | "archival" | "failure"
+
+const TONE_CLASS: Record<StatusTone, string> = {
+  go:       "text-accent border-accent/45",
+  progress: "text-warning border-warning/45",
+  archival: "text-muted-foreground border-muted-foreground/40",
+  failure:  "text-destructive border-destructive/45",
 }
 
-const STATUSES: Record<StatusState, StatusConfig> = {
-  active:       { variant: "success",     label: "Active" },
-  live:         { variant: "success",     label: "Live" },
-  building:     { variant: "warning",     label: "Building",     icon: Loader2,      iconSpin: true },
-  draft:        { variant: "warning",     label: "Draft",        icon: CircleDashed },
-  completed:    { variant: "outline",     label: "Completed",    icon: Check },
-  failed:       { variant: "destructive", label: "Failed",       icon: XCircle },
-  directional:  { variant: "outline",     label: "Directional" },
-  preliminary:  { variant: "warning",     label: "Preliminary" },
-  stable:       { variant: "success",     label: "Stable",       icon: Zap },
+const STATUSES: Record<StatusState, { label: string; tone: StatusTone }> = {
+  active:      { label: "Active",      tone: "go" },
+  live:        { label: "Live",        tone: "go" },
+  stable:      { label: "Stable",      tone: "go" },
+  draft:       { label: "Draft",       tone: "progress" },
+  building:    { label: "Building",    tone: "progress" },
+  preliminary: { label: "Preliminary", tone: "progress" },
+  completed:   { label: "Completed",   tone: "archival" },
+  directional: { label: "Directional", tone: "archival" },
+  failed:      { label: "Failed",      tone: "failure" },
 }
 
 export function StatusBadge({
@@ -54,19 +58,18 @@ export function StatusBadge({
   className?: string
 }) {
   const config = STATUSES[state]
-  const Icon = config.icon
 
   return (
-    <Badge variant={config.variant} className={cn(className)}>
-      {Icon && (
-        <Icon
-          className={cn(
-            "size-2.5",
-            config.iconSpin && "animate-spin"
-          )}
-        />
+    <span
+      className={cn(
+        "inline-block text-[10px] font-medium uppercase leading-none tracking-[0.14em]",
+        "border-b pb-[3px]",
+        TONE_CLASS[config.tone],
+        state === "building" && "animate-pulse",
+        className
       )}
+    >
       {label ?? config.label}
-    </Badge>
+    </span>
   )
 }

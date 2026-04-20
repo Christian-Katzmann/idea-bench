@@ -110,6 +110,8 @@ export default toVercelHandler(withOperator(async (request: Request) => {
         context: p.context ?? null,
         structured: p.structured ?? null,
         categoryTags: p.categoryTags ?? [],
+        mode: p.mode ?? 'tournament',
+        modeConfig: p.modeConfig ?? null,
       })),
     )
     .returning();
@@ -153,8 +155,135 @@ interface ParsedPayload {
     context?: string;
     categoryTags?: string[];
     structured?: schema.PromptStructured;
+    mode?: schema.PromptMode;
+    modeConfig?: schema.PromptModeConfig;
   }>;
   providerModelIds: string[];
+}
+
+const PROMPT_MODES: readonly schema.PromptMode[] = [
+  'tournament',
+  'slider',
+  'approve_reject',
+  'best_of_n',
+  'multi_axis',
+  'qualitative',
+] as const;
+
+/**
+ * Per-mode validation for the `modeConfig` field. Returns the parsed
+ * config or an error string. `null` is always valid (uses mode defaults).
+ */
+function parseModeConfig(
+  mode: schema.PromptMode,
+  raw: unknown,
+): { ok: true; value: schema.PromptModeConfig } | { error: string } {
+  if (raw == null) return { ok: true, value: null };
+  if (typeof raw !== 'object') return { error: 'modeConfig must be an object' };
+  const o = raw as Record<string, unknown>;
+
+  if (mode === 'slider') {
+    const min = typeof o.min === 'number' ? o.min : 1;
+    const max = typeof o.max === 'number' ? o.max : 10;
+    if (!Number.isInteger(min) || !Number.isInteger(max)) {
+      return { error: 'slider min and max must be integers' };
+    }
+    if (min >= max) return { error: 'slider min must be less than max' };
+    if (max - min > 99)
+      return { error: 'slider range cannot exceed 99 steps (too many ticks)' };
+    const value: schema.PromptModeConfig = { min, max };
+    if (typeof o.minLabel === 'string' && o.minLabel.trim()) {
+      (value as { minLabel?: string }).minLabel = o.minLabel.trim().slice(0, 40);
+    }
+    if (typeof o.maxLabel === 'string' && o.maxLabel.trim()) {
+      (value as { maxLabel?: string }).maxLabel = o.maxLabel.trim().slice(0, 40);
+    }
+    return { ok: true, value };
+  }
+
+  if (mode === 'approve_reject') {
+    const value: schema.PromptModeConfig = {};
+    if (typeof o.approveLabel === 'string' && o.approveLabel.trim()) {
+      (value as { approveLabel?: string }).approveLabel = o.approveLabel
+        .trim()
+        .slice(0, 40);
+    }
+    if (typeof o.rejectLabel === 'string' && o.rejectLabel.trim()) {
+      (value as { rejectLabel?: string }).rejectLabel = o.rejectLabel
+        .trim()
+        .slice(0, 40);
+    }
+    return { ok: true, value };
+  }
+
+  if (mode === 'best_of_n') {
+    // No per-prompt config in Phase 2. Empty object is the canonical
+    // value; anything sent is ignored.
+    return { ok: true, value: {} as schema.PromptModeConfig };
+  }
+
+  if (mode === 'multi_axis') {
+    // `dimensions` is required — multi-axis is meaningless without at
+    // least one axis to score. Each dimension needs a stable `key`
+    // (used as the signal column identifier, ratings category segment,
+    // and submission payload key), a human `label`, and integer bounds.
+    if (!Array.isArray(o.dimensions) || o.dimensions.length === 0) {
+      return { error: 'multi_axis requires at least one dimension' };
+    }
+    if (o.dimensions.length > 8) {
+      return { error: 'multi_axis supports at most 8 dimensions' };
+    }
+    const dimensions: Array<{
+      key: string;
+      label: string;
+      min: number;
+      max: number;
+    }> = [];
+    const keySet = new Set<string>();
+    for (const raw of o.dimensions) {
+      if (typeof raw !== 'object' || raw === null)
+        return { error: 'each dimension must be an object' };
+      const d = raw as Record<string, unknown>;
+      const key = typeof d.key === 'string' ? d.key.trim() : '';
+      const label = typeof d.label === 'string' ? d.label.trim() : '';
+      const min = typeof d.min === 'number' ? d.min : 1;
+      const max = typeof d.max === 'number' ? d.max : 5;
+      if (!key) return { error: 'each dimension needs a non-empty key' };
+      // Dimension keys are encoded into rating category strings as
+      // `multi_axis:<key>:<tag>`. A colon in the key would break the
+      // encoding; simpler to forbid it than to escape downstream.
+      if (key.includes(':'))
+        return { error: `dimension key cannot contain ':': ${key}` };
+      if (key.length > 40)
+        return { error: `dimension key too long: ${key}` };
+      if (keySet.has(key))
+        return { error: `duplicate dimension key: ${key}` };
+      keySet.add(key);
+      if (!label) return { error: `dimension ${key} needs a label` };
+      if (!Number.isInteger(min) || !Number.isInteger(max)) {
+        return { error: `dimension ${key} min/max must be integers` };
+      }
+      if (min >= max)
+        return { error: `dimension ${key} min must be less than max` };
+      if (max - min > 19)
+        return { error: `dimension ${key} range cannot exceed 19 steps` };
+      dimensions.push({ key, label: label.slice(0, 60), min, max });
+    }
+    return { ok: true, value: { dimensions } };
+  }
+
+  if (mode === 'qualitative') {
+    const value: { prompt?: string; required: boolean } = {
+      required: o.required === true,
+    };
+    if (typeof o.prompt === 'string' && o.prompt.trim()) {
+      value.prompt = o.prompt.trim().slice(0, 200);
+    }
+    return { ok: true, value };
+  }
+
+  // Tournament has no config. Unknown modes land here and store NULL.
+  return { ok: true, value: null };
 }
 
 function parseCreatePayload(
@@ -187,6 +316,19 @@ function parseCreatePayload(
     const parsedStructured = parseStructured(pr.structured);
     if (parsedStructured.kind === 'error')
       return { error: parsedStructured.error };
+
+    // Evaluation mode defaults to 'tournament' (legacy behavior). When
+    // provided, it must be one of the known modes.
+    let mode: schema.PromptMode = 'tournament';
+    if (typeof pr.mode === 'string') {
+      if (!PROMPT_MODES.includes(pr.mode as schema.PromptMode)) {
+        return { error: `unknown prompt mode: ${pr.mode}` };
+      }
+      mode = pr.mode as schema.PromptMode;
+    }
+    const parsedModeConfig = parseModeConfig(mode, pr.modeConfig);
+    if ('error' in parsedModeConfig) return { error: parsedModeConfig.error };
+
     prompts.push({
       text,
       context:
@@ -198,6 +340,8 @@ function parseCreatePayload(
         : undefined,
       structured:
         parsedStructured.kind === 'ok' ? parsedStructured.value : undefined,
+      mode,
+      modeConfig: parsedModeConfig.value,
     });
   }
 

@@ -3,12 +3,22 @@ import { voteFinishWebHandler } from '../../../src/server/routes/vote/finish.js'
 import { voteNextWebHandler } from '../../../src/server/routes/vote/next.js';
 import { voteResultsWebHandler } from '../../../src/server/routes/vote/results.js';
 import { voteSubmitWebHandler } from '../../../src/server/routes/vote/submit.js';
+import { voteSubmitSliderWebHandler } from '../../../src/server/routes/vote/submit-slider.js';
+import { voteSubmitApproveRejectWebHandler } from '../../../src/server/routes/vote/submit-approve-reject.js';
+import { voteSubmitBestOfNWebHandler } from '../../../src/server/routes/vote/submit-best-of-n.js';
+import { voteSubmitMultiAxisWebHandler } from '../../../src/server/routes/vote/submit-multi-axis.js';
+import { voteSubmitQualitativeWebHandler } from '../../../src/server/routes/vote/submit-qualitative.js';
 
 const actionHandlers: Record<string, WebHandler> = {
   finish: voteFinishWebHandler,
   next: voteNextWebHandler,
   results: voteResultsWebHandler,
-  submit: voteSubmitWebHandler,
+  submit: voteSubmitWebHandler, // legacy tournament endpoint
+  'submit-slider': voteSubmitSliderWebHandler,
+  'submit-approve-reject': voteSubmitApproveRejectWebHandler,
+  'submit-best-of-n': voteSubmitBestOfNWebHandler,
+  'submit-multi-axis': voteSubmitMultiAxisWebHandler,
+  'submit-qualitative': voteSubmitQualitativeWebHandler,
 };
 
 const voteActionWebHandler: WebHandler = async (request) => {

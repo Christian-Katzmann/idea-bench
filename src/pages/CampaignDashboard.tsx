@@ -181,6 +181,62 @@ export default function CampaignDashboard() {
       .sort((a, b) => b.rating - a.rating);
   }, [data]);
 
+  // Per-mode overall rollups (Phase 1: slider + approve_reject). Each is
+  // a list of models sorted by rating descending, pulled from category
+  // `slider:overall` / `approve_reject:overall`. If the campaign has no
+  // prompts of that mode, the array stays empty and the panel is hidden.
+  const sortedSliderRatings = useMemo(() => {
+    if (!data) return [];
+    return [...data.ratings]
+      .filter((r) => r.category === 'slider:overall' && r.gameCount > 0)
+      .sort((a, b) => b.rating - a.rating);
+  }, [data]);
+
+  const sortedApproveRejectRatings = useMemo(() => {
+    if (!data) return [];
+    return [...data.ratings]
+      .filter(
+        (r) => r.category === 'approve_reject:overall' && r.gameCount > 0,
+      )
+      .sort((a, b) => b.rating - a.rating);
+  }, [data]);
+
+  const sortedBestOfNRatings = useMemo(() => {
+    if (!data) return [];
+    return [...data.ratings]
+      .filter((r) => r.category === 'best_of_n:overall' && r.gameCount > 0)
+      .sort((a, b) => b.rating - a.rating);
+  }, [data]);
+
+  /**
+   * Multi-axis ratings grouped by dimension. Categories are encoded as
+   * `multi_axis:<dim>:<category>`; here we pull every row whose
+   * secondary category segment is `overall`, bucket by dimension, and
+   * sort each bucket's models by rating desc.
+   */
+  const multiAxisByDimension = useMemo(() => {
+    if (!data) return [];
+    const groups = new Map<string, CampaignDetail['ratings']>();
+    for (const r of data.ratings) {
+      if (r.gameCount === 0) continue;
+      if (!r.category.startsWith('multi_axis:')) continue;
+      const rest = r.category.slice('multi_axis:'.length);
+      const colonIdx = rest.indexOf(':');
+      if (colonIdx < 0) continue;
+      const dim = rest.slice(0, colonIdx);
+      const subCat = rest.slice(colonIdx + 1);
+      if (subCat !== 'overall') continue;
+      if (!groups.has(dim)) groups.set(dim, []);
+      groups.get(dim)!.push(r);
+    }
+    return Array.from(groups.entries())
+      .map(([dim, rows]) => ({
+        dimension: dim,
+        rows: [...rows].sort((a, b) => b.rating - a.rating),
+      }))
+      .sort((a, b) => a.dimension.localeCompare(b.dimension));
+  }, [data]);
+
   const shareLink = useMemo(() => {
     if (!data) return '';
     return `${window.location.origin}/vote/${data.campaign.shareSlug}`;
@@ -467,6 +523,111 @@ export default function CampaignDashboard() {
               </>
             )}
           </section>
+
+          {/* Slider results — shown only if the campaign has slider prompts
+              with ratings. Rating is stored ×100 on the server, so divide
+              here for display. */}
+          {sortedSliderRatings.length > 0 && (
+            <ModeScorecard
+              title="Slider ratings"
+              description="Mean score per model, higher is better. Error bars are ±1.96·SE."
+              rows={sortedSliderRatings}
+              format={(r) => (r.rating / 100).toFixed(2)}
+              formatRange={(r) =>
+                r.ciLow != null && r.ciHigh != null
+                  ? `${(r.ciLow / 100).toFixed(2)} – ${(r.ciHigh / 100).toFixed(2)}`
+                  : null
+              }
+              sampleLabel="ratings"
+            />
+          )}
+
+          {sortedApproveRejectRatings.length > 0 && (
+            <ModeScorecard
+              title="Approve / reject results"
+              description="Pass rate per model (share of approvals). Bounds are Wilson 95% intervals."
+              rows={sortedApproveRejectRatings}
+              format={(r) => `${r.rating}%`}
+              formatRange={(r) =>
+                r.ciLow != null && r.ciHigh != null
+                  ? `${r.ciLow}% – ${r.ciHigh}%`
+                  : null
+              }
+              sampleLabel="decisions"
+            />
+          )}
+
+          {sortedBestOfNRatings.length > 0 && (
+            <ModeScorecard
+              title="Best-of-N results"
+              description="Win rate per model (share of times picked). Bounds are Wilson 95% intervals."
+              rows={sortedBestOfNRatings}
+              format={(r) => `${r.rating}%`}
+              formatRange={(r) =>
+                r.ciLow != null && r.ciHigh != null
+                  ? `${r.ciLow}% – ${r.ciHigh}%`
+                  : null
+              }
+              sampleLabel="shown"
+            />
+          )}
+
+          {multiAxisByDimension.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <header className="border-b border-border px-5 py-3">
+                <h2 className="font-heading text-sm font-semibold text-foreground">
+                  Multi-axis ratings
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Mean score per model on each dimension, higher is better.
+                  Error bars are ±1.96·SE.
+                </p>
+              </header>
+              <div className="flex flex-col gap-4 p-4">
+                {multiAxisByDimension.map((group) => (
+                  <div key={group.dimension} className="flex flex-col gap-2">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      {group.dimension}
+                    </h3>
+                    <ul className="divide-y divide-border/60 rounded-lg border border-border">
+                      {group.rows.map((r, idx) => {
+                        const rangeLow = r.ciLow != null ? (r.ciLow / 100).toFixed(2) : null;
+                        const rangeHigh = r.ciHigh != null ? (r.ciHigh / 100).toFixed(2) : null;
+                        return (
+                          <li
+                            key={r.campaignModelId}
+                            className="flex items-center justify-between gap-3 px-4 py-2"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                                {idx + 1}
+                              </span>
+                              <span className="truncate text-sm font-medium text-foreground">
+                                {r.displayName}
+                              </span>
+                            </div>
+                            <div className="flex items-baseline gap-3 shrink-0">
+                              <span className="font-mono text-sm tabular-nums text-foreground">
+                                {(r.rating / 100).toFixed(2)}
+                              </span>
+                              {rangeLow != null && rangeHigh != null && (
+                                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                                  {rangeLow} – {rangeHigh}
+                                </span>
+                              )}
+                              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                                n={r.gameCount}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </TabsContent>
 
         {/* Prompts ----------------------------------------------------- */}
@@ -990,5 +1151,73 @@ function StabilityChip({ tier }: { tier: Stability }) {
       // Title lives on the inner element via aria-describedby in future;
       // using native title here is acceptable for a read-only hint.
     />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ModeScorecard — compact leaderboard panel used for slider + approve/
+// reject results. Mirrors the top B-T leaderboard's chrome but without
+// the stability + win-rate columns (neither applies to these modes).
+// Phase 1 scope: simple and readable; Phase 2 can grow full CI bars.
+// ─────────────────────────────────────────────────────────────────────────
+
+function ModeScorecard({
+  title,
+  description,
+  rows,
+  format,
+  formatRange,
+  sampleLabel,
+}: {
+  title: string;
+  description: string;
+  rows: CampaignDetail['ratings'];
+  format: (r: CampaignDetail['ratings'][number]) => string;
+  formatRange: (r: CampaignDetail['ratings'][number]) => string | null;
+  sampleLabel: string;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <header className="border-b border-border px-5 py-3">
+        <h2 className="font-heading text-sm font-semibold text-foreground">
+          {title}
+        </h2>
+        <p className="text-[11px] text-muted-foreground">{description}</p>
+      </header>
+      <ul className="divide-y divide-border/60">
+        {rows.map((r, idx) => {
+          const range = formatRange(r);
+          return (
+            <li
+              key={r.campaignModelId}
+              className="flex items-center justify-between gap-3 px-5 py-3"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="w-5 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {idx + 1}
+                </span>
+                <span className="truncate text-sm font-medium text-foreground">
+                  {r.displayName}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-3 shrink-0">
+                <span className="font-mono text-sm tabular-nums text-foreground">
+                  {format(r)}
+                </span>
+                {range && (
+                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {range}
+                  </span>
+                )}
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                  n={r.gameCount}{' '}
+                  <span className="opacity-70">{sampleLabel}</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

@@ -80,18 +80,86 @@ interface CreatedCampaign {
   models: Array<{ id: string; providerModelId: string; displayName: string }>;
 }
 
-type PromptMode = 'simple' | 'structured';
+/**
+ * Controls which AUTHORING UI the operator sees for a prompt's text —
+ * simple textarea vs structured (instructions + input + output format).
+ * Distinct from `PromptEvalMode` below, which controls how voters see
+ * and rate the generated output.
+ */
+type PromptAuthoringMode = 'simple' | 'structured';
+
+/**
+ * Evaluation mode for a prompt — how voters rate the model outputs.
+ * Mirrors the server-side enum in schema.ts. Phase 1 UI exposes the
+ * first three; Phase 2 adds the rest.
+ */
+type PromptEvalMode =
+  | 'tournament'
+  | 'slider'
+  | 'approve_reject'
+  | 'best_of_n'
+  | 'multi_axis'
+  | 'qualitative';
+
+interface SliderConfig {
+  min: number;
+  max: number;
+  minLabel?: string;
+  maxLabel?: string;
+}
+interface ApproveRejectConfig {
+  approveLabel?: string;
+  rejectLabel?: string;
+}
+interface MultiAxisDimensionDraft {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+}
+interface MultiAxisConfig {
+  dimensions: MultiAxisDimensionDraft[];
+}
+interface QualitativeConfig {
+  prompt: string;
+  required: boolean;
+}
 
 interface PromptDraft {
-  mode: PromptMode;
+  mode: PromptAuthoringMode;
   text: string; // simple-mode blob
   context: string; // shared
   instructions: string; // structured-mode
   input: string;
   outputFormat: string;
+  /** Evaluation mode (how voters rate the output). */
+  evalMode: PromptEvalMode;
+  /** Mode-specific config; shape depends on `evalMode`. */
+  sliderConfig: SliderConfig;
+  approveRejectConfig: ApproveRejectConfig;
+  multiAxisConfig: MultiAxisConfig;
+  qualitativeConfig: QualitativeConfig;
 }
 
-function emptyPrompt(): PromptDraft {
+const DEFAULT_SLIDER_CONFIG: SliderConfig = { min: 1, max: 10 };
+const DEFAULT_MULTI_AXIS_CONFIG: MultiAxisConfig = {
+  dimensions: [
+    { key: 'correctness', label: 'Correctness', min: 1, max: 5 },
+    { key: 'tone', label: 'Tone', min: 1, max: 5 },
+    { key: 'clarity', label: 'Clarity', min: 1, max: 5 },
+  ],
+};
+const DEFAULT_QUALITATIVE_CONFIG: QualitativeConfig = {
+  prompt: '',
+  required: false,
+};
+
+/**
+ * Create a blank prompt draft. `previousEvalMode` seeds the new prompt's
+ * evaluation mode so the common case of a campaign with one mode doesn't
+ * require clicking the picker on every prompt added.
+ */
+function emptyPrompt(previousEvalMode: PromptEvalMode = 'tournament'): PromptDraft {
   return {
     mode: 'structured',
     text: '',
@@ -99,7 +167,60 @@ function emptyPrompt(): PromptDraft {
     instructions: '',
     input: '',
     outputFormat: '',
+    evalMode: previousEvalMode,
+    sliderConfig: { ...DEFAULT_SLIDER_CONFIG },
+    approveRejectConfig: {},
+    multiAxisConfig: {
+      dimensions: DEFAULT_MULTI_AXIS_CONFIG.dimensions.map((d) => ({ ...d })),
+    },
+    qualitativeConfig: { ...DEFAULT_QUALITATIVE_CONFIG },
   };
+}
+
+/**
+ * Pull the right mode-config payload for a prompt based on its evalMode.
+ * Tournament + the not-yet-shipped modes return `undefined` so the server
+ * stores NULL (it falls back to sensible defaults on read).
+ */
+function evalModeConfigForApi(p: PromptDraft): Record<string, unknown> | undefined {
+  if (p.evalMode === 'slider') {
+    const { min, max, minLabel, maxLabel } = p.sliderConfig;
+    const cfg: Record<string, unknown> = { min, max };
+    if (minLabel?.trim()) cfg.minLabel = minLabel.trim();
+    if (maxLabel?.trim()) cfg.maxLabel = maxLabel.trim();
+    return cfg;
+  }
+  if (p.evalMode === 'approve_reject') {
+    const { approveLabel, rejectLabel } = p.approveRejectConfig;
+    const cfg: Record<string, unknown> = {};
+    if (approveLabel?.trim()) cfg.approveLabel = approveLabel.trim();
+    if (rejectLabel?.trim()) cfg.rejectLabel = rejectLabel.trim();
+    return Object.keys(cfg).length > 0 ? cfg : undefined;
+  }
+  if (p.evalMode === 'multi_axis') {
+    // Server requires at least one dimension. Empty label/key rows are
+    // dropped here so the operator isn't forced to complete every row.
+    const clean = p.multiAxisConfig.dimensions
+      .filter((d) => d.key.trim() && d.label.trim())
+      .map((d) => ({
+        key: d.key.trim(),
+        label: d.label.trim(),
+        min: d.min,
+        max: d.max,
+      }));
+    return { dimensions: clean };
+  }
+  if (p.evalMode === 'qualitative') {
+    const cfg: Record<string, unknown> = {
+      required: !!p.qualitativeConfig.required,
+    };
+    if (p.qualitativeConfig.prompt.trim()) {
+      cfg.prompt = p.qualitativeConfig.prompt.trim();
+    }
+    return cfg;
+  }
+  // best_of_n and tournament have no per-prompt config.
+  return undefined;
 }
 
 /**
@@ -212,6 +333,8 @@ export default function CreateCampaign() {
               text: flat.text,
               context: p.context.trim() ? p.context : undefined,
               structured: flat.structured,
+              mode: p.evalMode,
+              modeConfig: evalModeConfigForApi(p),
             })),
           providerModelIds: selectedModels,
         }),
@@ -641,7 +764,15 @@ function StepPrompts({
         ))}
         <button
           type="button"
-          onClick={() => onChange([...prompts, emptyPrompt()])}
+          // Last-used mode is the default for the next prompt — a campaign
+          // that's all slider stays all slider without clicking the
+          // eval-mode picker every row.
+          onClick={() =>
+            onChange([
+              ...prompts,
+              emptyPrompt(prompts[prompts.length - 1]?.evalMode),
+            ])
+          }
           className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card py-3 text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
         >
           <Plus className="size-4" />
@@ -708,6 +839,8 @@ function PromptCard({
         <StructuredFields prompt={prompt} idx={idx} onPatch={onPatch} />
       )}
 
+      <EvalModePicker prompt={prompt} idx={idx} onPatch={onPatch} />
+
       <div className="flex flex-col gap-1.5">
         <Label
           htmlFor={`prompt-context-${idx}`}
@@ -742,8 +875,8 @@ function ModeToggle({
   value,
   onChange,
 }: {
-  value: PromptMode;
-  onChange: (mode: PromptMode) => void;
+  value: PromptAuthoringMode;
+  onChange: (mode: PromptAuthoringMode) => void;
 }) {
   return (
     <div
@@ -1304,4 +1437,522 @@ function parseFrame(
   } catch {
     return { event, data: dataLines.join('\n') };
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Evaluation-mode picker — per-prompt control for HOW voters rate this
+// prompt's outputs. Separate from the authoring ModeToggle (which controls
+// how the OPERATOR enters the prompt text). Ships three modes in Phase 1;
+// best_of_n / multi_axis / qualitative are disabled with "soon" labels
+// to preview the surface.
+// ─────────────────────────────────────────────────────────────────────────
+
+const EVAL_MODE_OPTIONS: Array<{
+  mode: PromptEvalMode;
+  label: string;
+  desc: string;
+  enabled: boolean;
+}> = [
+  {
+    mode: 'tournament',
+    label: 'Tournament',
+    desc: 'Two outputs side-by-side, pick the winner.',
+    enabled: true,
+  },
+  {
+    mode: 'slider',
+    label: 'Slider',
+    desc: 'Rate each output on a numeric scale.',
+    enabled: true,
+  },
+  {
+    mode: 'approve_reject',
+    label: 'Approve / reject',
+    desc: 'Mark each output as acceptable or not.',
+    enabled: true,
+  },
+  {
+    mode: 'best_of_n',
+    label: 'Best of N',
+    desc: 'See all outputs at once, pick one.',
+    enabled: true,
+  },
+  {
+    mode: 'multi_axis',
+    label: 'Multi-axis',
+    desc: 'Score on several dimensions at once.',
+    enabled: true,
+  },
+  {
+    mode: 'qualitative',
+    label: 'Qualitative',
+    desc: 'Collect free-text feedback per output.',
+    enabled: true,
+  },
+];
+
+function EvalModePicker({
+  prompt,
+  idx,
+  onPatch,
+}: {
+  prompt: PromptDraft;
+  idx: number;
+  onPatch: (patch: Partial<PromptDraft>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label
+          htmlFor={`eval-mode-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Evaluation mode
+        </Label>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {EVAL_MODE_OPTIONS.filter((o) => o.enabled).map((opt) => {
+          const active = prompt.evalMode === opt.mode;
+          return (
+            <button
+              key={opt.mode}
+              type="button"
+              onClick={() => onPatch({ evalMode: opt.mode })}
+              aria-pressed={active}
+              className={cn(
+                'flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors',
+                active
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border bg-background hover:border-foreground/40',
+              )}
+            >
+              <span className="text-[12px] font-semibold">{opt.label}</span>
+              <span
+                className={cn(
+                  'text-[11px] leading-snug',
+                  active ? 'text-background/75' : 'text-muted-foreground',
+                )}
+              >
+                {opt.desc}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {prompt.evalMode === 'slider' && (
+        <SliderConfigEditor
+          config={prompt.sliderConfig}
+          idx={idx}
+          onChange={(next) => onPatch({ sliderConfig: next })}
+        />
+      )}
+      {prompt.evalMode === 'approve_reject' && (
+        <ApproveRejectConfigEditor
+          config={prompt.approveRejectConfig}
+          idx={idx}
+          onChange={(next) => onPatch({ approveRejectConfig: next })}
+        />
+      )}
+      {prompt.evalMode === 'multi_axis' && (
+        <MultiAxisConfigEditor
+          config={prompt.multiAxisConfig}
+          idx={idx}
+          onChange={(next) => onPatch({ multiAxisConfig: next })}
+        />
+      )}
+      {prompt.evalMode === 'qualitative' && (
+        <QualitativeConfigEditor
+          config={prompt.qualitativeConfig}
+          idx={idx}
+          onChange={(next) => onPatch({ qualitativeConfig: next })}
+        />
+      )}
+      {prompt.evalMode === 'best_of_n' && (
+        <p className="text-[11px] text-muted-foreground">
+          Voters see every model's output on one screen and pick one.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SliderConfigEditor({
+  config,
+  idx,
+  onChange,
+}: {
+  config: SliderConfig;
+  idx: number;
+  onChange: (next: SliderConfig) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <Label
+            htmlFor={`slider-min-${idx}`}
+            className="text-[10px] uppercase tracking-wide"
+          >
+            Min
+          </Label>
+          <Input
+            id={`slider-min-${idx}`}
+            type="number"
+            inputMode="numeric"
+            value={config.min}
+            onChange={(e) =>
+              onChange({ ...config, min: Number(e.target.value) || 0 })
+            }
+            className="h-9 bg-background text-sm"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label
+            htmlFor={`slider-max-${idx}`}
+            className="text-[10px] uppercase tracking-wide"
+          >
+            Max
+          </Label>
+          <Input
+            id={`slider-max-${idx}`}
+            type="number"
+            inputMode="numeric"
+            value={config.max}
+            onChange={(e) =>
+              onChange({ ...config, max: Number(e.target.value) || 0 })
+            }
+            className="h-9 bg-background text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <Label
+            htmlFor={`slider-min-label-${idx}`}
+            className="text-[10px] uppercase tracking-wide"
+          >
+            Low label <span className="text-muted-foreground/70">(optional)</span>
+          </Label>
+          <Input
+            id={`slider-min-label-${idx}`}
+            value={config.minLabel ?? ''}
+            onChange={(e) => onChange({ ...config, minLabel: e.target.value })}
+            placeholder="e.g. Weakest"
+            maxLength={40}
+            className="h-9 bg-background text-sm"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label
+            htmlFor={`slider-max-label-${idx}`}
+            className="text-[10px] uppercase tracking-wide"
+          >
+            High label <span className="text-muted-foreground/70">(optional)</span>
+          </Label>
+          <Input
+            id={`slider-max-label-${idx}`}
+            value={config.maxLabel ?? ''}
+            onChange={(e) => onChange({ ...config, maxLabel: e.target.value })}
+            placeholder="e.g. Excellent"
+            maxLength={40}
+            className="h-9 bg-background text-sm"
+          />
+        </div>
+      </div>
+      {config.min >= config.max && (
+        <p
+          role="alert"
+          className="text-[11px] text-destructive"
+        >
+          Min must be less than max.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ApproveRejectConfigEditor({
+  config,
+  idx,
+  onChange,
+}: {
+  config: ApproveRejectConfig;
+  idx: number;
+  onChange: (next: ApproveRejectConfig) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+      <div className="flex flex-col gap-1">
+        <Label
+          htmlFor={`ar-approve-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Approve label <span className="text-muted-foreground/70">(optional)</span>
+        </Label>
+        <Input
+          id={`ar-approve-${idx}`}
+          value={config.approveLabel ?? ''}
+          onChange={(e) =>
+            onChange({ ...config, approveLabel: e.target.value })
+          }
+          placeholder="Approve"
+          maxLength={40}
+          className="h-9 bg-background text-sm"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label
+          htmlFor={`ar-reject-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Reject label <span className="text-muted-foreground/70">(optional)</span>
+        </Label>
+        <Input
+          id={`ar-reject-${idx}`}
+          value={config.rejectLabel ?? ''}
+          onChange={(e) =>
+            onChange({ ...config, rejectLabel: e.target.value })
+          }
+          placeholder="Reject"
+          maxLength={40}
+          className="h-9 bg-background text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Multi-axis dimension editor.
+//
+// Each dimension gets a key (stable identifier used by the ratings
+// aggregator and the submission payload), a human-readable label, and
+// min/max bounds. The operator can add, remove, and reorder via the
+// standard up/down pattern. Starter set of 3 dimensions
+// (correctness/tone/clarity) is seeded for new prompts; operator can
+// rename, delete, or add more (cap enforced server-side at 8).
+// ─────────────────────────────────────────────────────────────────────────
+
+function MultiAxisConfigEditor({
+  config,
+  idx,
+  onChange,
+}: {
+  config: MultiAxisConfig;
+  idx: number;
+  onChange: (next: MultiAxisConfig) => void;
+}) {
+  const maxDimensions = 8;
+  const updateDim = (dimIdx: number, patch: Partial<MultiAxisDimensionDraft>) => {
+    onChange({
+      dimensions: config.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, ...patch } : d,
+      ),
+    });
+  };
+  const removeDim = (dimIdx: number) => {
+    onChange({
+      dimensions: config.dimensions.filter((_, i) => i !== dimIdx),
+    });
+  };
+  const addDim = () => {
+    if (config.dimensions.length >= maxDimensions) return;
+    onChange({
+      dimensions: [
+        ...config.dimensions,
+        { key: `axis${config.dimensions.length + 1}`, label: '', min: 1, max: 5 },
+      ],
+    });
+  };
+
+  // Detect duplicate keys so the operator sees an inline warning — the
+  // server will 400 on duplicates and we'd rather surface that early.
+  const keyCounts = new Map<string, number>();
+  for (const d of config.dimensions) {
+    const k = d.key.trim();
+    if (k) keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Dimensions ({config.dimensions.length}/{maxDimensions})
+        </span>
+        <button
+          type="button"
+          onClick={addDim}
+          disabled={config.dimensions.length >= maxDimensions}
+          className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus className="size-3" />
+          Add dimension
+        </button>
+      </div>
+      {config.dimensions.length === 0 && (
+        <p
+          role="alert"
+          className="text-[11px] text-destructive"
+        >
+          At least one dimension is required.
+        </p>
+      )}
+      {config.dimensions.map((d, dimIdx) => {
+        const dup = d.key.trim() && (keyCounts.get(d.key.trim()) ?? 0) > 1;
+        return (
+          <div
+            key={dimIdx}
+            className="flex flex-col gap-2 rounded-md border border-border bg-background p-3"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                Dimension {dimIdx + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeDim(dimIdx)}
+                aria-label="Remove dimension"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <Label
+                  htmlFor={`ma-key-${idx}-${dimIdx}`}
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  Key
+                </Label>
+                <Input
+                  id={`ma-key-${idx}-${dimIdx}`}
+                  value={d.key}
+                  onChange={(e) => updateDim(dimIdx, { key: e.target.value })}
+                  placeholder="correctness"
+                  maxLength={40}
+                  className="h-9 bg-card text-sm font-mono"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label
+                  htmlFor={`ma-label-${idx}-${dimIdx}`}
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  Label
+                </Label>
+                <Input
+                  id={`ma-label-${idx}-${dimIdx}`}
+                  value={d.label}
+                  onChange={(e) => updateDim(dimIdx, { label: e.target.value })}
+                  placeholder="Correctness"
+                  maxLength={60}
+                  className="h-9 bg-card text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <Label
+                  htmlFor={`ma-min-${idx}-${dimIdx}`}
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  Min
+                </Label>
+                <Input
+                  id={`ma-min-${idx}-${dimIdx}`}
+                  type="number"
+                  inputMode="numeric"
+                  value={d.min}
+                  onChange={(e) =>
+                    updateDim(dimIdx, { min: Number(e.target.value) || 0 })
+                  }
+                  className="h-9 bg-card text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label
+                  htmlFor={`ma-max-${idx}-${dimIdx}`}
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  Max
+                </Label>
+                <Input
+                  id={`ma-max-${idx}-${dimIdx}`}
+                  type="number"
+                  inputMode="numeric"
+                  value={d.max}
+                  onChange={(e) =>
+                    updateDim(dimIdx, { max: Number(e.target.value) || 0 })
+                  }
+                  className="h-9 bg-card text-sm"
+                />
+              </div>
+            </div>
+            {d.min >= d.max && (
+              <p role="alert" className="text-[11px] text-destructive">
+                Min must be less than max.
+              </p>
+            )}
+            {dup && (
+              <p role="alert" className="text-[11px] text-destructive">
+                Duplicate key — keys must be unique within a prompt.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Qualitative editor — a custom question prompt shown above the voter's
+// text field, plus a "required" toggle. Text-length cap is enforced on
+// both client and server (4000 chars).
+// ─────────────────────────────────────────────────────────────────────────
+
+function QualitativeConfigEditor({
+  config,
+  idx,
+  onChange,
+}: {
+  config: QualitativeConfig;
+  idx: number;
+  onChange: (next: QualitativeConfig) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <div className="flex flex-col gap-1">
+        <Label
+          htmlFor={`qual-prompt-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Question voters see{' '}
+          <span className="text-muted-foreground/70">(optional)</span>
+        </Label>
+        <Input
+          id={`qual-prompt-${idx}`}
+          value={config.prompt}
+          onChange={(e) => onChange({ ...config, prompt: e.target.value })}
+          placeholder="What did you think of this response?"
+          maxLength={200}
+          className="h-9 bg-background text-sm"
+        />
+      </div>
+      <label
+        htmlFor={`qual-required-${idx}`}
+        className="flex items-center gap-2 text-[12px] text-foreground"
+      >
+        <input
+          id={`qual-required-${idx}`}
+          type="checkbox"
+          checked={config.required}
+          onChange={(e) => onChange({ ...config, required: e.target.checked })}
+          className="size-3.5 cursor-pointer accent-foreground"
+        />
+        Require feedback to continue
+      </label>
+    </div>
+  );
 }

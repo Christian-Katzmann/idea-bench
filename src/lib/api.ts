@@ -131,19 +131,71 @@ export interface PromptStructured {
   outputFormat?: string;
 }
 
-export interface NextBattleResponse {
+/**
+ * Evaluation modes a prompt can be configured in. Server-side enum lives
+ * in src/server/db/schema.ts as `promptModeEnum`. Kept in sync manually —
+ * if a new mode is added, update both places + the `VoteStep` union.
+ */
+export type PromptMode =
+  | 'tournament'
+  | 'slider'
+  | 'approve_reject'
+  | 'best_of_n'
+  | 'multi_axis'
+  | 'qualitative';
+
+/**
+ * Discriminated union returned by `GET /api/vote/:slug/next`. Each variant
+ * describes a single step the participant needs to complete.
+ *
+ * Phase 2 supports all six evaluation modes plus the terminal `done`.
+ * Clients MUST switch on `stepType` before reading mode-specific fields.
+ */
+export type VoteStep =
+  | TournamentBattleStep
+  | SliderStep
+  | ApproveRejectStep
+  | BestOfNStep
+  | MultiAxisStep
+  | QualitativeStep
+  | DoneStep;
+
+export interface DoneStep {
   done: true;
+  stepType: 'done';
 }
-export interface NextBattlePayload {
+
+/**
+ * Shared shape across all non-tournament step types. Tournament keeps its
+ * bespoke `tournamentsTotal`/`tournamentsDone` progress aliases for back-
+ * compat; new modes only use the mode-agnostic names.
+ */
+export interface StepPrompt {
+  id: string;
+  text: string;
+  context: string | null;
+  structured: PromptStructured | null;
+  categoryTags: string[];
+  mode: PromptMode;
+}
+
+/**
+ * Progress for modes that rate each of the campaign's N models per prompt
+ * (slider, approve_reject, eventually multi_axis/qualitative). The
+ * `withinPrompt` block tells the client "you're 2 of 4 through this
+ * prompt's ratings."
+ */
+export interface PerModelProgress {
+  promptsTotal: number;
+  promptsDone: number;
+  withinPrompt: { total: number; done: number };
+}
+
+export interface TournamentBattleStep {
   done: false;
+  stepType: 'tournament_battle';
   tournament: { id: string; promptId: string };
-  prompt: {
-    id: string;
-    text: string;
-    context: string | null;
-    structured: PromptStructured | null;
-    categoryTags: string[];
-  };
+  prompt: StepPrompt;
   battle: {
     position: 'b1' | 'b2' | 'b3' | 'b4' | 'b5';
     label: string;
@@ -151,8 +203,139 @@ export interface NextBattlePayload {
   };
   generationA: { id: string; output: string; tokensOut: number | null };
   generationB: { id: string; output: string; tokensOut: number | null };
-  progress: { tournamentsTotal: number; tournamentsDone: number };
+  /**
+   * Both `tournamentsTotal`/`tournamentsDone` (legacy) and
+   * `promptsTotal`/`promptsDone` (mode-agnostic) are emitted. Prefer the
+   * latter — non-tournament modes only emit the mode-agnostic names.
+   */
+  progress: {
+    tournamentsTotal: number;
+    tournamentsDone: number;
+    promptsTotal: number;
+    promptsDone: number;
+  };
 }
+
+/**
+ * Mode-config shape for a slider prompt. `min`/`max` default to 1/10 when
+ * the server emits `null` (legacy prompts, or prompts created without
+ * explicit config).
+ */
+export interface SliderModeConfig {
+  min: number;
+  max: number;
+  minLabel?: string;
+  maxLabel?: string;
+}
+
+export interface SliderStep {
+  done: false;
+  stepType: 'slider';
+  prompt: StepPrompt;
+  modeConfig: SliderModeConfig | null;
+  target: {
+    campaignModelId: string;
+    generation: { id: string; output: string; tokensOut: number | null };
+  };
+  progress: PerModelProgress;
+}
+
+export interface ApproveRejectModeConfig {
+  approveLabel?: string;
+  rejectLabel?: string;
+}
+
+export interface ApproveRejectStep {
+  done: false;
+  stepType: 'approve_reject';
+  prompt: StepPrompt;
+  modeConfig: ApproveRejectModeConfig | null;
+  target: {
+    campaignModelId: string;
+    generation: { id: string; output: string; tokensOut: number | null };
+  };
+  progress: PerModelProgress;
+}
+
+/**
+ * Best-of-N step: a single step per prompt that shows every model's
+ * output at once. Distinct from the per-model modes — one step, one
+ * submission, one winner. `progress` has no `withinPrompt` subtotal
+ * (one step == one prompt).
+ */
+export interface BestOfNStep {
+  done: false;
+  stepType: 'best_of_n';
+  prompt: StepPrompt;
+  modeConfig: Record<string, never> | null;
+  targets: Array<{
+    campaignModelId: string;
+    generation: { id: string; output: string; tokensOut: number | null };
+  }>;
+  progress: {
+    promptsTotal: number;
+    promptsDone: number;
+  };
+}
+
+/**
+ * Multi-axis dimension definition. `key` is the stable identifier used
+ * in both the submission payload and the ratings category encoding
+ * (`multi_axis:<key>:<tag>`). `label` is the human-friendly name.
+ */
+export interface MultiAxisDimension {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+}
+
+export interface MultiAxisModeConfig {
+  dimensions: MultiAxisDimension[];
+}
+
+export interface MultiAxisStep {
+  done: false;
+  stepType: 'multi_axis';
+  prompt: StepPrompt;
+  modeConfig: MultiAxisModeConfig | null;
+  target: {
+    campaignModelId: string;
+    generation: { id: string; output: string; tokensOut: number | null };
+  };
+  progress: PerModelProgress;
+}
+
+export interface QualitativeModeConfig {
+  prompt?: string;
+  required: boolean;
+}
+
+export interface QualitativeStep {
+  done: false;
+  stepType: 'qualitative';
+  prompt: StepPrompt;
+  modeConfig: QualitativeModeConfig | null;
+  target: {
+    campaignModelId: string;
+    generation: { id: string; output: string; tokensOut: number | null };
+  };
+  progress: PerModelProgress;
+}
+
+/**
+ * @deprecated Use `DoneStep` (via `VoteStep` discrimination). Alias kept
+ * for the existing import in VotingInterface.tsx; remove once all call
+ * sites discriminate on `stepType`.
+ */
+export type NextBattleResponse = DoneStep;
+
+/**
+ * @deprecated Use `TournamentBattleStep` (via `VoteStep` discrimination).
+ * Alias kept for the existing import in VotingInterface.tsx; remove once
+ * all call sites discriminate on `stepType`.
+ */
+export type NextBattlePayload = TournamentBattleStep;
 
 export interface PersonalResults {
   campaign: { name: string; shareSlug: string };

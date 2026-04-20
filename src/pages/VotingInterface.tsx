@@ -14,13 +14,18 @@ import { KeyHint } from '../components/ui/key-hint';
 import {
   apiFetch,
   ApiError,
-  type NextBattleResponse,
-  type NextBattlePayload,
+  type VoteStep,
+  type TournamentBattleStep,
 } from '../lib/api';
+import { SliderStepView } from '../components/voting/SliderStepView';
+import { ApproveRejectStepView } from '../components/voting/ApproveRejectStepView';
+import { BestOfNStepView } from '../components/voting/BestOfNStepView';
+import { MultiAxisStepView } from '../components/voting/MultiAxisStepView';
+import { QualitativeStepView } from '../components/voting/QualitativeStepView';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
 
-type NextResp = NextBattleResponse | NextBattlePayload;
+type NextResp = VoteStep;
 type VoteChoice = 'A' | 'B' | 'tie' | 'both_bad';
 
 export default function VotingInterface() {
@@ -66,11 +71,14 @@ export default function VotingInterface() {
 
   const isBusy = submit.isPending || nextQ.isFetching;
 
+  const isTournamentStep = (s: VoteStep | undefined): s is TournamentBattleStep =>
+    !!s && !s.done && s.stepType === 'tournament_battle';
+
   const handleVote = useCallback(
     (winner: VoteChoice) => {
-      if (!nextQ.data || nextQ.data.done) return;
+      if (!isTournamentStep(nextQ.data)) return;
       if (submit.isPending || nextQ.isFetching) return;
-      const b = nextQ.data as NextBattlePayload;
+      const b = nextQ.data;
       submit.mutate({
         tournamentId: b.tournament.id,
         bracketPosition: b.battle.position,
@@ -82,8 +90,11 @@ export default function VotingInterface() {
     [nextQ.data, nextQ.isFetching, submit],
   );
 
-  // Keyboard shortcuts. A/←, B/→, T/↑, X/↓.
+  // Keyboard shortcuts — tournament mode only. A/←, B/→, T/↑, X/↓.
+  // Slider + approve/reject each bind their own shortcuts inside their
+  // view components.
   useEffect(() => {
+    if (!isTournamentStep(nextQ.data)) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')
         handleVote('A');
@@ -96,7 +107,7 @@ export default function VotingInterface() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleVote]);
+  }, [handleVote, nextQ.data]);
 
   // Auto-redirect when the stream of battles ends.
   useEffect(() => {
@@ -116,9 +127,8 @@ export default function VotingInterface() {
 
   const progress = useMemo(() => {
     if (!nextQ.data || nextQ.data.done) return 100;
-    const { tournamentsTotal, tournamentsDone } = (
-      nextQ.data as NextBattlePayload
-    ).progress;
+    if (nextQ.data.stepType !== 'tournament_battle') return 100;
+    const { tournamentsTotal, tournamentsDone } = nextQ.data.progress;
     return tournamentsTotal > 0
       ? Math.round(((tournamentsDone + 0.5) / tournamentsTotal) * 100)
       : 0;
@@ -168,9 +178,32 @@ export default function VotingInterface() {
     );
   }
 
-  // Strict-mode cast: the discriminated-union check above doesn't narrow
-  // NextResp under tsconfig `strict: false`. Behaves like the original.
-  const battle = nextQ.data as NextBattlePayload;
+  // Dispatch on stepType so each mode owns its view. Tournament continues
+  // below with the original bracket UI; every other mode hands off to its
+  // dedicated component (each manages its own submit state and keyboard
+  // shortcuts independently of the tournament path above).
+  if (nextQ.data.stepType === 'slider') {
+    return <SliderStepView step={nextQ.data} slug={slug!} />;
+  }
+  if (nextQ.data.stepType === 'approve_reject') {
+    return <ApproveRejectStepView step={nextQ.data} slug={slug!} />;
+  }
+  if (nextQ.data.stepType === 'best_of_n') {
+    return <BestOfNStepView step={nextQ.data} slug={slug!} />;
+  }
+  if (nextQ.data.stepType === 'multi_axis') {
+    return <MultiAxisStepView step={nextQ.data} slug={slug!} />;
+  }
+  if (nextQ.data.stepType === 'qualitative') {
+    return <QualitativeStepView step={nextQ.data} slug={slug!} />;
+  }
+
+  // Tournament bracket rendering — the legacy path. Narrowing to
+  // `TournamentBattleStep` is logically guaranteed by the branches above
+  // (slider + approve_reject early-return), but tsconfig is non-strict
+  // so TS can't prove it. Explicit cast mirrors what the pre-refactor
+  // code did.
+  const battle = nextQ.data as TournamentBattleStep;
 
   const tournamentCurrent = Math.min(
     battle.progress.tournamentsDone + 1,

@@ -10,10 +10,16 @@ import { BrandMark } from '../components/ui/brand-mark';
 import { apiFetch, type VoteLanding } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
+// Permissive enough for hand-typed addresses (one `@`, a domain with at least
+// one dot). The server is the authority; we only catch obvious typos before
+// they cost the participant a round-trip.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function ParticipantLanding() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const landing = useQuery({
     queryKey: ['vote-landing', slug],
@@ -40,7 +46,13 @@ export default function ParticipantLanding() {
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
     if (start.isPending) return;
-    start.mutate(email.trim() ? { email: email.trim() } : {});
+    const trimmed = email.trim();
+    if (trimmed && !EMAIL_RE.test(trimmed)) {
+      setEmailError('Please enter a valid email address, or leave it blank.');
+      return;
+    }
+    setEmailError(null);
+    start.mutate(trimmed ? { email: trimmed } : {});
   };
 
   if (landing.isLoading) {
@@ -120,6 +132,7 @@ export default function ParticipantLanding() {
 
           <form
             onSubmit={handleStart}
+            noValidate
             className="flex flex-col gap-3 border-t border-border bg-surface-highlight/40 px-6 py-5"
           >
             <div className="flex flex-col gap-1.5">
@@ -132,13 +145,30 @@ export default function ParticipantLanding() {
               </Label>
               <Input
                 id="email"
-                type="text"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                spellCheck={false}
+                autoCapitalize="none"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                }}
                 disabled={notActive}
                 autoFocus
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? 'email-error' : undefined}
               />
+              {emailError && (
+                <p
+                  id="email-error"
+                  className="text-[11px] text-destructive"
+                >
+                  {emailError}
+                </p>
+              )}
             </div>
             {start.error && (
               <ErrorCard

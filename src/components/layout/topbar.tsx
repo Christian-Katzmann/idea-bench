@@ -21,20 +21,22 @@ export function Topbar({
   onOpenPalette: () => void
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md md:px-6">
-      <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-2 border-b border-border bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md md:px-6">
+      {/* `min-w-0` lets the left group shrink so the breadcrumb can truncate
+          instead of pushing the right-side icons off-screen on long names. */}
+      <div className="flex min-w-0 items-center gap-3 md:gap-4">
         <button
           type="button"
           onClick={onOpenMobileMenu}
           aria-label="Open navigation"
-          className="text-muted-foreground transition-colors hover:text-foreground md:hidden"
+          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground md:hidden"
         >
           <Menu className="size-5" />
         </button>
-        <Breadcrumb items={breadcrumb} />
+        <Breadcrumb items={breadcrumb} className="min-w-0" />
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         {/* Mobile: 44×44 icon-only tap target (below md). Meets Apple HIG
             minimum and gives mobile operators a one-tap path to the command
             palette instead of drawer → "Search" row. */}

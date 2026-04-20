@@ -112,11 +112,14 @@ function CampaignRow({ campaign }: { campaign: CampaignSummary }) {
       <div className="flex min-w-0 items-center gap-4">
         <EntityIcon name={campaign.name} size="md" />
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium text-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate font-medium text-foreground">
               {campaign.name}
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {/* Category tag is secondary on mobile — the right-rail StatusBadge
+                carries enough context at 375px and reclaiming this space lets
+                the campaign name read properly. Revealed at sm:. */}
+            <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
               {inlineLabel}
             </span>
             {/* Public share-link quick access — visible on hover. Rendered

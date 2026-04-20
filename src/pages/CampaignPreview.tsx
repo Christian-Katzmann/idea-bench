@@ -397,14 +397,16 @@ export default function CampaignPreview() {
   return (
     <ParticipantShell contentClassName="flex min-h-0 flex-1 flex-col">
       <PreviewBanner campaignId={campaign.id} />
-      <section className="flex items-center justify-between gap-4 border-b border-border bg-background/60 px-4 py-2 backdrop-blur-sm md:px-6">
+      <section className="flex items-center justify-between gap-3 border-b border-border bg-background/60 px-4 py-2 backdrop-blur-sm md:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="text-xs font-medium text-muted-foreground">
+          <div className="truncate text-xs font-medium text-muted-foreground">
             {`Battle ${battleIndex} of ${battleCount} · ${battle.reason}`}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="h-1 w-32 overflow-hidden rounded-full bg-border">
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Progress bar is desktop-only — on mobile the "N/M" counter
+              does the same job in less space. */}
+          <div className="hidden h-1 w-32 overflow-hidden rounded-full bg-border sm:block">
             <div
               className="h-full bg-foreground transition-all duration-300"
               style={{ width: `${pct}%` }}
@@ -448,8 +450,12 @@ export default function CampaignPreview() {
         )}
       </section>
 
-      <section className="relative flex-1 overflow-hidden bg-background px-4 py-4 md:px-6">
-        <div className="mx-auto flex h-full max-w-5xl flex-col gap-3">
+      {/* Battle area — mirrors VotingInterface's mobile treatment: desktop
+          gets a viewport-filling pane with per-column scroll; mobile gets
+          natural page scroll + the fixed MobileVoteBar. pb-28 reserves
+          space for the bar on mobile. */}
+      <section className="relative flex-1 bg-background px-4 pt-4 pb-28 md:overflow-hidden md:px-6 md:pb-4">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 md:h-full">
           <AnimatePresence mode="wait">
             <motion.div
               key={`${activePrompt.id}:${battle.position}`}
@@ -457,7 +463,7 @@ export default function CampaignPreview() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.02 }}
               transition={{ duration: 0.15 }}
-              className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2"
+              className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-2"
             >
               <OutputColumn
                 side="A"
@@ -476,7 +482,9 @@ export default function CampaignPreview() {
             </motion.div>
           </AnimatePresence>
 
-          <div className="flex shrink-0 items-center justify-center gap-2">
+          {/* Desktop tertiary row — hidden on mobile where Tie/Both bad
+              live in the fixed bottom bar instead. */}
+          <div className="hidden shrink-0 items-center justify-center gap-2 md:flex">
             <Button
               variant="outline"
               onClick={() => handleVote('tie')}
@@ -496,7 +504,58 @@ export default function CampaignPreview() {
           </div>
         </div>
       </section>
+
+      <PreviewMobileVoteBar onVote={handleVote} />
     </ParticipantShell>
+  );
+}
+
+/**
+ * Mobile-only fixed bottom action bar for the preview battle. Mirrors
+ * the MobileVoteBar in VotingInterface — four equal-width zones so every
+ * decision is a single thumb-tap without scrolling back. Kept local to
+ * avoid cross-importing from the participant page.
+ */
+function PreviewMobileVoteBar({
+  onVote,
+}: {
+  onVote: (choice: 'A' | 'B' | 'tie' | 'both_bad') => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Vote"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      <div className="grid grid-cols-4 gap-2 px-3 py-3">
+        <Button
+          onClick={() => onVote('A')}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          A better
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onVote('tie')}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          Tie
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onVote('both_bad')}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          Both bad
+        </Button>
+        <Button
+          onClick={() => onVote('B')}
+          className="h-11 min-w-0 justify-center gap-1 px-0 text-[13px]"
+        >
+          B better
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -560,10 +619,13 @@ function OutputColumn({
           {tokens ?? '?'} tok
         </span>
       </header>
-      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[13px] leading-relaxed text-foreground">
+      {/* Desktop scrolls within cell; mobile flows with the page. */}
+      <div className="flex-1 whitespace-pre-wrap px-4 py-4 text-[13px] leading-relaxed text-foreground md:overflow-y-auto">
         {output}
       </div>
-      <div className="shrink-0 border-t border-border bg-surface-highlight/30 p-3">
+      {/* Per-card vote button is desktop-only — mobile uses the fixed
+          bottom PreviewMobileVoteBar below. */}
+      <div className="hidden shrink-0 border-t border-border bg-surface-highlight/30 p-3 md:block">
         <Button
           onClick={onVote}
           size="lg"

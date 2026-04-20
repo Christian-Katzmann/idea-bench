@@ -81,7 +81,12 @@ export function AppShell({
         </div>
       </div>
 
-      <div className="relative flex min-h-dvh flex-1 flex-col md:ml-64">
+      {/* `min-w-0` is load-bearing: without it, a flex-1 row item keeps the
+          default `min-width: auto`, which lets the column grow to its widest
+          content (tables, long names) instead of shrinking to the allocated
+          viewport width. On phones that cascaded into every page rendering
+          ~2× wider than the viewport. */}
+      <div className="relative flex min-h-dvh min-w-0 flex-1 flex-col md:ml-64">
         <Topbar
           breadcrumb={breadcrumb}
           onOpenMobileMenu={() => setIsMobileMenuOpen(true)}

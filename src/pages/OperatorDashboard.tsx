@@ -120,14 +120,16 @@ export default function OperatorDashboard() {
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <EntityIcon name={campaign.name} size="sm" />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium text-foreground">
                             {campaign.name}
                           </span>
-                          <StatusBadge
-                            state={campaign.status as StatusState}
-                          />
+                          <span className="shrink-0">
+                            <StatusBadge
+                              state={campaign.status as StatusState}
+                            />
+                          </span>
                         </div>
                         <div className="text-[11px] text-muted-foreground">
                           {campaign.createdAt

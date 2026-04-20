@@ -107,7 +107,9 @@ export function Spotlight({
   return (
     <section aria-label="Campaign spotlight" className="flex flex-col">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        {/* Picker + tabs together are ~490px — won't fit at 375px. Let them
+            wrap: picker on row 1, tabs on row 2 (or same row at sm+). */}
+        <div className="flex flex-wrap items-center gap-3">
           <CampaignPicker
             campaigns={leaderboards}
             value={activeCampaign.id}

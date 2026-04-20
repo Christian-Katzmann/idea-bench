@@ -26,19 +26,35 @@ export function Breadcrumb({
   return (
     <nav
       aria-label="Breadcrumb"
-      className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}
+      className={cn("flex min-w-0 items-center gap-2 text-sm text-muted-foreground", className)}
     >
+      {/* Root and intermediate segments never truncate; the last segment
+          takes whatever space remains and truncates. This keeps
+          "modelarena / Campaigns" readable while preventing a long
+          campaign name in the last slot from pushing the right-side
+          topbar icons off-screen. */}
       <Link
         to="/"
-        className="transition-colors hover:text-foreground"
+        className="shrink-0 transition-colors hover:text-foreground"
       >
         modelarena
       </Link>
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1
+        // On phones, intermediate segments steal room from the last (current-
+        // page) segment and collapse it to "O...". Hide them below sm; the
+        // drawer covers navigation. Desktop keeps the full trail.
+        const hideOnMobile = !isLast && items.length > 1
         return (
-          <span key={`${item.label}-${idx}`} className="flex items-center gap-2">
-            <span aria-hidden className="text-border">/</span>
+          <span
+            key={`${item.label}-${idx}`}
+            className={cn(
+              "items-center gap-2",
+              isLast ? "flex min-w-0" : "shrink-0",
+              hideOnMobile ? "hidden sm:flex" : "flex",
+            )}
+          >
+            <span aria-hidden className="shrink-0 text-border">/</span>
             {item.to && !isLast ? (
               <Link
                 to={item.to}
@@ -47,7 +63,9 @@ export function Breadcrumb({
                 {item.label}
               </Link>
             ) : (
-              <span className="font-medium text-foreground">{item.label}</span>
+              <span className="min-w-0 truncate font-medium text-foreground">
+                {item.label}
+              </span>
             )}
           </span>
         )

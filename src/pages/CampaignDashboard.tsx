@@ -439,7 +439,10 @@ export default function CampaignDashboard() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-[32px_1.5fr_1fr_80px_100px_120px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {/* Desktop: fixed 6-column grid header. Hidden below sm —
+                    the grid tracks sum to ~332px of fixed width + fluid,
+                    which overflows on a 360px phone. */}
+                <div className="hidden grid-cols-[32px_1.5fr_1fr_80px_100px_120px] items-center gap-3 border-b border-border bg-surface-highlight/40 px-5 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
                   <div>#</div>
                   <div>Model</div>
                   <div>Rating · ±CI</div>
@@ -450,7 +453,14 @@ export default function CampaignDashboard() {
                 <ul className="divide-y divide-border/60">
                   {sortedRatings.map((rating, idx) => (
                     <li key={rating.campaignModelId}>
-                      <RatingRow rating={rating} rank={idx + 1} />
+                      {/* Desktop grid row */}
+                      <div className="hidden sm:block">
+                        <RatingRow rating={rating} rank={idx + 1} />
+                      </div>
+                      {/* Mobile card row — same fields, flow layout */}
+                      <div className="sm:hidden">
+                        <RatingRowMobile rating={rating} rank={idx + 1} />
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -794,6 +804,70 @@ function RatingRow({
       </div>
       <div>
         <StabilityChip tier={rating.stability} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile-only rating row. Same fields as RatingRow but in flow layout:
+ *   header: [##] displayName                      [stability chip]
+ *   line 2:       providerModelId (mono, muted)
+ *   line 3:       rating ±CI (mono) · winRate% · gameCount games
+ *
+ * Resolves the overflow of the fixed-width 6-column grid on 360px phones
+ * without hiding any data.
+ */
+function RatingRowMobile({
+  rating,
+  rank,
+}: {
+  rating: CampaignDetail['ratings'][number];
+  rank: number;
+}) {
+  const ciSpread =
+    rating.ciLow != null && rating.ciHigh != null
+      ? Math.round((rating.ciHigh - rating.ciLow) / 2)
+      : null;
+  const winRateLabel =
+    rating.winRate != null
+      ? `${Math.round(rating.winRate * 100)}%`
+      : '—';
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-1 px-4 py-3 text-sm transition-colors hover:bg-surface-highlight/40',
+        rating.stability === 'directional' && 'opacity-70',
+        rank === 1 && 'bg-surface-highlight/30',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+          {rank.toString().padStart(2, '0')}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+          {rating.displayName}
+        </span>
+        <span className="shrink-0">
+          <StabilityChip tier={rating.stability} />
+        </span>
+      </div>
+      <div className="truncate pl-7 font-mono text-[11px] text-muted-foreground">
+        {rating.providerModelId}
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pl-7 font-mono text-[12px] text-muted-foreground">
+        <span className="inline-flex items-baseline gap-1">
+          <span className="font-semibold text-foreground">{rating.rating}</span>
+          {ciSpread != null && (
+            <span className="text-[11px]">±{ciSpread}</span>
+          )}
+        </span>
+        <span aria-hidden className="text-border">·</span>
+        <span className="text-foreground">{winRateLabel}</span>
+        <span aria-hidden className="text-border">·</span>
+        <span>
+          <span className="text-foreground">{rating.gameCount}</span> games
+        </span>
       </div>
     </div>
   );

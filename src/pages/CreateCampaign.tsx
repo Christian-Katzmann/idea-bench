@@ -455,48 +455,81 @@ export default function CreateCampaign() {
 // ────────────────────────────────────────────────────────────────────────────
 
 function Stepper({ activeStep }: { activeStep: number }) {
+  const activeLabel = STEPS[activeStep - 1]?.label ?? '';
+  const progressPct = (activeStep / STEPS.length) * 100;
   return (
-    <ol
-      aria-label="Wizard progress"
-      className="relative flex items-center justify-between"
-    >
-      <span
-        aria-hidden
-        className="absolute left-4 right-4 top-3.5 -z-10 h-px bg-border"
-      />
-      {STEPS.map(({ n, label }) => {
-        const isActive = activeStep === n;
-        const isDone = activeStep > n;
-        return (
-          <li
-            key={n}
-            className="flex flex-col items-center gap-1.5 bg-background px-2"
-          >
-            <div
-              aria-current={isActive ? 'step' : undefined}
-              className={cn(
-                'flex size-7 items-center justify-center rounded-full border text-xs font-medium transition-colors',
-                isDone
-                  ? 'border-foreground bg-foreground text-background'
-                  : isActive
-                    ? 'border-foreground bg-card text-foreground ring-4 ring-foreground/10'
-                    : 'border-border bg-card text-muted-foreground',
-              )}
+    <>
+      {/* Mobile-only compact header: "Step N of 5 · Label" + 2px progress bar.
+          The full dotted-stepper below eats horizontal at 360px and its
+          labels are second-tier info on a small screen anyway. */}
+      <div className="sm:hidden" aria-label="Wizard progress">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Step{' '}
+            <span className="text-foreground">{activeStep}</span> of{' '}
+            {STEPS.length}
+          </span>
+          <span className="text-sm font-medium text-foreground">
+            {activeLabel}
+          </span>
+        </div>
+        <div
+          className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-border"
+          role="progressbar"
+          aria-valuenow={activeStep}
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+        >
+          <div
+            className="h-full bg-foreground transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Desktop/tablet: full dotted stepper. Hidden below sm. */}
+      <ol
+        aria-label="Wizard progress"
+        className="relative hidden items-center justify-between sm:flex"
+      >
+        <span
+          aria-hidden
+          className="absolute left-4 right-4 top-3.5 -z-10 h-px bg-border"
+        />
+        {STEPS.map(({ n, label }) => {
+          const isActive = activeStep === n;
+          const isDone = activeStep > n;
+          return (
+            <li
+              key={n}
+              className="flex flex-col items-center gap-1.5 bg-background px-2"
             >
-              {isDone ? <Check className="size-3.5" /> : n}
-            </div>
-            <span
-              className={cn(
-                'text-[10px] font-medium uppercase tracking-wide',
-                activeStep >= n ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+              <div
+                aria-current={isActive ? 'step' : undefined}
+                className={cn(
+                  'flex size-7 items-center justify-center rounded-full border text-xs font-medium transition-colors',
+                  isDone
+                    ? 'border-foreground bg-foreground text-background'
+                    : isActive
+                      ? 'border-foreground bg-card text-foreground ring-4 ring-foreground/10'
+                      : 'border-border bg-card text-muted-foreground',
+                )}
+              >
+                {isDone ? <Check className="size-3.5" /> : n}
+              </div>
+              <span
+                className={cn(
+                  'text-[10px] font-medium uppercase tracking-wide',
+                  activeStep >= n ? 'text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 

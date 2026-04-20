@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
  */
 const inputVariants = cva(
   [
-    "h-10 w-full min-w-0 rounded-lg border border-border bg-card px-3.5 py-1 text-sm text-foreground transition-colors outline-none",
+    "h-10 w-full min-w-0 rounded-lg border border-border bg-card px-3.5 py-1 text-base text-foreground transition-colors outline-none md:text-sm",
     "file:inline-flex file:h-8 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
     "placeholder:text-muted-foreground",
     "focus-visible:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent/20",

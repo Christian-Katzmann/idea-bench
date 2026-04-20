@@ -33,8 +33,8 @@ export function ParticipantShell({
   const nextTheme = theme === "dark" ? "light" : "dark"
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground font-sans">
-      <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md md:px-6">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground font-sans">
+      <header className="sticky top-0 z-30 flex h-[calc(3rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link to="/" aria-label="Home" className="flex items-center">
             <BrandMark size="sm" />
@@ -60,7 +60,14 @@ export function ParticipantShell({
           </button>
         </div>
       </header>
-      <main className={cn("flex-1", contentClassName)}>{children}</main>
+      <main
+        className={cn(
+          "flex-1 pb-[env(safe-area-inset-bottom)]",
+          contentClassName,
+        )}
+      >
+        {children}
+      </main>
     </div>
   )
 }

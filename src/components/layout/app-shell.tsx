@@ -54,7 +54,7 @@ export function AppShell({
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground font-sans">
+    <div className="flex min-h-dvh bg-background text-foreground font-sans">
       {/* Desktop sidebar — fixed so topbar + content scroll underneath */}
       <aside className="fixed inset-y-0 z-40 hidden w-64 flex-col border-r border-border bg-background/80 backdrop-blur-xl md:flex">
         <SidebarContent />
@@ -73,7 +73,7 @@ export function AppShell({
           className="absolute inset-0 bg-foreground/30 backdrop-blur-sm"
           onClick={() => setIsMobileMenuOpen(false)}
         />
-        <div className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-card shadow-2xl">
+        <div className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl">
           <SidebarContent
             onNavigate={() => setIsMobileMenuOpen(false)}
             onOpenPalette={() => setIsPaletteOpen(true)}
@@ -81,7 +81,7 @@ export function AppShell({
         </div>
       </div>
 
-      <div className="relative flex min-h-screen flex-1 flex-col md:ml-64">
+      <div className="relative flex min-h-dvh flex-1 flex-col md:ml-64">
         <Topbar
           breadcrumb={breadcrumb}
           onOpenMobileMenu={() => setIsMobileMenuOpen(true)}

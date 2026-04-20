@@ -25,7 +25,7 @@ export default function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
       <BrowserRouter>
-        <Suspense fallback={<div className="min-h-screen bg-background" aria-hidden="true" />}>
+        <Suspense fallback={<div className="min-h-dvh bg-background" aria-hidden="true" />}>
           <Routes>
             {/* Auth */}
             <Route path="/login" element={<OperatorLogin />} />

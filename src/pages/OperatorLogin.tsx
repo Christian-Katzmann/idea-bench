@@ -97,7 +97,7 @@ export default function OperatorLogin() {
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 font-sans text-foreground">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 font-sans text-foreground">
       <button
         type="button"
         onClick={() => setTheme(nextTheme)}

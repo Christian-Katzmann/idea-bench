@@ -20,7 +20,9 @@ export const closeCampaignWebHandler = withOperator(
       .where(eq(schema.campaigns.id, id))
       .limit(1);
 
-    if (!campaign) return json({ error: 'campaign not found' }, 404);
+    if (!campaign || campaign.deletedAt) {
+      return json({ error: 'campaign not found' }, 404);
+    }
     if (campaign.status === 'draft') {
       return json({ error: 'draft campaigns cannot be closed' }, 409);
     }

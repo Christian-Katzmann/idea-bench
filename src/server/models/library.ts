@@ -708,7 +708,10 @@ async function computeAnalyticsSnapshot(
     generationAggregates,
     participantAggregates,
   ] = await Promise.all([
-      db.select().from(schema.campaigns),
+      // Soft-deleted campaigns are excluded from analytics so the
+      // dashboard leaderboard / model library / activity feed don't
+      // surface ghost data.
+      db.select().from(schema.campaigns).where(isNull(schema.campaigns.deletedAt)),
       db.select({ id: schema.prompts.id, campaignId: schema.prompts.campaignId }).from(schema.prompts),
       // Activity feed needs recent participant_finished events. Only
       // finished participants matter for that — total counts come from

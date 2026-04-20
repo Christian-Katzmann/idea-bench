@@ -30,7 +30,8 @@ export const recomputeCampaignWebHandler = withOperator(async (request: Request)
     .from(schema.campaigns)
     .where(eq(schema.campaigns.id, id))
     .limit(1);
-  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  if (!campaign || campaign.deletedAt)
+    return json({ error: 'campaign not found' }, 404);
 
   const t0 = Date.now();
   const res = await recomputeCampaignRatings(id);

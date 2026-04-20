@@ -31,7 +31,8 @@ export const activateCampaignWebHandler = withOperator(async (request: Request) 
     .from(schema.campaigns)
     .where(eq(schema.campaigns.id, id))
     .limit(1);
-  if (!campaign) return json({ error: 'campaign not found' }, 404);
+  if (!campaign || campaign.deletedAt)
+    return json({ error: 'campaign not found' }, 404);
   if (campaign.status !== 'draft') {
     return json(
       { error: `cannot activate: status is ${campaign.status}` },

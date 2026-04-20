@@ -104,10 +104,22 @@ export const campaigns = pgTable(
       .notNull()
       .defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** Soft-delete tombstone. NULL means live; non-NULL means the campaign
+     *  is hidden from list/detail endpoints and queued for hard purge by
+     *  the daily cron after a 30-day grace window. Vote/rating history is
+     *  preserved until purge so analytics aren't disrupted by undo-able
+     *  deletes. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   // The list endpoint sorts by createdAt DESC; index that direction
   // explicitly so postgres uses it without an extra sort step.
-  (t) => [index('campaigns_created_at').on(sql`${t.createdAt} desc`)],
+  // The (deletedAt, createdAt) partial-index supports the soft-delete
+  // filter (`WHERE deleted_at IS NULL ORDER BY created_at DESC`) without
+  // an extra sort and lets the cron purge sweep efficiently.
+  (t) => [
+    index('campaigns_created_at').on(sql`${t.createdAt} desc`),
+    index('campaigns_deleted_at').on(t.deletedAt, t.createdAt),
+  ],
 );
 
 export const prompts = pgTable(

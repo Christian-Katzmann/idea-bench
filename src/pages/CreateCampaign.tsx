@@ -740,6 +740,20 @@ function StepGenerate({
 
         {createError && <ErrorAlert>{createError}</ErrorAlert>}
         {generateError && <ErrorAlert>{generateError}</ErrorAlert>}
+
+        {/* Visually-hidden status for screen readers. The progress bar
+            and counters are silent visual changes; this announces them
+            at a polite cadence so blind operators can track the long-
+            running generation without relying on the bar. */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {generationDone
+            ? `Generation complete. ${succeeded} succeeded${
+                failed > 0 ? `, ${failed} failed` : ''
+              }.`
+            : isGenerating
+            ? `Generating output ${slotsReceived} of ${slotTotal}.`
+            : ''}
+        </div>
       </div>
 
       {slotValues.length > 0 && (

@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm';
+import { desc, isNull } from 'drizzle-orm';
 import { getDb } from '../../src/server/db/client.js';
 import * as schema from '../../src/server/db/schema.js';
 import { generateShareSlug } from '../../src/lib/ids.js';
@@ -21,7 +21,19 @@ import { toVercelHandler } from '../../src/server/vercel-adapter.js';
  *     name: string,
  *     description?: string,
  *     categories?: string[],
- *     prompts: [{ text: string, context?: string, categoryTags?: string[] }, ...],
+ *     prompts: [
+ *       {
+ *         text: string,                       // authoritative blob for LLM
+ *         context?: string,
+ *         categoryTags?: string[],
+ *         structured?: {                      // optional display-only breakdown
+ *           instructions: string,
+ *           input?: string,
+ *           outputFormat?: string,
+ *         },
+ *       },
+ *       ...
+ *     ],
  *     providerModelIds: string[]   // must all be in the fixed catalog
  *   }
  *
@@ -96,6 +108,7 @@ export default toVercelHandler(withOperator(async (request: Request) => {
         orderIndex: i,
         text: p.text,
         context: p.context ?? null,
+        structured: p.structured ?? null,
         categoryTags: p.categoryTags ?? [],
       })),
     )
@@ -135,7 +148,12 @@ interface ParsedPayload {
   name: string;
   description: string;
   categories: string[];
-  prompts: Array<{ text: string; context?: string; categoryTags?: string[] }>;
+  prompts: Array<{
+    text: string;
+    context?: string;
+    categoryTags?: string[];
+    structured?: schema.PromptStructured;
+  }>;
   providerModelIds: string[];
 }
 
@@ -166,6 +184,9 @@ function parseCreatePayload(
     const pr = raw as Record<string, unknown>;
     const text = typeof pr.text === 'string' ? pr.text.trim() : '';
     if (!text) return { error: 'each prompt must have non-empty text' };
+    const parsedStructured = parseStructured(pr.structured);
+    if (parsedStructured.kind === 'error')
+      return { error: parsedStructured.error };
     prompts.push({
       text,
       context:
@@ -175,6 +196,8 @@ function parseCreatePayload(
       categoryTags: Array.isArray(pr.categoryTags)
         ? pr.categoryTags.filter((x): x is string => typeof x === 'string')
         : undefined,
+      structured:
+        parsedStructured.kind === 'ok' ? parsedStructured.value : undefined,
     });
   }
 
@@ -198,6 +221,31 @@ function parseCreatePayload(
   return { name, description, categories, prompts, providerModelIds: ids };
 }
 
+type ParseStructuredResult =
+  | { kind: 'absent' }
+  | { kind: 'ok'; value: schema.PromptStructured }
+  | { kind: 'error'; error: string };
+
+function parseStructured(raw: unknown): ParseStructuredResult {
+  if (raw == null) return { kind: 'absent' };
+  if (typeof raw !== 'object')
+    return { kind: 'error', error: 'structured must be an object' };
+  const s = raw as Record<string, unknown>;
+  const instructions =
+    typeof s.instructions === 'string' ? s.instructions.trim() : '';
+  if (!instructions) return { kind: 'absent' }; // empty object → treat as missing
+  const input =
+    typeof s.input === 'string' && s.input.trim() ? s.input : undefined;
+  const outputFormat =
+    typeof s.outputFormat === 'string' && s.outputFormat.trim()
+      ? s.outputFormat
+      : undefined;
+  const value: schema.PromptStructured = { instructions };
+  if (input) value.input = input;
+  if (outputFormat) value.outputFormat = outputFormat;
+  return { kind: 'ok', value };
+}
+
 async function handleList(): Promise<Response> {
   const db = getDb();
   const rows = await db
@@ -208,10 +256,15 @@ async function handleList(): Promise<Response> {
       description: schema.campaigns.description,
       categories: schema.campaigns.categories,
       status: schema.campaigns.status,
+      votingMode: schema.campaigns.votingMode,
+      emailPromptMessage: schema.campaigns.emailPromptMessage,
       createdAt: schema.campaigns.createdAt,
       closedAt: schema.campaigns.closedAt,
     })
     .from(schema.campaigns)
+    // Soft-deleted campaigns are filtered everywhere except the (future)
+    // "Recently deleted" recovery surface and the daily purge cron.
+    .where(isNull(schema.campaigns.deletedAt))
     .orderBy(desc(schema.campaigns.createdAt));
   return json({ campaigns: rows }, 200);
 }

@@ -34,6 +34,8 @@ function createCampaignDetail(status: 'active' | 'completed' = 'active') {
       description: 'QA sweep',
       categories: ['quality'],
       status,
+      votingMode: 'hybrid' as const,
+      emailPromptMessage: null,
       createdAt: '2026-04-17T09:00:00.000Z',
       closedAt:
         status === 'completed' ? '2026-04-17T10:00:00.000Z' : null,
@@ -44,6 +46,8 @@ function createCampaignDetail(status: 'active' | 'completed' = 'active') {
       totalVotes: 12,
       uniqueParticipants: 5,
       finishedParticipants: 3,
+      identifiedParticipants: 2,
+      anonymousParticipants: 3,
     },
     models: [
       {
@@ -190,6 +194,103 @@ describe('CampaignDashboard', () => {
     ).toBeInTheDocument();
   });
 
+  it('soft-deletes a campaign and bounces back to the campaigns list', async () => {
+    const user = userEvent.setup();
+    let isDeleted = false;
+
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        body: () => createCampaignDetail('active'),
+      },
+      {
+        method: 'DELETE',
+        url: '/api/campaigns/campaign-1',
+        body: () => {
+          isDeleted = true;
+          return { ok: true, deletedAt: '2026-04-19T11:00:00.000Z' };
+        },
+      },
+    ]);
+
+    renderCampaignDashboard();
+
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /settings/i }),
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: /^delete$/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    const confirmButton = within(dialog).getByRole('button', {
+      name: /delete campaign/i,
+    });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(within(dialog).getByRole('textbox'), 'Support QA');
+    expect(confirmButton).toBeEnabled();
+    await user.click(confirmButton);
+
+    await waitFor(() => {
+      expect(isDeleted).toBe(true);
+    });
+  });
+
+  it('PATCHes campaign metadata when the operator saves Edit details', async () => {
+    const user = userEvent.setup();
+    let lastPatchBody: { name?: string; description?: string } | null = null;
+
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        body: () => createCampaignDetail('active'),
+      },
+      {
+        method: 'PATCH',
+        url: '/api/campaigns/campaign-1',
+        body: () => ({
+          ok: true,
+          campaign: { ...createCampaignDetail('active').campaign, name: 'Renamed' },
+        }),
+      },
+    ]);
+
+    // Capture the PATCH body for assertion (mockFetch doesn't expose init by
+    // route; intercept via the global fetch one level deeper).
+    const realFetch = window.fetch;
+    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PATCH' && typeof init.body === 'string') {
+        lastPatchBody = JSON.parse(init.body);
+      }
+      return realFetch(input, init);
+    }) as typeof fetch;
+
+    renderCampaignDashboard();
+
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /settings/i }),
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: /^edit$/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    const nameInput = within(dialog).getByLabelText(/^name$/i);
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Renamed');
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /save changes/i }),
+    );
+
+    await waitFor(() => {
+      expect(lastPatchBody).toMatchObject({ name: 'Renamed' });
+    });
+  });
+
   it('opens the csv export endpoint from the operator page', async () => {
     const user = userEvent.setup();
     installMockFetch([
@@ -209,10 +310,12 @@ describe('CampaignDashboard', () => {
       await screen.findByRole('tab', { name: /settings/i }),
     );
 
-    // ActionRow renders a row with the descriptive title + a short button
-    // label ("Export"). findByRole matches the button's accessible name.
+    // Two rows now share the "Export" button label; disambiguate via the
+    // row title.
+    const resultsRow = (await screen.findByText(/export results as csv/i))
+      .closest('li') as HTMLElement;
     await user.click(
-      await screen.findByRole('button', { name: /^export$/i }),
+      within(resultsRow).getByRole('button', { name: /^export$/i }),
     );
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -221,5 +324,37 @@ describe('CampaignDashboard', () => {
       'noopener',
     );
     expect(document.title).toBe('Support QA · ModelArena');
+  });
+
+  it('opens the participants csv endpoint from the operator page', async () => {
+    const user = userEvent.setup();
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        body: createCampaignDetail('active'),
+      },
+    ]);
+    const openSpy = vi
+      .spyOn(window, 'open')
+      .mockImplementation(() => null);
+
+    renderCampaignDashboard();
+
+    fireEvent.click(
+      await screen.findByRole('tab', { name: /settings/i }),
+    );
+
+    const participantsRow = (
+      await screen.findByText(/export participants as csv/i)
+    ).closest('li') as HTMLElement;
+    await user.click(
+      within(participantsRow).getByRole('button', { name: /^export$/i }),
+    );
+
+    expect(openSpy).toHaveBeenCalledWith(
+      '/api/campaigns/campaign-1/export-participants',
+      '_blank',
+      'noopener',
+    );
   });
 });

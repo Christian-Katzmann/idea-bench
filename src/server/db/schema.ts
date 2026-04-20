@@ -54,6 +54,21 @@ export const campaignStatusEnum = pgEnum('campaign_status', [
   'completed',
 ]);
 
+/**
+ * How voters identify themselves when starting a campaign:
+ *   - 'anonymous'       UI shows only a "Start voting" button; email field
+ *                       is hidden. Any email sent in the payload is ignored.
+ *   - 'email_required'  Voter must enter a valid email to start.
+ *   - 'hybrid'          Voter can either enter an email OR press the
+ *                       "Vote as anonymous" button. Matches the pre-feature
+ *                       behavior, so existing campaigns migrate to this.
+ */
+export const votingModeEnum = pgEnum('voting_mode', [
+  'anonymous',
+  'email_required',
+  'hybrid',
+]);
+
 export const modelRegistry = pgTable('model_registry', {
   id: uuid('id').primaryKey().defaultRandom(),
   providerModelId: text('provider_model_id').notNull().unique(),
@@ -97,6 +112,20 @@ export const campaigns = pgTable(
     description: text('description').notNull().default(''),
     categories: text('categories').array().notNull().default([]),
     status: campaignStatusEnum('status').notNull().default('draft'),
+    /**
+     * Operator-controlled voter-identity policy. Default for NEW campaigns
+     * is `anonymous` — lowest-friction; the cookie still provides stable
+     * participant identity and dedup. Pre-feature campaigns get migrated
+     * to `hybrid` to preserve existing "email optional" behavior.
+     */
+    votingMode: votingModeEnum('voting_mode').notNull().default('anonymous'),
+    /**
+     * Optional operator copy shown above the email field in
+     * `email_required` and `hybrid` modes — e.g. "Use your @acme.com email
+     * so we can count internal votes separately." Ignored when
+     * voting_mode = 'anonymous'. Capped at 500 chars at the API layer.
+     */
+    emailPromptMessage: text('email_prompt_message'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -122,6 +151,20 @@ export const campaigns = pgTable(
   ],
 );
 
+/**
+ * `text` is the authoritative blob sent to the LLM at generation time.
+ * When `structured` is non-null, it's the creator-intended breakdown of
+ * that same prompt — rendered in the voter UI so instructions, source
+ * material, and output format read distinctly instead of as one wall.
+ * Legacy prompts predate the field and have `structured = null`; they
+ * render from `text` as-is (with markdown + whitespace preserved).
+ */
+export interface PromptStructured {
+  instructions: string;
+  input?: string;
+  outputFormat?: string;
+}
+
 export const prompts = pgTable(
   'prompts',
   {
@@ -132,6 +175,7 @@ export const prompts = pgTable(
     orderIndex: integer('order_index').notNull(),
     text: text('text').notNull(),
     context: text('context'),
+    structured: jsonb('structured').$type<PromptStructured>(),
     categoryTags: text('category_tags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -410,3 +454,4 @@ export type NewMagicLink = typeof magicLinks.$inferInsert;
 export type BracketPosition = (typeof bracketPositionEnum.enumValues)[number];
 export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];
 export type VoteWinner = (typeof voteWinnerEnum.enumValues)[number];
+export type VotingMode = (typeof votingModeEnum.enumValues)[number];

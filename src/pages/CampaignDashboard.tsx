@@ -10,11 +10,14 @@ import {
   ExternalLink,
   Info,
   Loader2,
+  Pencil,
   RefreshCw,
   StopCircle,
+  Trash2,
 } from 'lucide-react';
 import { AppShell } from '../components/layout/app-shell';
 import { ConfirmDestructive } from '../components/modals/confirm-destructive';
+import { EditCampaignDialog } from '../components/modals/edit-campaign';
 import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { PageHeader } from '../components/ui/page-header';
@@ -27,7 +30,7 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { toast } from '../components/ui/toast';
-import { ApiError, apiFetch, type CampaignDetail } from '../lib/api';
+import { ApiError, apiFetch, type CampaignDetail, type VotingMode } from '../lib/api';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
@@ -38,6 +41,8 @@ export default function CampaignDashboard() {
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [isCloseOpen, setIsCloseOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
@@ -80,6 +85,59 @@ export default function CampaignDashboard() {
         'Recompute failed',
         { details: err instanceof Error ? err.message : String(err) },
       );
+    },
+  });
+
+  const editCampaign = useMutation({
+    mutationFn: (patch: {
+      name: string;
+      description: string;
+      categories: string[];
+      votingMode: VotingMode;
+      emailPromptMessage: string | null;
+    }) =>
+      apiFetch<{ ok: true; campaign: CampaignDetail['campaign'] }>(
+        `/api/campaigns/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaign', id] });
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['activity'] });
+      setIsEditOpen(false);
+      toast.success('Campaign updated');
+    },
+    onError: (err) => {
+      toast.error('Update failed', {
+        details: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+
+  const deleteCampaign = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: true; deletedAt: string; alreadyDeleted?: boolean }>(
+        `/api/campaigns/${id}`,
+        { method: 'DELETE' },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['activity'] });
+      setIsDeleteOpen(false);
+      toast.success('Campaign deleted', {
+        details: 'Recoverable for 30 days before permanent purge.',
+      });
+      navigate('/', { replace: true });
+    },
+    onError: (err) => {
+      toast.error('Delete failed', {
+        details: err instanceof Error ? err.message : String(err),
+      });
     },
   });
 
@@ -141,6 +199,14 @@ export default function CampaignDashboard() {
 
   const handleExportCsv = () => {
     window.open(`/api/campaigns/${id}/export`, '_blank', 'noopener');
+  };
+
+  const handleExportParticipantsCsv = () => {
+    window.open(
+      `/api/campaigns/${id}/export-participants`,
+      '_blank',
+      'noopener',
+    );
   };
 
   if (isLoading) {
@@ -279,6 +345,11 @@ export default function CampaignDashboard() {
               <KeyValue label="Finished participants">
                 <span className="font-mono text-xs tabular-nums text-foreground">
                   {stats.finishedParticipants}
+                </span>
+              </KeyValue>
+              <KeyValue label="Identified · anonymous">
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {stats.identifiedParticipants} · {stats.anonymousParticipants}
                 </span>
               </KeyValue>
               <div className="flex flex-col gap-2 pt-2 sm:flex-row">
@@ -469,6 +540,14 @@ export default function CampaignDashboard() {
             </header>
             <ul className="divide-y divide-border/60">
               <ActionRow
+                icon={<Pencil className="size-4" />}
+                title="Edit details"
+                description="Rename, rewrite the description, or adjust the category tags."
+                actionLabel="Edit"
+                onClick={() => setIsEditOpen(true)}
+                disabled={editCampaign.isPending}
+              />
+              <ActionRow
                 icon={<RefreshCw className="size-4" />}
                 title="Recompute ratings"
                 description="Run the Bradley-Terry solver + Fisher-info CIs over the full vote log."
@@ -482,10 +561,17 @@ export default function CampaignDashboard() {
               />
               <ActionRow
                 icon={<Download className="size-4" />}
-                title="Export votes as CSV"
-                description="Download every vote with participant, tournament, and prompt IDs."
+                title="Export results as CSV"
+                description="Per-model leaderboard with ratings, win/loss counts, and aggregate participant counts."
                 actionLabel="Export"
                 onClick={handleExportCsv}
+              />
+              <ActionRow
+                icon={<Download className="size-4" />}
+                title="Export participants as CSV"
+                description="One row per voter: email (blank for anonymous), start/finish time, votes cast."
+                actionLabel="Export"
+                onClick={handleExportParticipantsCsv}
               />
               {campaign.status === 'active' && (
                 <ActionRow
@@ -499,6 +585,16 @@ export default function CampaignDashboard() {
                   isPending={closeCampaign.isPending}
                 />
               )}
+              <ActionRow
+                icon={<Trash2 className="size-4" />}
+                title="Delete campaign"
+                description="Soft-delete; recoverable for 30 days before the daily cron purges it permanently."
+                actionLabel="Delete"
+                pendingLabel="Deleting…"
+                onClick={() => setIsDeleteOpen(true)}
+                disabled={deleteCampaign.isPending}
+                isPending={deleteCampaign.isPending}
+              />
             </ul>
           </section>
         </TabsContent>
@@ -520,6 +616,44 @@ export default function CampaignDashboard() {
         confirmLabel="Close campaign"
         isPending={closeCampaign.isPending}
         onConfirm={() => closeCampaign.mutate()}
+      />
+
+      <ConfirmDestructive
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title="Delete campaign"
+        description={
+          <>
+            <span className="font-medium text-foreground">{campaign.name}</span>{' '}
+            will disappear from your dashboards and the public voting link
+            will return 404. Vote history, generations, and ratings are
+            preserved for 30 days; after that the daily cron purges them
+            permanently.
+          </>
+        }
+        confirmWord={campaign.name}
+        confirmLabel="Delete campaign"
+        isPending={deleteCampaign.isPending}
+        onConfirm={() => deleteCampaign.mutate()}
+      />
+
+      <EditCampaignDialog
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        initial={{
+          name: campaign.name,
+          description: campaign.description ?? '',
+          categories: campaign.categories ?? [],
+          votingMode: campaign.votingMode,
+          emailPromptMessage: campaign.emailPromptMessage,
+        }}
+        isPending={editCampaign.isPending}
+        errorMessage={
+          editCampaign.error instanceof Error
+            ? editCampaign.error.message
+            : null
+        }
+        onSave={(patch) => editCampaign.mutate(patch)}
       />
     </AppShell>
   );

@@ -1,4 +1,4 @@
-import { and, asc, count, countDistinct, eq, inArray, sql } from 'drizzle-orm';
+import { asc, count, countDistinct, eq, inArray, sql } from 'drizzle-orm';
 import { stabilityFor, type Stability } from '../../lib/stability.js';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
@@ -41,6 +41,8 @@ export interface CampaignDetailData {
     description: string;
     categories: string[];
     status: schema.CampaignStatus;
+    votingMode: schema.VotingMode;
+    emailPromptMessage: string | null;
     createdAt: Date;
     closedAt: Date | null;
   };
@@ -50,6 +52,8 @@ export interface CampaignDetailData {
     totalVotes: number;
     uniqueParticipants: number;
     finishedParticipants: number;
+    identifiedParticipants: number;
+    anonymousParticipants: number;
   };
   models: Array<{
     id: string;
@@ -69,7 +73,10 @@ export async function buildCampaignDetail(
     .from(schema.campaigns)
     .where(eq(schema.campaigns.id, id))
     .limit(1);
-  if (!campaign) return null;
+  // Treat soft-deleted as not found for the operator detail surface;
+  // this also short-circuits export/preview/recompute callers that
+  // funnel through buildCampaignDetail.
+  if (!campaign || campaign.deletedAt) return null;
 
   const [models, promptRows, voteStats, ratings] = await Promise.all([
     db
@@ -143,17 +150,27 @@ export async function buildCampaignDetail(
     };
   });
 
-  const finishedParticipants = (
+  // One trip — aggregate finished/identified/anonymous participant counts
+  // in a single scan over the campaign's participants.
+  const participantAgg = (
     await db
-      .select({ n: count() })
-      .from(schema.participants)
-      .where(
-        and(
-          eq(schema.participants.campaignId, id),
-          sql`${schema.participants.finishedAt} is not null`,
+      .select({
+        finished: sql<number>`count(*) filter (where ${schema.participants.finishedAt} is not null)`.mapWith(
+          Number,
         ),
-      )
-  )[0]?.n ?? 0;
+        identified: sql<number>`count(*) filter (where ${schema.participants.email} is not null)`.mapWith(
+          Number,
+        ),
+        anonymous: sql<number>`count(*) filter (where ${schema.participants.email} is null)`.mapWith(
+          Number,
+        ),
+      })
+      .from(schema.participants)
+      .where(eq(schema.participants.campaignId, id))
+  )[0];
+  const finishedParticipants = participantAgg?.finished ?? 0;
+  const identifiedParticipants = participantAgg?.identified ?? 0;
+  const anonymousParticipants = participantAgg?.anonymous ?? 0;
 
   return {
     campaign: {
@@ -163,6 +180,8 @@ export async function buildCampaignDetail(
       description: campaign.description,
       categories: campaign.categories,
       status: campaign.status,
+      votingMode: campaign.votingMode,
+      emailPromptMessage: campaign.emailPromptMessage,
       createdAt: campaign.createdAt,
       closedAt: campaign.closedAt,
     },
@@ -172,6 +191,8 @@ export async function buildCampaignDetail(
       totalVotes: voteStats[0]?.totalVotes ?? 0,
       uniqueParticipants: voteStats[0]?.uniqueParticipants ?? 0,
       finishedParticipants,
+      identifiedParticipants,
+      anonymousParticipants,
     },
     models: models.map((model) => ({
       id: model.id,

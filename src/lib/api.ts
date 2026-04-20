@@ -54,6 +54,8 @@ export async function apiFetch<T>(
 
 // --- Shared response types (duck-typed against the handlers) ---
 
+export type VotingMode = 'anonymous' | 'email_required' | 'hybrid';
+
 export interface CampaignSummary {
   id: string;
   shareSlug: string;
@@ -61,6 +63,8 @@ export interface CampaignSummary {
   description: string;
   categories: string[];
   status: 'draft' | 'active' | 'completed';
+  votingMode: VotingMode;
+  emailPromptMessage: string | null;
   createdAt: string;
   closedAt: string | null;
 }
@@ -73,6 +77,8 @@ export interface CampaignDetail {
     totalVotes: number;
     uniqueParticipants: number;
     finishedParticipants: number;
+    identifiedParticipants: number;
+    anonymousParticipants: number;
   };
   models: Array<{
     id: string;
@@ -113,8 +119,16 @@ export interface VoteLanding {
   description: string;
   categories: string[];
   status: 'draft' | 'active' | 'completed';
+  votingMode: VotingMode;
+  emailPromptMessage: string | null;
   promptCount: number;
   modelCount: number;
+}
+
+export interface PromptStructured {
+  instructions: string;
+  input?: string;
+  outputFormat?: string;
 }
 
 export interface NextBattleResponse {
@@ -127,6 +141,7 @@ export interface NextBattlePayload {
     id: string;
     text: string;
     context: string | null;
+    structured: PromptStructured | null;
     categoryTags: string[];
   };
   battle: {

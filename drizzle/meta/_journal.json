@@ -36,6 +36,20 @@
       "when": 1776665632754,
       "tag": "0004_regular_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776689572698,
+      "tag": "0005_voting_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776691676516,
+      "tag": "0006_handy_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

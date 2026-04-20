@@ -296,4 +296,109 @@
         100% { background-color: transparent; }
     }
     .lb-just-updated { animation: lb-flash 1.2s ease-out; }
+
+    /* ---------------------------------------------------------------
+       .prose-mini — constrained markdown rendering for prompt content.
+
+       Deliberately NOT @tailwindcss/typography — that plugin imposes
+       editorial scale and rhythm that overwhelms a tight battle-screen
+       strip. This variant keeps the text at the size the prompt was
+       always rendered at and layers in just enough structure for
+       bullets, bold/italic, code, and quotes to read correctly.
+    --------------------------------------------------------------- */
+    .prose-mini {
+        font-size: 15px;
+        line-height: 1.65;
+        color: var(--clr-fg);
+    }
+    .prose-mini > * + * { margin-top: 0.55em; }
+    .prose-mini p { margin: 0; }
+    .prose-mini strong { font-weight: 600; color: var(--clr-fg); }
+    .prose-mini em { font-style: italic; }
+    .prose-mini a {
+        color: var(--clr-accent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        text-decoration-thickness: 1px;
+    }
+    .prose-mini ul,
+    .prose-mini ol {
+        margin: 0;
+        padding-left: 1.25em;
+    }
+    .prose-mini ul { list-style: disc; }
+    .prose-mini ol { list-style: decimal; }
+    .prose-mini li { margin: 0; padding-left: 0.15em; }
+    .prose-mini li + li { margin-top: 0.2em; }
+    .prose-mini li::marker { color: var(--clr-fg-muted); }
+    .prose-mini li > ul,
+    .prose-mini li > ol { margin-top: 0.2em; }
+    .prose-mini code {
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+        padding: 0.1em 0.35em;
+        border-radius: calc(var(--radius) * 0.35);
+        background: var(--clr-surface-highlight);
+        border: 1px solid var(--clr-border);
+    }
+    .prose-mini pre {
+        margin: 0;
+        padding: 0.75rem 0.9rem;
+        border-radius: var(--radius-md);
+        background: var(--clr-surface-highlight);
+        border: 1px solid var(--clr-border);
+        overflow-x: auto;
+    }
+    .prose-mini pre code {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        font-size: 0.85em;
+        line-height: 1.55;
+        color: var(--clr-fg);
+    }
+    .prose-mini blockquote {
+        margin: 0;
+        padding: 0.15em 0 0.15em 0.9em;
+        border-left: 2px solid var(--clr-border);
+        color: var(--clr-fg-muted);
+    }
+    .prose-mini hr {
+        margin: 0.5em 0;
+        border: 0;
+        border-top: 1px solid var(--clr-border);
+    }
+    .prose-mini h1,
+    .prose-mini h2,
+    .prose-mini h3,
+    .prose-mini h4 {
+        font-weight: 600;
+        color: var(--clr-fg);
+        line-height: 1.35;
+    }
+    .prose-mini h1 { font-size: 1.12em; }
+    .prose-mini h2 { font-size: 1.06em; }
+    .prose-mini h3 { font-size: 1em; }
+    .prose-mini h4 { font-size: 0.95em; }
+    .prose-mini table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92em;
+    }
+    .prose-mini th,
+    .prose-mini td {
+        padding: 0.35em 0.55em;
+        border-bottom: 1px solid var(--clr-border);
+        text-align: left;
+        vertical-align: top;
+    }
+    .prose-mini th {
+        font-weight: 600;
+        color: var(--clr-fg);
+        background: var(--clr-surface-highlight);
+    }
+    .prose-mini input[type='checkbox'] {
+        margin-right: 0.4em;
+        accent-color: var(--clr-fg);
+    }
 }

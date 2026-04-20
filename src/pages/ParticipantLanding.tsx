@@ -43,16 +43,30 @@ export default function ParticipantLanding() {
     },
   });
 
-  const handleStart = (e: React.FormEvent) => {
+  // Submit with email. Validates the shape client-side so we don't waste a
+  // round-trip on a transparently-bad address.
+  const submitWithEmail = (e: React.FormEvent) => {
     e.preventDefault();
     if (start.isPending) return;
     const trimmed = email.trim();
-    if (trimmed && !EMAIL_RE.test(trimmed)) {
-      setEmailError('Please enter a valid email address, or leave it blank.');
+    if (!trimmed) {
+      setEmailError('Please enter your email.');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmed)) {
+      setEmailError('Please enter a valid email address.');
       return;
     }
     setEmailError(null);
-    start.mutate(trimmed ? { email: trimmed } : {});
+    start.mutate({ email: trimmed });
+  };
+
+  // Submit anonymously — works in `anonymous` (no email field rendered) and
+  // `hybrid` (user pressed the "Vote as anonymous" button).
+  const submitAnonymous = () => {
+    if (start.isPending) return;
+    setEmailError(null);
+    start.mutate({});
   };
 
   if (landing.isLoading) {
@@ -86,6 +100,15 @@ export default function ParticipantLanding() {
   const notActive = campaign.status !== 'active';
   const minBattles = campaign.promptCount * 4;
   const maxBattles = campaign.promptCount * 5;
+  const mode = campaign.votingMode;
+
+  // Footer microcopy. Mode dictates what we tell the voter below the card.
+  const footerCopy =
+    mode === 'anonymous'
+      ? 'Your vote is anonymous. No email is collected.'
+      : mode === 'email_required'
+        ? 'Your email is required to vote on this campaign.'
+        : 'Email helps the operator know who you are. Prefer not to share? Vote anonymously.';
 
   return (
     <ParticipantShell contentClassName="flex items-center justify-center px-4 py-12">
@@ -130,74 +153,142 @@ export default function ParticipantLanding() {
             </div>
           )}
 
-          <form
-            onSubmit={handleStart}
-            noValidate
-            className="flex flex-col gap-3 border-t border-border bg-surface-highlight/40 px-6 py-5"
-          >
-            <div className="flex flex-col gap-1.5">
-              <Label
-                htmlFor="email"
-                className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-              >
-                Email{' '}
-                <span className="text-muted-foreground/70">(optional)</span>
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                spellCheck={false}
-                autoCapitalize="none"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (emailError) setEmailError(null);
-                }}
-                disabled={notActive}
+          {/* Mode-driven entry form. Three branches — kept inline so the
+              shared loading/error UI is in one place. */}
+          {mode === 'anonymous' ? (
+            <div
+              className="flex flex-col gap-3 border-t border-border bg-surface-highlight/40 px-6 py-5"
+              data-testid="vote-start-anonymous-only"
+            >
+              {start.error && (
+                <ErrorCard
+                  detail={
+                    start.error instanceof Error
+                      ? start.error.message
+                      : 'Failed to start'
+                  }
+                />
+              )}
+              <Button
+                type="button"
+                className="w-full"
+                disabled={notActive || start.isPending}
+                onClick={submitAnonymous}
                 autoFocus
-                aria-invalid={emailError ? true : undefined}
-                aria-describedby={emailError ? 'email-error' : undefined}
-              />
-              {emailError && (
-                <p
-                  id="email-error"
-                  className="text-[11px] text-destructive"
-                >
-                  {emailError}
+              >
+                {start.isPending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Starting…
+                  </>
+                ) : (
+                  'Start voting'
+                )}
+              </Button>
+            </div>
+          ) : (
+            <form
+              onSubmit={submitWithEmail}
+              noValidate
+              className="flex flex-col gap-3 border-t border-border bg-surface-highlight/40 px-6 py-5"
+              data-testid={
+                mode === 'email_required'
+                  ? 'vote-start-email-required'
+                  : 'vote-start-hybrid'
+              }
+            >
+              {campaign.emailPromptMessage && (
+                <p className="rounded-md border border-border bg-surface-highlight/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                  {campaign.emailPromptMessage}
                 </p>
               )}
-            </div>
-            {start.error && (
-              <ErrorCard
-                detail={
-                  start.error instanceof Error
-                    ? start.error.message
-                    : 'Failed to start'
-                }
-              />
-            )}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={notActive || start.isPending}
-            >
-              {start.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Starting…
-                </>
-              ) : (
-                'Start voting'
+              <div className="flex flex-col gap-1.5">
+                <Label
+                  htmlFor="email"
+                  className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Email
+                  {mode === 'hybrid' ? (
+                    <span className="text-muted-foreground/70"> (optional)</span>
+                  ) : (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailError) setEmailError(null);
+                  }}
+                  disabled={notActive}
+                  autoFocus
+                  required={mode === 'email_required'}
+                  aria-invalid={emailError ? true : undefined}
+                  aria-describedby={emailError ? 'email-error' : undefined}
+                />
+                {emailError && (
+                  <p
+                    id="email-error"
+                    className="text-[11px] text-destructive"
+                  >
+                    {emailError}
+                  </p>
+                )}
+              </div>
+              {start.error && (
+                <ErrorCard
+                  detail={
+                    start.error instanceof Error
+                      ? start.error.message
+                      : 'Failed to start'
+                  }
+                />
               )}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={notActive || start.isPending}
+              >
+                {start.isPending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Starting…
+                  </>
+                ) : (
+                  'Start voting'
+                )}
+              </Button>
+              {mode === 'hybrid' && (
+                <>
+                  <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" />
+                    or
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={notActive || start.isPending}
+                    onClick={submitAnonymous}
+                  >
+                    Vote as anonymous
+                  </Button>
+                </>
+              )}
+            </form>
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          Email is optional — it only helps the operator know who you are.
+          {footerCopy}
         </p>
       </div>
     </ParticipantShell>

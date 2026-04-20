@@ -8,6 +8,7 @@ import {
 import { AlertTriangle, HelpCircle, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ParticipantShell } from '../components/layout/participant-shell';
+import { PromptDisplay } from '../components/prompt/PromptDisplay';
 import { Button } from '../components/ui/button';
 import { KeyHint } from '../components/ui/key-hint';
 import {
@@ -176,17 +177,23 @@ export default function VotingInterface() {
       label={`${battle.battle.label} · ${battle.battle.reason}`}
       rightSlot={
         <>
-          <div className="hidden min-w-32 items-center gap-2 sm:flex">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
+          <div className="hidden min-w-40 items-center gap-2 sm:flex">
+            <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+              Prompt{' '}
+              <span className="text-foreground">
+                {Math.min(
+                  battle.progress.tournamentsDone + 1,
+                  battle.progress.tournamentsTotal,
+                )}
+              </span>{' '}
+              of {battle.progress.tournamentsTotal}
+            </span>
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-border/60">
               <div
                 className="h-full bg-foreground transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-              {battle.progress.tournamentsDone}/
-              {battle.progress.tournamentsTotal}
-            </span>
           </div>
           <ShortcutsHelp />
           <button
@@ -204,34 +211,32 @@ export default function VotingInterface() {
     >
       {/* Prompt strip */}
       <section className="border-b border-border bg-card px-4 py-4 md:px-6">
-        <div className="mx-auto flex max-w-5xl flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="mx-auto flex max-w-5xl flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Prompt
             </span>
-            {battle.prompt.categoryTags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex h-5 items-center rounded-full border border-border bg-surface-highlight px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
+            {battle.prompt.categoryTags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {battle.prompt.categoryTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex h-5 items-center rounded-full border border-border bg-surface-highlight px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <p className="text-[15px] font-medium leading-relaxed text-foreground">
-            {battle.prompt.text}
-          </p>
-          {battle.prompt.context && (
-            <div className="mt-1 rounded-md border border-border bg-surface-highlight/40 px-3 py-2 text-xs text-muted-foreground">
-              <span className="mr-2 font-medium text-foreground">Context:</span>
-              {battle.prompt.context}
-            </div>
-          )}
+          <div className="max-w-[72ch]">
+            <PromptDisplay prompt={battle.prompt} collapsible />
+          </div>
         </div>
       </section>
 
       {/* Battle area — side-by-side outputs + primary vote row + tie/both-bad row */}
-      <section className="relative flex-1 overflow-hidden bg-background px-4 py-4 md:px-6">
+      <section className="relative flex-1 overflow-hidden bg-background px-4 pb-4 pt-6 md:px-6">
         <div className="mx-auto flex h-full max-w-5xl flex-col gap-3">
           <AnimatePresence mode="wait">
             <motion.div
@@ -261,7 +266,7 @@ export default function VotingInterface() {
             </motion.div>
           </AnimatePresence>
 
-          <div className="flex shrink-0 items-center justify-center gap-2">
+          <div className="flex shrink-0 items-center justify-center gap-2 border-t border-border/50 pt-3">
             <TertiaryVoteButton
               disabled={isBusy}
               onClick={() => handleVote('tie')}
@@ -329,16 +334,17 @@ function OutputColumn({
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-surface-highlight/40 px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="inline-flex size-5 items-center justify-center rounded-md border border-border bg-card font-mono text-[11px] font-semibold text-foreground">
+          <span className="inline-flex size-5 items-center justify-center rounded-md bg-foreground font-mono text-[11px] font-semibold text-background">
             {side}
           </span>
-          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="text-sm font-semibold text-foreground">{label}</span>
         </div>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {tokens ?? '?'} tok
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          {tokens != null ? tokens.toLocaleString() : '—'}
+          <span className="ml-1 opacity-70">tokens</span>
         </span>
       </header>
-      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[13px] leading-relaxed text-foreground">
+      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[14px] leading-[1.65] text-foreground">
         {output}
       </div>
       <div className="shrink-0 border-t border-border bg-surface-highlight/30 p-3">
@@ -348,10 +354,10 @@ function OutputColumn({
           size="lg"
           className={cn('w-full justify-center gap-2')}
         >
-          <span>{side} is better</span>
           <KeyHint className="border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground/80">
             {side}
           </KeyHint>
+          <span>{side} is better</span>
         </Button>
       </div>
     </div>

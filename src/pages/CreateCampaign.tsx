@@ -10,6 +10,7 @@ import {
   Loader2,
   Play,
   Plus,
+  RefreshCw,
   Rocket,
   Trash2,
   XCircle,
@@ -20,7 +21,13 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { PageHeader } from '../components/ui/page-header';
-import { ApiError, apiFetch, type ModelLibraryData } from '../lib/api';
+import { PromptDisplay } from '../components/prompt/PromptDisplay';
+import {
+  ApiError,
+  apiFetch,
+  type ModelLibraryData,
+  type PromptStructured,
+} from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
 
@@ -73,6 +80,55 @@ interface CreatedCampaign {
   models: Array<{ id: string; providerModelId: string; displayName: string }>;
 }
 
+type PromptMode = 'simple' | 'structured';
+
+interface PromptDraft {
+  mode: PromptMode;
+  text: string; // simple-mode blob
+  context: string; // shared
+  instructions: string; // structured-mode
+  input: string;
+  outputFormat: string;
+}
+
+function emptyPrompt(): PromptDraft {
+  return {
+    mode: 'structured',
+    text: '',
+    context: '',
+    instructions: '',
+    input: '',
+    outputFormat: '',
+  };
+}
+
+/**
+ * Collapse a draft into the wire shape the API expects. `text` is always
+ * present (it's what the LLM sees). When the creator used structured
+ * mode, we also attach `structured` so the voter UI can render each
+ * field with its own typography instead of one merged blob.
+ */
+function flattenPrompt(
+  p: PromptDraft,
+): { text: string; structured?: PromptStructured } | null {
+  if (p.mode === 'structured') {
+    const instructions = p.instructions.trim();
+    if (!instructions) return null;
+    const input = p.input.trim();
+    const outputFormat = p.outputFormat.trim();
+    const parts = [instructions];
+    if (input) parts.push(`Input:\n${input}`);
+    if (outputFormat) parts.push(`Output format:\n${outputFormat}`);
+    const structured: PromptStructured = { instructions };
+    if (input) structured.input = input;
+    if (outputFormat) structured.outputFormat = outputFormat;
+    return { text: parts.join('\n\n'), structured };
+  }
+  const text = p.text.trim();
+  if (!text) return null;
+  return { text };
+}
+
 export default function CreateCampaign() {
   const navigate = useNavigate();
   useDocumentTitle('New Campaign');
@@ -81,7 +137,7 @@ export default function CreateCampaign() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
-  const [prompts, setPrompts] = useState([{ text: '', context: '' }]);
+  const [prompts, setPrompts] = useState<PromptDraft[]>([emptyPrompt()]);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
 
   const [createError, setCreateError] = useState<string | null>(null);
@@ -150,10 +206,12 @@ export default function CreateCampaign() {
           description,
           categories,
           prompts: prompts
-            .filter((p) => p.text.trim())
-            .map((p) => ({
-              text: p.text,
+            .map((p) => ({ p, flat: flattenPrompt(p) }))
+            .filter((x): x is { p: PromptDraft; flat: NonNullable<ReturnType<typeof flattenPrompt>> } => x.flat !== null)
+            .map(({ p, flat }) => ({
+              text: flat.text,
               context: p.context.trim() ? p.context : undefined,
+              structured: flat.structured,
             })),
           providerModelIds: selectedModels,
         }),
@@ -199,6 +257,36 @@ export default function CreateCampaign() {
     navigate,
   ]);
 
+  const handleRetryFailed = useCallback(async () => {
+    if (isGenerating || !campaign) return;
+    setGenerateError(null);
+    setGenerationDone(false);
+    setIsGenerating(true);
+    try {
+      await runGeneration(
+        campaign.id,
+        {
+          onStart: () => {
+            // Preserve slotTotal — retry reports the failed subset; the
+            // overall progress bar remains anchored to the full run.
+          },
+          onSlot: (ev) =>
+            setSlots((prev) => ({
+              ...prev,
+              [slotKey(ev.promptId, ev.campaignModelId)]: ev,
+            })),
+          onDone: () => setGenerationDone(true),
+          onError: (msg) => setGenerateError(msg),
+        },
+        { onlyFailed: true },
+      );
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'unknown error');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [isGenerating, campaign]);
+
   const handleLaunch = async () => {
     if (!campaign || isActivating) return;
     setActivateError(null);
@@ -231,9 +319,11 @@ export default function CreateCampaign() {
     (model) => model.enabled && !model.legacy,
   );
 
+  const validPromptCount = prompts.filter((p) => flattenPrompt(p) !== null)
+    .length;
   const canProgress =
     (step === 1 && !!name) ||
-    (step === 2 && prompts[0].text.trim().length > 0) ||
+    (step === 2 && validPromptCount > 0) ||
     (step === 3 && selectedModels.length >= MIN_MODELS) ||
     (step === 4 && generationDone) ||
     step === 5;
@@ -282,7 +372,7 @@ export default function CreateCampaign() {
 
             {step === 4 && (
               <StepGenerate
-                promptCount={prompts.filter((p) => p.text.trim()).length}
+                promptCount={validPromptCount}
                 modelCount={selectedModels.length}
                 isGenerating={isGenerating}
                 generationDone={generationDone}
@@ -295,6 +385,8 @@ export default function CreateCampaign() {
                 createError={createError}
                 generateError={generateError}
                 onStart={handleGenerate}
+                onRetryFailed={handleRetryFailed}
+                canRetryFailed={Boolean(campaign)}
               />
             )}
 
@@ -489,82 +581,279 @@ function StepPrompts({
   prompts,
   onChange,
 }: {
-  prompts: Array<{ text: string; context: string }>;
-  onChange: (p: Array<{ text: string; context: string }>) => void;
+  prompts: PromptDraft[];
+  onChange: (p: PromptDraft[]) => void;
 }) {
+  const updateAt = (idx: number, patch: Partial<PromptDraft>) => {
+    const next = prompts.map((p, i) => (i === idx ? { ...p, ...patch } : p));
+    onChange(next);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <StepHeader
         title="Prompts & context"
-        description="Add the prompts you want to evaluate. Each prompt runs against every selected model."
+        description="Add the prompts you want to evaluate. Each prompt runs against every selected model. Markdown is supported — the preview shows voters exactly what they'll see."
       />
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {prompts.map((prompt, idx) => (
-          <div
+          <PromptCard
             key={idx}
-            className="group relative flex flex-col gap-3 rounded-lg border border-border bg-surface-highlight/30 p-4"
-          >
-            {prompts.length > 1 && (
-              <button
-                type="button"
-                onClick={() =>
-                  onChange(prompts.filter((_, i) => i !== idx))
-                }
-                aria-label="Remove prompt"
-                className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-card hover:text-foreground group-hover:opacity-100"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            )}
-            <div className="flex flex-col gap-1.5">
-              <Label
-                htmlFor={`prompt-text-${idx}`}
-                className="text-[10px] uppercase tracking-wide"
-              >
-                Prompt {idx + 1}
-              </Label>
-              <Textarea
-                id={`prompt-text-${idx}`}
-                value={prompt.text}
-                onChange={(e) => {
-                  const next = [...prompts];
-                  next[idx].text = e.target.value;
-                  onChange(next);
-                }}
-                placeholder="Enter the prompt text…"
-                className="min-h-20 bg-card"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label
-                htmlFor={`prompt-context-${idx}`}
-                className="text-[10px] uppercase tracking-wide"
-              >
-                Context <span className="text-muted-foreground/70">(optional)</span>
-              </Label>
-              <Textarea
-                id={`prompt-context-${idx}`}
-                value={prompt.context}
-                onChange={(e) => {
-                  const next = [...prompts];
-                  next[idx].context = e.target.value;
-                  onChange(next);
-                }}
-                placeholder="Background info or system instructions…"
-                className="min-h-16 bg-card text-sm"
-              />
-            </div>
-          </div>
+            idx={idx}
+            prompt={prompt}
+            removable={prompts.length > 1}
+            onPatch={(patch) => updateAt(idx, patch)}
+            onRemove={() => onChange(prompts.filter((_, i) => i !== idx))}
+          />
         ))}
         <button
           type="button"
-          onClick={() => onChange([...prompts, { text: '', context: '' }])}
+          onClick={() => onChange([...prompts, emptyPrompt()])}
           className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card py-3 text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
         >
           <Plus className="size-4" />
           Add another prompt
         </button>
       </div>
+    </div>
+  );
+}
+
+function PromptCard({
+  idx,
+  prompt,
+  removable,
+  onPatch,
+  onRemove,
+}: {
+  idx: number;
+  prompt: PromptDraft;
+  removable: boolean;
+  onPatch: (patch: Partial<PromptDraft>) => void;
+  onRemove: () => void;
+}) {
+  const flat = flattenPrompt(prompt);
+  const hasContent = flat !== null;
+
+  // Build a live preview shape matching the battle-screen prompt contract.
+  // Use the ACTUAL text the LLM will receive so creators notice if the
+  // structured → flattened concatenation produces something awkward.
+  const previewPrompt = hasContent
+    ? {
+        text: flat.text,
+        context: prompt.context.trim() ? prompt.context : null,
+        structured: flat.structured ?? null,
+      }
+    : null;
+
+  return (
+    <div className="group relative flex flex-col gap-3 rounded-lg border border-border bg-surface-highlight/30 p-4">
+      {removable && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove prompt"
+          className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-card hover:text-foreground group-hover:opacity-100"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Prompt {idx + 1}
+        </span>
+        <ModeToggle
+          value={prompt.mode}
+          onChange={(mode) => onPatch({ mode })}
+        />
+      </div>
+
+      {prompt.mode === 'simple' ? (
+        <SimpleFields prompt={prompt} idx={idx} onPatch={onPatch} />
+      ) : (
+        <StructuredFields prompt={prompt} idx={idx} onPatch={onPatch} />
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label
+          htmlFor={`prompt-context-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Context <span className="text-muted-foreground/70">(optional)</span>
+        </Label>
+        <Textarea
+          id={`prompt-context-${idx}`}
+          value={prompt.context}
+          onChange={(e) => onPatch({ context: e.target.value })}
+          placeholder="Background info or system instructions…"
+          className="min-h-16 bg-card text-sm"
+        />
+      </div>
+
+      {previewPrompt && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Voter sees
+          </span>
+          <div className="rounded-md border border-border bg-card px-3 py-3">
+            <PromptDisplay prompt={previewPrompt} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModeToggle({
+  value,
+  onChange,
+}: {
+  value: PromptMode;
+  onChange: (mode: PromptMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex h-7 items-center rounded-md border border-border bg-card p-0.5 text-[11px] font-medium"
+      role="tablist"
+    >
+      {(['structured', 'simple'] as const).map((mode) => {
+        const on = value === mode;
+        return (
+          <button
+            key={mode}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onChange(mode)}
+            className={cn(
+              'h-full rounded-[5px] px-2.5 capitalize transition-colors',
+              on
+                ? 'bg-foreground text-background'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {mode}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SimpleFields({
+  prompt,
+  idx,
+  onPatch,
+}: {
+  prompt: PromptDraft;
+  idx: number;
+  onPatch: (patch: Partial<PromptDraft>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label
+        htmlFor={`prompt-text-${idx}`}
+        className="text-[10px] uppercase tracking-wide"
+      >
+        Prompt text
+      </Label>
+      <Textarea
+        id={`prompt-text-${idx}`}
+        value={prompt.text}
+        onChange={(e) => onPatch({ text: e.target.value })}
+        placeholder="Enter the prompt text…"
+        className="min-h-24 bg-card"
+      />
+    </div>
+  );
+}
+
+function StructuredFields({
+  prompt,
+  idx,
+  onPatch,
+}: {
+  prompt: PromptDraft;
+  idx: number;
+  onPatch: (patch: Partial<PromptDraft>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <FieldSlot
+        id={`prompt-instructions-${idx}`}
+        label="Instructions"
+        required
+        hint="What should the model do?"
+        value={prompt.instructions}
+        onChange={(v) => onPatch({ instructions: v })}
+        placeholder="e.g. Translate the following English text to Danish. Keep tone and meaning…"
+        minHeightClass="min-h-24"
+      />
+      <FieldSlot
+        id={`prompt-input-${idx}`}
+        label="Input"
+        optional
+        hint="Text, code, or data the model should operate on. Leave empty for open-ended prompts."
+        value={prompt.input}
+        onChange={(v) => onPatch({ input: v })}
+        placeholder="The source material the model should work on…"
+        minHeightClass="min-h-20"
+      />
+      <FieldSlot
+        id={`prompt-output-${idx}`}
+        label="Output format"
+        optional
+        hint="Constraints on how the answer should be shaped."
+        value={prompt.outputFormat}
+        onChange={(v) => onPatch({ outputFormat: v })}
+        placeholder="e.g. Return only the translation, no commentary."
+        minHeightClass="min-h-16"
+      />
+    </div>
+  );
+}
+
+function FieldSlot({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  required,
+  optional,
+  minHeightClass,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  hint?: string;
+  required?: boolean;
+  optional?: boolean;
+  minHeightClass: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-[10px] uppercase tracking-wide">
+        {label}
+        {optional && (
+          <span className="text-muted-foreground/70"> (optional)</span>
+        )}
+        {required && <span className="text-muted-foreground/70"> *</span>}
+      </Label>
+      <Textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={cn('bg-card text-sm', minHeightClass)}
+      />
+      {hint && (
+        <span className="text-[11px] text-muted-foreground/80">{hint}</span>
+      )}
     </div>
   );
 }
@@ -659,6 +948,8 @@ function StepGenerate({
   createError,
   generateError,
   onStart,
+  onRetryFailed,
+  canRetryFailed,
 }: {
   promptCount: number;
   modelCount: number;
@@ -673,6 +964,8 @@ function StepGenerate({
   createError: string | null;
   generateError: string | null;
   onStart: () => void;
+  onRetryFailed: () => void;
+  canRetryFailed: boolean;
 }) {
   const total = promptCount * modelCount;
 
@@ -734,6 +1027,17 @@ function StepGenerate({
                   </span>
                 )}
               </div>
+            )}
+            {failed > 0 && !isGenerating && canRetryFailed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRetryFailed}
+                className="self-start"
+              >
+                <RefreshCw className="size-3.5" />
+                Retry failed ({failed})
+              </Button>
             )}
           </div>
         )}
@@ -906,8 +1210,10 @@ async function runGeneration(
     onDone: (summary: { succeeded: number; failed: number }) => void;
     onError: (msg: string) => void;
   },
+  options: { onlyFailed?: boolean } = {},
 ): Promise<void> {
-  const res = await fetch(`/api/campaigns/${campaignId}/generate`, {
+  const qs = options.onlyFailed ? '?only=failed' : '';
+  const res = await fetch(`/api/campaigns/${campaignId}/generate${qs}`, {
     method: 'POST',
     headers: { accept: 'text/event-stream' },
   });

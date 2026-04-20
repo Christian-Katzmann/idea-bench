@@ -204,6 +204,7 @@ export const voteNextWebHandler = withParticipant(async (request, ctx) => {
             id: prompt.id,
             text: prompt.text,
             context: prompt.context,
+            structured: prompt.structured ?? null,
             categoryTags: prompt.categoryTags,
           },
           battle: {

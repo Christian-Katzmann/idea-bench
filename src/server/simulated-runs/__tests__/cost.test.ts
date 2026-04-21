@@ -1,0 +1,133 @@
+/**
+ * Unit tests for cost estimation + ceiling. Cost is the load-bearing
+ * guardrail — a runaway loop is a $1000 bill. These cover the happy
+ * path for estimation scale (should be roughly linear in voters) and
+ * the ceiling-triggering arithmetic.
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  checkCostCeiling,
+  defaultCostCeiling,
+  estimateRunCost,
+} from '../cost.js';
+import { defaultGenericMix } from '../panel-assembly.js';
+import type { PromptMode } from '../../db/schema.js';
+
+function buildPromptsByMode(partial: Partial<Record<PromptMode, number>>): Record<PromptMode, number> {
+  return {
+    tournament: 0,
+    slider: 0,
+    approve_reject: 0,
+    best_of_n: 0,
+    multi_axis: 0,
+    qualitative: 0,
+    ...partial,
+  };
+}
+
+describe('estimateRunCost', () => {
+  it('returns zero for zero prompts', () => {
+    const result = estimateRunCost({
+      voterCount: 30,
+      promptsByMode: buildPromptsByMode({}),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    expect(result.estimatedUsd).toBe(0);
+    expect(result.totalCalls).toBe(0);
+  });
+
+  it('scales roughly linearly with voter count', () => {
+    const ten = estimateRunCost({
+      voterCount: 10,
+      promptsByMode: buildPromptsByMode({ slider: 5 }),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    const forty = estimateRunCost({
+      voterCount: 40,
+      promptsByMode: buildPromptsByMode({ slider: 5 }),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    const ratio = forty.estimatedUsd / ten.estimatedUsd;
+    expect(ratio).toBeGreaterThan(3.9);
+    expect(ratio).toBeLessThan(4.1);
+  });
+
+  it('tournament mode costs more per prompt than slider (5 battles × 1500 tokens)', () => {
+    const tournament = estimateRunCost({
+      voterCount: 30,
+      promptsByMode: buildPromptsByMode({ tournament: 10 }),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    const slider = estimateRunCost({
+      voterCount: 30,
+      promptsByMode: buildPromptsByMode({ slider: 10 }),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    // Tournament: 10 prompts × 30 voters × 5 battles = 1500 calls
+    // Slider:     10 prompts × 30 voters × 4 models  = 1200 calls
+    // Plus tournament tokens are ~1.9× slider, so tournament wins big.
+    expect(tournament.estimatedUsd).toBeGreaterThan(slider.estimatedUsd);
+    expect(tournament.totalCalls).toBe(1500);
+    expect(slider.totalCalls).toBe(1200);
+  });
+
+  it('emits low/high bands at ±25%', () => {
+    const result = estimateRunCost({
+      voterCount: 30,
+      promptsByMode: buildPromptsByMode({ slider: 5 }),
+      campaignModelCount: 4,
+      modelMix: defaultGenericMix(),
+    });
+    expect(result.lowUsd).toBeCloseTo(result.estimatedUsd * 0.75, 3);
+    expect(result.highUsd).toBeCloseTo(result.estimatedUsd * 1.25, 3);
+  });
+
+  it('reports per-mode breakdown with zero entries for unused modes', () => {
+    const result = estimateRunCost({
+      voterCount: 10,
+      promptsByMode: buildPromptsByMode({ slider: 5, tournament: 2 }),
+      campaignModelCount: 3,
+      modelMix: defaultGenericMix(),
+    });
+    expect(result.perMode.slider.calls).toBe(10 * 5 * 3);
+    expect(result.perMode.tournament.calls).toBe(10 * 2 * 5);
+    expect(result.perMode.best_of_n.calls).toBe(0);
+    expect(result.perMode.qualitative.calls).toBe(0);
+  });
+});
+
+describe('defaultCostCeiling', () => {
+  it('returns 2x the estimate when above the floor', () => {
+    expect(defaultCostCeiling(5)).toBe(10);
+  });
+
+  it('floors at $0.50 for tiny estimates', () => {
+    expect(defaultCostCeiling(0.1)).toBe(0.5);
+    expect(defaultCostCeiling(0)).toBe(0.5);
+  });
+});
+
+describe('checkCostCeiling', () => {
+  it('passes when actual is under ceiling', () => {
+    expect(checkCostCeiling(10, 5)).toEqual({ status: 'ok', ceilingUsd: 10 });
+  });
+
+  it('flags exceeded when actual > ceiling', () => {
+    expect(checkCostCeiling(10, 12)).toEqual({
+      status: 'exceeded',
+      ceilingUsd: 10,
+    });
+  });
+
+  it('is ok when ceiling is null (no limit)', () => {
+    expect(checkCostCeiling(null, 9999)).toEqual({
+      status: 'ok',
+      ceilingUsd: null,
+    });
+  });
+});

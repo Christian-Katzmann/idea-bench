@@ -95,6 +95,14 @@ export interface CampaignDetail {
   }>;
   ratings: Array<{
     category: string;
+    /**
+     * Which signal source aggregated this row — Plan 02 splits
+     * responses into `human` / `simulated` / `both` views so operators
+     * can strip out LLM-judge votes. Default filter on the dashboard
+     * is `both`; pre-Plan-02 campaigns only have `both` rows and read
+     * identically to before.
+     */
+    source: RatingSource;
     rating: number;
     seRating: number | null;
     btStrength: number | null;
@@ -112,6 +120,60 @@ export interface CampaignDetail {
     providerModelId: string;
     displayName: string;
   }>;
+}
+
+export type RatingSource = 'human' | 'simulated' | 'both';
+export type PanelType = 'generic' | 'persona';
+export type SimulatedRunStatus =
+  | 'pending'
+  | 'running'
+  | 'complete'
+  | 'failed'
+  | 'aborted';
+export type SimulatedParticipantStatus =
+  | 'pending'
+  | 'running'
+  | 'complete'
+  | 'failed';
+
+export interface SimulatedRunSummary {
+  id: string;
+  campaignId: string;
+  panelType: PanelType;
+  voterCount: number;
+  modelMix: Array<{ providerModelId: string; weight: number }>;
+  personaIds: string[] | null;
+  status: SimulatedRunStatus;
+  costEstimateUsd: number | null;
+  costActualUsd: number;
+  costCeilingUsd: number | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface SimulatedRunDetail {
+  run: SimulatedRunSummary & { maxConcurrency: number };
+  seatsByStatus: Record<SimulatedParticipantStatus, number>;
+  seatsTotal: number;
+  seats: Array<{
+    id: string;
+    seatIndex: number;
+    judgeModelId: string;
+    personaId: string | null;
+    status: SimulatedParticipantStatus;
+    error: string | null;
+    completedAt: string | null;
+  }>;
+}
+
+export interface SimulatedRunCostEstimate {
+  estimatedUsd: number;
+  lowUsd: number;
+  highUsd: number;
+  totalCalls: number;
+  perMode: Record<string, { calls: number; usd: number }>;
 }
 
 /**

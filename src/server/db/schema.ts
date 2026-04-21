@@ -46,6 +46,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
 
 export const campaignStatusEnum = pgEnum('campaign_status', [
@@ -340,9 +341,19 @@ export const tournaments = pgTable(
   'tournaments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    /**
+     * XOR with `simulatedParticipantId` — see CHECK constraint below.
+     * Simulated runs spawn one tournament per (simulated_participant,
+     * prompt) just like human runs, so the 5-battle bracket shape still
+     * applies and the votes table FK to tournaments stays intact.
+     */
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -354,9 +365,15 @@ export const tournaments = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (t) => [
-    uniqueIndex('uniq_tournament_participant_prompt').on(
-      t.participantId,
-      t.promptId,
+    uniqueIndex('uniq_tournament_participant_prompt')
+      .on(t.participantId, t.promptId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_tournament_simulated_prompt')
+      .on(t.simulatedParticipantId, t.promptId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
+    check(
+      'tournaments_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
     ),
   ],
 );
@@ -387,9 +404,19 @@ export const votes = pgTable(
     tournamentId: uuid('tournament_id')
       .notNull()
       .references(() => tournaments.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    /**
+     * One of `participantId` / `simulatedParticipantId` is populated per
+     * row; the other is null. CHECK constraint `votes_voter_xor`
+     * enforces the exclusivity. See the `simulated_participants` table
+     * for the Plan 02 simulated-voter half of this pair.
+     */
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -417,6 +444,11 @@ export const votes = pgTable(
     index('votes_campaign').on(t.campaignId),
     index('votes_prompt').on(t.promptId),
     index('votes_participant').on(t.participantId),
+    index('votes_simulated_participant').on(t.simulatedParticipantId),
+    check(
+      'votes_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -447,9 +479,14 @@ export const sliderResponses = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    /** Human voter — XOR with simulatedParticipantId. See CHECK constraint. */
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -463,13 +500,22 @@ export const sliderResponses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_slider_response').on(
-      t.participantId,
-      t.promptId,
-      t.campaignModelId,
-    ),
+    // Partial unique indexes: human rows dedup by (participant, prompt,
+    // model); simulated rows dedup by (simulated_participant, prompt,
+    // model). Keeping the human index name unchanged preserves the
+    // regex-based duplicate detection in submit-slider.ts.
+    uniqueIndex('uniq_slider_response')
+      .on(t.participantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_slider_response_simulated')
+      .on(t.simulatedParticipantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
     index('slider_responses_campaign').on(t.campaignId),
     index('slider_responses_prompt').on(t.promptId),
+    check(
+      'slider_responses_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -484,9 +530,13 @@ export const approveRejectResponses = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -500,13 +550,18 @@ export const approveRejectResponses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_approve_reject_response').on(
-      t.participantId,
-      t.promptId,
-      t.campaignModelId,
-    ),
+    uniqueIndex('uniq_approve_reject_response')
+      .on(t.participantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_approve_reject_response_simulated')
+      .on(t.simulatedParticipantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
     index('approve_reject_responses_campaign').on(t.campaignId),
     index('approve_reject_responses_prompt').on(t.promptId),
+    check(
+      'approve_reject_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -523,9 +578,13 @@ export const bestOfNResponses = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -538,9 +597,18 @@ export const bestOfNResponses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_best_of_n_response').on(t.participantId, t.promptId),
+    uniqueIndex('uniq_best_of_n_response')
+      .on(t.participantId, t.promptId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_best_of_n_response_simulated')
+      .on(t.simulatedParticipantId, t.promptId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
     index('best_of_n_responses_campaign').on(t.campaignId),
     index('best_of_n_responses_prompt').on(t.promptId),
+    check(
+      'best_of_n_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -561,9 +629,13 @@ export const multiAxisResponses = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -577,13 +649,18 @@ export const multiAxisResponses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_multi_axis_response').on(
-      t.participantId,
-      t.promptId,
-      t.campaignModelId,
-    ),
+    uniqueIndex('uniq_multi_axis_response')
+      .on(t.participantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_multi_axis_response_simulated')
+      .on(t.simulatedParticipantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
     index('multi_axis_responses_campaign').on(t.campaignId),
     index('multi_axis_responses_prompt').on(t.promptId),
+    check(
+      'multi_axis_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -600,9 +677,13 @@ export const qualitativeResponses = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id')
-      .notNull()
-      .references(() => participants.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'cascade',
+    }),
+    simulatedParticipantId: uuid('simulated_participant_id').references(
+      () => simulatedParticipants.id,
+      { onDelete: 'cascade' },
+    ),
     promptId: uuid('prompt_id')
       .notNull()
       .references(() => prompts.id, { onDelete: 'cascade' }),
@@ -616,13 +697,18 @@ export const qualitativeResponses = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_qualitative_response').on(
-      t.participantId,
-      t.promptId,
-      t.campaignModelId,
-    ),
+    uniqueIndex('uniq_qualitative_response')
+      .on(t.participantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.participantId} IS NOT NULL`),
+    uniqueIndex('uniq_qualitative_response_simulated')
+      .on(t.simulatedParticipantId, t.promptId, t.campaignModelId)
+      .where(sql`${t.simulatedParticipantId} IS NOT NULL`),
     index('qualitative_responses_campaign').on(t.campaignId),
     index('qualitative_responses_prompt').on(t.promptId),
+    check(
+      'qualitative_voter_xor',
+      sql`(${t.participantId} IS NULL) <> (${t.simulatedParticipantId} IS NULL)`,
+    ),
   ],
 );
 
@@ -643,6 +729,19 @@ export const qualitativeResponses = pgTable(
  *                   Stored for debugging; not shown in UI.
  *   - `gameCount`   Number of comparisons contributing to this row.
  */
+/**
+ * Signal source for Plan 02 simulated runs. `both` is the default view
+ * (combined human + simulated). `human` is the always-available
+ * humans-only cut — preserves the pre-Plan-02 leaderboard semantics when
+ * a campaign has no simulated signal. `simulated` is the simulated-only
+ * cut, segmented further by persona on the read side.
+ */
+export const ratingSourceEnum = pgEnum('rating_source', [
+  'human',
+  'simulated',
+  'both',
+]);
+
 export const ratings = pgTable(
   'ratings',
   {
@@ -654,6 +753,13 @@ export const ratings = pgTable(
       .notNull()
       .references(() => campaignModels.id, { onDelete: 'cascade' }),
     category: text('category').notNull().default('overall'),
+    /**
+     * Which subset of responses this row aggregates. Default 'both'
+     * preserves backwards-compatible reads for pre-Plan-02 campaigns —
+     * a migration backfills existing rows to 'both' (equivalent to
+     * 'human' in that era, since there was no simulated signal yet).
+     */
+    source: ratingSourceEnum('source').notNull().default('both'),
     rating: integer('rating').notNull().default(1000),
     seRating: numeric('se_rating', { precision: 10, scale: 6 }),
     ciLow: integer('ci_low'),
@@ -669,7 +775,182 @@ export const ratings = pgTable(
       t.campaignId,
       t.campaignModelId,
       t.category,
+      t.source,
     ),
+  ],
+);
+
+// ===========================================================================
+// Plan 02 — Simulated Runs
+//
+// Three tables — `personas`, `simulated_runs`, `simulated_participants` —
+// plus the per-response-table `simulated_participant_id` column added
+// above. The six response tables stay the primary storage: a simulated
+// voter writes through the same shape a human would, just keyed by
+// `simulated_participant_id` instead of `participant_id`. The CHECK
+// constraint on each response table enforces that exactly one is set.
+//
+// Multi-tenancy is explicitly out of scope here — Plan 02's handoff
+// defers orgs to a later pass. When that lands, a follow-up migration
+// backfills every existing persona row under the single current org and
+// flips `personas.orgId` to NOT NULL.
+// ===========================================================================
+
+/**
+ * Run status machine:
+ *   pending     created, no work started yet
+ *   running     at least one simulated participant has started
+ *   complete    every simulated_participants row is `complete` or
+ *               `failed`, and the run didn't hit the cost ceiling
+ *   failed      terminal — cost ceiling hit, OpenRouter circuit broke,
+ *               or every seat failed
+ *   aborted     operator pressed abort; any completed seats stay
+ */
+export const simulatedRunStatusEnum = pgEnum('simulated_run_status', [
+  'pending',
+  'running',
+  'complete',
+  'failed',
+  'aborted',
+]);
+
+/**
+ * Per-seat status. `pending` seats are picked up by the runner;
+ * `complete` means every (prompt, mode) response this seat owes has
+ * been written to the relevant response table.
+ */
+export const simulatedParticipantStatusEnum = pgEnum(
+  'simulated_participant_status',
+  ['pending', 'running', 'complete', 'failed'],
+);
+
+export const panelTypeEnum = pgEnum('panel_type', ['generic', 'persona']);
+
+/**
+ * Saved voter profile used by persona-panel runs. Generic runs don't
+ * touch this table — they use the hard-coded overall-quality judge
+ * prompt in src/server/simulated-runs/prompts/.
+ *
+ * `isStarter` marks the curated library seeded at deploy time (Phase 2
+ * adds the seeder). `derivedFromPersonaId` tracks "duplicate and edit"
+ * lineage so the library can show a persona's origin in the UI without
+ * re-embedding the starter text.
+ */
+export const personas = pgTable(
+  'personas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    systemPrompt: text('system_prompt').notNull(),
+    priorities: text('priorities').array().notNull().default([]),
+    antiPatterns: text('anti_patterns').array().notNull().default([]),
+    tags: text('tags').array().notNull().default([]),
+    isStarter: boolean('is_starter').notNull().default(false),
+    derivedFromPersonaId: uuid('derived_from_persona_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('personas_is_starter').on(t.isStarter),
+    index('personas_created_at').on(sql`${t.createdAt} desc`),
+  ],
+);
+
+/**
+ * One row per launched simulated run. The runner rehydrates its state
+ * entirely from this row plus the related `simulated_participants` —
+ * no in-memory state is trusted across invocations, so a restart (or
+ * the Vercel function timing out mid-stream) resumes cleanly.
+ *
+ * `modelMix` is a denormalized snapshot of the operator's chosen judge
+ * pool at launch time. Changing `AVAILABLE_MODELS` later doesn't
+ * retroactively rewrite past runs.
+ *
+ * `costCeilingUsd` is the hard stop — the runner aborts the run with
+ * status='failed' if `costActualUsd` would exceed it. Default is 2×
+ * the estimate, applied at launch.
+ */
+export interface SimulatedRunModelMix {
+  providerModelId: string;
+  weight: number;
+}
+
+export const simulatedRuns = pgTable(
+  'simulated_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    panelType: panelTypeEnum('panel_type').notNull(),
+    voterCount: integer('voter_count').notNull(),
+    modelMix: jsonb('model_mix')
+      .$type<SimulatedRunModelMix[]>()
+      .notNull(),
+    personaIds: uuid('persona_ids').array(),
+    status: simulatedRunStatusEnum('status').notNull().default('pending'),
+    costEstimateUsd: numeric('cost_estimate_usd', { precision: 10, scale: 4 }),
+    costActualUsd: numeric('cost_actual_usd', { precision: 10, scale: 4 })
+      .notNull()
+      .default('0'),
+    costCeilingUsd: numeric('cost_ceiling_usd', { precision: 10, scale: 4 }),
+    maxConcurrency: integer('max_concurrency').notNull().default(5),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('simulated_runs_campaign').on(t.campaignId),
+    index('simulated_runs_status').on(t.status),
+    index('simulated_runs_created_at').on(sql`${t.createdAt} desc`),
+  ],
+);
+
+/**
+ * One row per simulated voter seat. `seatIndex` is 0..(voterCount-1)
+ * and serves as the idempotency key for resume — the runner claims
+ * seats by atomically flipping `status` from 'pending' to 'running'.
+ *
+ * `judgeModelId` is the providerModelId this seat uses for its judge
+ * calls, sampled from the run's `modelMix` at launch.
+ *
+ * `personaId` is null for generic runs; populated per-seat for persona
+ * runs (weighted by the run's `personaIds` — the runner distributes
+ * seats across personas roughly evenly).
+ */
+export const simulatedParticipants = pgTable(
+  'simulated_participants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    simulatedRunId: uuid('simulated_run_id')
+      .notNull()
+      .references(() => simulatedRuns.id, { onDelete: 'cascade' }),
+    personaId: uuid('persona_id').references(() => personas.id, {
+      onDelete: 'set null',
+    }),
+    judgeModelId: text('judge_model_id').notNull(),
+    seatIndex: integer('seat_index').notNull(),
+    status: simulatedParticipantStatusEnum('status')
+      .notNull()
+      .default('pending'),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('uniq_simulated_seat').on(t.simulatedRunId, t.seatIndex),
+    index('simulated_participants_run').on(t.simulatedRunId),
+    index('simulated_participants_status').on(t.status),
   ],
 );
 
@@ -735,3 +1016,17 @@ export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];
 export type VoteWinner = (typeof voteWinnerEnum.enumValues)[number];
 export type VotingMode = (typeof votingModeEnum.enumValues)[number];
 export type PromptMode = (typeof promptModeEnum.enumValues)[number];
+
+export type Persona = typeof personas.$inferSelect;
+export type NewPersona = typeof personas.$inferInsert;
+export type SimulatedRun = typeof simulatedRuns.$inferSelect;
+export type NewSimulatedRun = typeof simulatedRuns.$inferInsert;
+export type SimulatedParticipant = typeof simulatedParticipants.$inferSelect;
+export type NewSimulatedParticipant =
+  typeof simulatedParticipants.$inferInsert;
+export type PanelType = (typeof panelTypeEnum.enumValues)[number];
+export type SimulatedRunStatus =
+  (typeof simulatedRunStatusEnum.enumValues)[number];
+export type SimulatedParticipantStatus =
+  (typeof simulatedParticipantStatusEnum.enumValues)[number];
+export type RatingSource = (typeof ratingSourceEnum.enumValues)[number];

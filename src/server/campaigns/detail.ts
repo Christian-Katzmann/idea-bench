@@ -7,6 +7,16 @@ type Database = ReturnType<typeof getDb>;
 
 export interface CampaignLeaderboardRow {
   category: string;
+  /**
+   * Which subset of responses contributed to this row:
+   *   'human'     — only responses from real voters
+   *   'simulated' — only responses from simulated participants (Plan 02)
+   *   'both'      — combined human + simulated (the default dashboard view)
+   * Pre-Plan-02 ratings default to 'both' via the migration so the
+   * existing dashboard shows identical numbers when a campaign has no
+   * simulated signal.
+   */
+  source: schema.RatingSource;
   rating: number;
   seRating: number | null;
   btStrength: number | null;
@@ -106,6 +116,7 @@ export async function buildCampaignDetail(
     db
       .select({
         category: schema.ratings.category,
+        source: schema.ratings.source,
         rating: schema.ratings.rating,
         ciLow: schema.ratings.ciLow,
         ciHigh: schema.ratings.ciHigh,

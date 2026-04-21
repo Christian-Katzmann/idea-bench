@@ -123,76 +123,124 @@ export async function recomputeCampaignRatings(
   const now = new Date();
   const inserts: schema.NewRating[] = [];
 
+  // Partition responses by source for the Plan 02 "Human / Simulated /
+  // Both" leaderboard filter. Each partition produces its own set of
+  // rating rows tagged with `source`. The 'both' partition — the
+  // combined view — is the default the dashboard reads with no filter,
+  // so campaigns without any simulated signal see no behavior change.
+  const bySourceVotes = partitionVotesBySource(votes);
+  const bySourceSlider = partitionResponsesBySource(sliderResponses);
+  const bySourceApproveReject = partitionResponsesBySource(approveRejectResponses);
+  const bySourceBestOfN = partitionResponsesBySource(bestOfNResponses);
+  const bySourceMultiAxis = partitionResponsesBySource(multiAxisResponses);
+
+  const sourceOrder: schema.RatingSource[] = ['human', 'simulated', 'both'];
+
   // ─── Tournament (Bradley-Terry) ───────────────────────────────────────
+  // byCategory (returned below) uses the `both` view — the combined
+  // signal — so downstream consumers of RecomputeResult get the same
+  // shape they always have.
   const byCategory = await computeTournamentByCategory({
-    votes,
+    votes: bySourceVotes.both,
     modelIds,
     promptCategoryTags,
   });
-  for (const [cat, bt] of Object.entries(byCategory)) {
-    for (const modelId of modelIds) {
-      const rating = Math.round(bt.ratings[modelId]);
-      const seNum = bt.seRatings[modelId];
-      inserts.push({
-        campaignId,
-        campaignModelId: modelId,
-        category: cat,
-        rating,
-        seRating: seNum != null ? seNum.toFixed(4) : null,
-        ciLow: bt.ciLow[modelId] != null ? Math.round(bt.ciLow[modelId]!) : null,
-        ciHigh:
-          bt.ciHigh[modelId] != null ? Math.round(bt.ciHigh[modelId]!) : null,
-        btStrength: bt.strengths[modelId].toFixed(8),
-        gameCount: Math.round(bt.gameCount[modelId]),
-        computedAt: now,
-      });
+  for (const source of sourceOrder) {
+    const subsetVotes = bySourceVotes[source];
+    if (subsetVotes.length === 0 && source !== 'both') continue;
+    const subset =
+      source === 'both'
+        ? byCategory
+        : await computeTournamentByCategory({
+            votes: subsetVotes,
+            modelIds,
+            promptCategoryTags,
+          });
+    for (const [cat, bt] of Object.entries(subset)) {
+      for (const modelId of modelIds) {
+        const rating = Math.round(bt.ratings[modelId]);
+        const seNum = bt.seRatings[modelId];
+        inserts.push({
+          campaignId,
+          campaignModelId: modelId,
+          category: cat,
+          source,
+          rating,
+          seRating: seNum != null ? seNum.toFixed(4) : null,
+          ciLow:
+            bt.ciLow[modelId] != null ? Math.round(bt.ciLow[modelId]!) : null,
+          ciHigh:
+            bt.ciHigh[modelId] != null
+              ? Math.round(bt.ciHigh[modelId]!)
+              : null,
+          btStrength: bt.strengths[modelId].toFixed(8),
+          gameCount: Math.round(bt.gameCount[modelId]),
+          computedAt: now,
+        });
+      }
     }
   }
 
   // ─── Slider ───────────────────────────────────────────────────────────
-  inserts.push(
-    ...computeSliderAggregates({
+  for (const source of sourceOrder) {
+    const responses = bySourceSlider[source];
+    if (responses.length === 0 && source !== 'both') continue;
+    for (const row of computeSliderAggregates({
       campaignId,
-      responses: sliderResponses,
+      responses,
       modelIds,
       promptCategoryTags,
       now,
-    }),
-  );
+    })) {
+      inserts.push({ ...row, source });
+    }
+  }
 
   // ─── Approve / Reject ─────────────────────────────────────────────────
-  inserts.push(
-    ...computeApproveRejectAggregates({
+  for (const source of sourceOrder) {
+    const responses = bySourceApproveReject[source];
+    if (responses.length === 0 && source !== 'both') continue;
+    for (const row of computeApproveRejectAggregates({
       campaignId,
-      responses: approveRejectResponses,
+      responses,
       modelIds,
       promptCategoryTags,
       now,
-    }),
-  );
+    })) {
+      inserts.push({ ...row, source });
+    }
+  }
 
   // ─── Best-of-N ────────────────────────────────────────────────────────
-  inserts.push(
-    ...computeBestOfNAggregates({
+  for (const source of sourceOrder) {
+    const responses = bySourceBestOfN[source];
+    if (responses.length === 0 && source !== 'both') continue;
+    for (const row of computeBestOfNAggregates({
       campaignId,
-      responses: bestOfNResponses,
+      responses,
       modelIds,
       promptCategoryTags,
       now,
-    }),
-  );
+    })) {
+      inserts.push({ ...row, source });
+    }
+  }
 
   // ─── Multi-axis ───────────────────────────────────────────────────────
-  inserts.push(
-    ...computeMultiAxisAggregates({
+  for (const source of sourceOrder) {
+    const responses = bySourceMultiAxis[source];
+    if (responses.length === 0 && source !== 'both') continue;
+    for (const row of computeMultiAxisAggregates({
       campaignId,
-      responses: multiAxisResponses,
+      responses,
       prompts,
       modelIds,
       promptCategoryTags,
       now,
-    }),
-  );
+    })) {
+      inserts.push({ ...row, source });
+    }
+  }
 
   // Wipe and insert fresh rating rows. DELETE + INSERT (rather than
   // UPSERT) keeps the set of (category, model) rows exactly aligned
@@ -780,6 +828,48 @@ export async function computeParticipantRatings(
     totalVotes: votes.length,
     seenModelIds,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Source partitioning (Plan 02)
+//
+// Every response row is XOR-tagged with `participant_id` (human) or
+// `simulated_participant_id` (simulated). The partition returns three
+// views: the human subset, the simulated subset, and the combined
+// signal ("both"). Ratings are computed per partition and stored with
+// the matching `source` so the dashboard filter reads a consistent
+// slice with no on-the-fly arithmetic.
+// ─────────────────────────────────────────────────────────────────────────
+
+interface VoterTagged {
+  participantId: string | null;
+  simulatedParticipantId: string | null;
+}
+
+function partitionBySource<T extends VoterTagged>(rows: readonly T[]): {
+  human: T[];
+  simulated: T[];
+  both: T[];
+} {
+  const human: T[] = [];
+  const simulated: T[] = [];
+  for (const r of rows) {
+    if (r.participantId != null) human.push(r);
+    else if (r.simulatedParticipantId != null) simulated.push(r);
+  }
+  return { human, simulated, both: [...human, ...simulated] };
+}
+
+function partitionVotesBySource(
+  rows: readonly schema.Vote[],
+): { human: schema.Vote[]; simulated: schema.Vote[]; both: schema.Vote[] } {
+  return partitionBySource(rows);
+}
+
+function partitionResponsesBySource<T extends VoterTagged>(
+  rows: readonly T[],
+): { human: T[]; simulated: T[]; both: T[] } {
+  return partitionBySource(rows);
 }
 
 async function loadGenerationToModelMap(

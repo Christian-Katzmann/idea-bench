@@ -30,8 +30,9 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { toast } from '../components/ui/toast';
-import { ApiError, apiFetch, type CampaignDetail, type PromptMode, type VotingMode } from '../lib/api';
+import { ApiError, apiFetch, type CampaignDetail, type PromptMode, type RatingSource, type VotingMode } from '../lib/api';
 import { QualitativeReader } from '../components/dashboard/QualitativeReader';
+import { SimulatedRunPanel } from '../components/dashboard/SimulatedRunPanel';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
@@ -67,6 +68,13 @@ export default function CampaignDashboard() {
   const [isCloseOpen, setIsCloseOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  /**
+   * Plan 02 source filter. Default 'both' (combined human + simulated
+   * signal). When the campaign has no simulated runs, every `both` row
+   * is identical to the `human` row — so the default view matches the
+   * pre-Plan-02 leaderboard exactly.
+   */
+  const [ratingsSource, setRatingsSource] = useState<RatingSource>('both');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
@@ -201,9 +209,9 @@ export default function CampaignDashboard() {
   const sortedRatings = useMemo(() => {
     if (!data) return [];
     return [...data.ratings]
-      .filter((r) => r.category === 'overall')
+      .filter((r) => r.category === 'overall' && r.source === ratingsSource)
       .sort((a, b) => b.rating - a.rating);
-  }, [data]);
+  }, [data, ratingsSource]);
 
   // Per-mode overall rollups (Phase 1: slider + approve_reject). Each is
   // a list of models sorted by rating descending, pulled from category
@@ -212,25 +220,38 @@ export default function CampaignDashboard() {
   const sortedSliderRatings = useMemo(() => {
     if (!data) return [];
     return [...data.ratings]
-      .filter((r) => r.category === 'slider:overall' && r.gameCount > 0)
+      .filter(
+        (r) =>
+          r.category === 'slider:overall' &&
+          r.source === ratingsSource &&
+          r.gameCount > 0,
+      )
       .sort((a, b) => b.rating - a.rating);
-  }, [data]);
+  }, [data, ratingsSource]);
 
   const sortedApproveRejectRatings = useMemo(() => {
     if (!data) return [];
     return [...data.ratings]
       .filter(
-        (r) => r.category === 'approve_reject:overall' && r.gameCount > 0,
+        (r) =>
+          r.category === 'approve_reject:overall' &&
+          r.source === ratingsSource &&
+          r.gameCount > 0,
       )
       .sort((a, b) => b.rating - a.rating);
-  }, [data]);
+  }, [data, ratingsSource]);
 
   const sortedBestOfNRatings = useMemo(() => {
     if (!data) return [];
     return [...data.ratings]
-      .filter((r) => r.category === 'best_of_n:overall' && r.gameCount > 0)
+      .filter(
+        (r) =>
+          r.category === 'best_of_n:overall' &&
+          r.source === ratingsSource &&
+          r.gameCount > 0,
+      )
       .sort((a, b) => b.rating - a.rating);
-  }, [data]);
+  }, [data, ratingsSource]);
 
   /**
    * Per-mode prompt count for the "campaign composition" summary. The
@@ -268,6 +289,7 @@ export default function CampaignDashboard() {
     const groups = new Map<string, CampaignDetail['ratings']>();
     for (const r of data.ratings) {
       if (r.gameCount === 0) continue;
+      if (r.source !== ratingsSource) continue;
       if (!r.category.startsWith('multi_axis:')) continue;
       const rest = r.category.slice('multi_axis:'.length);
       const colonIdx = rest.indexOf(':');
@@ -284,7 +306,7 @@ export default function CampaignDashboard() {
         rows: [...rows].sort((a, b) => b.rating - a.rating),
       }))
       .sort((a, b) => a.dimension.localeCompare(b.dimension));
-  }, [data]);
+  }, [data, ratingsSource]);
 
   const shareLink = useMemo(() => {
     if (!data) return '';
@@ -520,6 +542,22 @@ export default function CampaignDashboard() {
 
         {/* Ratings ----------------------------------------------------- */}
         <TabsContent value="ratings" className="flex flex-col gap-4">
+          {/* Plan 02: simulated-run launch + monitor. Lives at the top
+              of the Ratings tab because simulated signal feeds into
+              every leaderboard below via the source filter. */}
+          <SimulatedRunPanel campaignId={campaign.id} />
+
+          {/* Source filter pills (Plan 02). Always rendered — even for
+              campaigns without simulated runs, the default 'Both' view
+              equals 'Human' and the pills teach the concept. */}
+          <SourceFilter
+            value={ratingsSource}
+            onChange={setRatingsSource}
+            simulatedAvailable={data.ratings.some(
+              (r) => r.source === 'simulated' && r.gameCount > 0,
+            )}
+          />
+
           {/* Composition summary — only shown when the campaign has more
               than one evaluation mode in play. Orients the operator
               before they scroll through the stacked per-mode panels
@@ -1007,6 +1045,71 @@ function StatTile({
         )}
       >
         {value}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Plan 02 source filter pills. Drives `ratingsSource` state — each
+ * memoized leaderboard list filters on it. Kept compact; no per-pill
+ * badges or tooltips because the Simulated Runs panel above already
+ * explains the semantics.
+ */
+function SourceFilter({
+  value,
+  onChange,
+  simulatedAvailable,
+}: {
+  value: RatingSource;
+  onChange: (next: RatingSource) => void;
+  simulatedAvailable: boolean;
+}) {
+  const options: Array<{ value: RatingSource; label: string; hint: string }> = [
+    { value: 'both', label: 'Both', hint: 'Humans + simulated (default)' },
+    { value: 'human', label: 'Humans', hint: 'Real voters only' },
+    {
+      value: 'simulated',
+      label: 'Simulated',
+      hint: simulatedAvailable
+        ? 'LLM judges only'
+        : 'No simulated runs yet',
+    },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-[11px] text-muted-foreground">
+      <span className="font-semibold uppercase tracking-[0.14em]">
+        Signal
+      </span>
+      <div
+        role="tablist"
+        aria-label="Rating signal source"
+        className="flex items-center gap-1"
+      >
+        {options.map((opt) => {
+          const active = opt.value === value;
+          const disabled = opt.value === 'simulated' && !simulatedAvailable;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              disabled={disabled}
+              onClick={() => onChange(opt.value)}
+              title={opt.hint}
+              className={cn(
+                'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition',
+                active
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border bg-surface-highlight text-foreground hover:border-foreground/50',
+                disabled && 'cursor-not-allowed opacity-40 hover:border-border',
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

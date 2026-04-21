@@ -1167,7 +1167,9 @@ function PerPersonaRollup({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
-                    {persona?.name ?? (loading ? 'Loading…' : '(Deleted persona)')}
+                    Simulated{' '}
+                    {persona?.name ??
+                      (loading ? 'Loading…' : '(Deleted persona)')}
                   </p>
                   {persona?.description ? (
                     <p className="truncate text-[11px] text-muted-foreground">
@@ -1176,6 +1178,14 @@ function PerPersonaRollup({
                   ) : null}
                 </div>
               </div>
+              {/* Honesty guard from Plan 02's risk list: persona results
+                  are a model's imagination of the role, not real-person
+                  data. The label plus this footnote keeps that
+                  distinction visible on every per-persona card. */}
+              <p className="mb-2 text-[10px] text-muted-foreground">
+                LLM-judged from the persona&rsquo;s perspective — not a real
+                survey.
+              </p>
               <ul className="space-y-1">
                 {g.rows.slice(0, 4).map((r, i) => (
                   <li

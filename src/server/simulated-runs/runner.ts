@@ -221,6 +221,7 @@ export async function executeSimulatedRun(args: {
     runAborted,
     maxConcurrency: run.maxConcurrency,
     ceilingUsd: progress.costCeilingUsd,
+    consecutiveFailures: { count: 0 },
   });
 
   await promiseQueue;
@@ -278,7 +279,22 @@ interface SeatTaskContext {
   runAborted: { flag: boolean; reason: string };
   maxConcurrency: number;
   ceilingUsd: number | null;
+  /**
+   * Rolling count of consecutive judge-call failures. Resets on any
+   * successful judge call. When it crosses
+   * CIRCUIT_BREAKER_THRESHOLD, the runner aborts the whole run —
+   * OpenRouter being down means further attempts just burn money.
+   */
+  consecutiveFailures: { count: number };
 }
+
+/**
+ * Trip the circuit when this many judge calls fail back-to-back. Chosen
+ * so a transient OpenRouter hiccup (which typically recovers inside
+ * 1-3 failed calls) doesn't kill a run, but a hard outage does. Not
+ * operator-configurable yet; tune if the false-positive rate surfaces.
+ */
+const CIRCUIT_BREAKER_THRESHOLD = 10;
 
 async function seatTaskRunner(ctx: SeatTaskContext): Promise<void> {
   const queue = [...ctx.seats];
@@ -505,6 +521,7 @@ async function runTournamentForSeat(args: {
       },
       ctx.signal,
     );
+    trackJudgeOutcome(ctx, outcome);
 
     if (outcome.kind === 'skipped') {
       // Cross-family exclusion: we can't skip a battle in the middle
@@ -642,6 +659,7 @@ async function runSliderForSeat(args: {
       },
       ctx.signal,
     );
+    trackJudgeOutcome(ctx, outcome);
     if (outcome.kind === 'skipped') {
       skipped += 1;
       continue;
@@ -697,6 +715,7 @@ async function runApproveRejectForSeat(args: {
       },
       ctx.signal,
     );
+    trackJudgeOutcome(ctx, outcome);
     if (outcome.kind === 'skipped') {
       skipped += 1;
       continue;
@@ -746,6 +765,7 @@ async function runBestOfNForSeat(args: {
     { seat: seatCtx, prompt: promptCtx, candidates },
     ctx.signal,
   );
+  trackJudgeOutcome(ctx, outcome);
   if (outcome.kind === 'skipped') {
     ctx.progress.callsSkipped += 1;
     return { callsMade: 0, callsSkipped: 1, callsFailed: 0 };
@@ -797,6 +817,7 @@ async function runMultiAxisForSeat(args: {
       },
       ctx.signal,
     );
+    trackJudgeOutcome(ctx, outcome);
     if (outcome.kind === 'skipped') {
       skipped += 1;
       continue;
@@ -848,6 +869,7 @@ async function runQualitativeForSeat(args: {
       },
       ctx.signal,
     );
+    trackJudgeOutcome(ctx, outcome);
     if (outcome.kind === 'skipped') {
       skipped += 1;
       continue;
@@ -874,11 +896,55 @@ async function runQualitativeForSeat(args: {
 
 // ─── Cost accounting + seat state transitions ─────────────────────────────
 
+/**
+ * Circuit breaker: tracks consecutive upstream failures. Called from
+ * every mode handler after a judge call returns, regardless of
+ * outcome. A non-OK outcome counts as a failure; an OK outcome
+ * resets the counter. Only "hard" failure reasons (network/timeout/
+ * HTTP) count — parse failures and cross-family skips don't indicate
+ * OpenRouter is unhealthy.
+ *
+ * Exported so the per-mode handlers can call it before their own
+ * `continue` statements. Keeping the bookkeeping here avoids drift
+ * between six mostly-identical call sites.
+ */
+function trackJudgeOutcome(
+  ctx: SeatTaskContext,
+  outcome: JudgeOutcome<unknown>,
+): void {
+  if (outcome.kind === 'ok') {
+    ctx.consecutiveFailures.count = 0;
+    return;
+  }
+  if (outcome.kind !== 'failed') return;
+  const hardFailure =
+    outcome.reason === 'timeout' ||
+    outcome.reason === 'http' ||
+    outcome.reason === 'network';
+  if (!hardFailure) return;
+  ctx.consecutiveFailures.count += 1;
+  if (
+    ctx.consecutiveFailures.count >= CIRCUIT_BREAKER_THRESHOLD &&
+    !ctx.runAborted.flag
+  ) {
+    ctx.runAborted.flag = true;
+    ctx.runAborted.reason = `openrouter circuit broken after ${CIRCUIT_BREAKER_THRESHOLD} consecutive failures`;
+    ctx.send('progress', {
+      status: 'circuit_broken',
+      consecutiveFailures: ctx.consecutiveFailures.count,
+      lastReason: outcome.reason,
+      lastMessage: outcome.message,
+    });
+  }
+}
+
 async function applyCostDelta(
   ctx: SeatTaskContext,
   outcome: JudgeOutcome<unknown>,
 ): Promise<void> {
+  trackJudgeOutcome(ctx, outcome);
   if (outcome.kind !== 'ok') return;
+
   const delta = outcome.costUsd;
   if (delta <= 0) return;
   const db = getDb();

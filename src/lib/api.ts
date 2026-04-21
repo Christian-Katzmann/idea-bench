@@ -206,6 +206,23 @@ export interface PersonaInput {
   derivedFromPersonaId?: string | null;
 }
 
+export type PersonaTestResult =
+  | {
+      ok: true;
+      reply: string;
+      judgeModelId: string;
+      judgeDisplayName: string;
+      costUsd: number;
+      latencyMs: number;
+      persona: { id: string; name: string };
+    }
+  | {
+      ok: false;
+      reason: string;
+      message: string;
+      latencyMs?: number;
+    };
+
 /**
  * Payload from GET /api/campaigns/:id/qualitative-responses — powers
  * the Comments tab on the campaign dashboard.

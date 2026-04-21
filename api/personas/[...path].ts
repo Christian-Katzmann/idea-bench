@@ -5,6 +5,7 @@ import {
   listPersonasWebHandler,
   updatePersonaWebHandler,
 } from '../../src/server/routes/personas/index.js';
+import { testPersonaWebHandler } from '../../src/server/routes/personas/test.js';
 import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /**
@@ -33,6 +34,13 @@ export default toVercelHandler(async (request: Request) => {
   }
 
   if (rest.length === 1) {
+    // ?action=test is an authoring aid — runs a single judge call
+    // against sample text using this persona's system prompt and
+    // returns the raw reply. Folded into the single-segment dispatch
+    // to stay under Vercel Hobby's function budget.
+    if (url.searchParams.get('action') === 'test') {
+      return testPersonaWebHandler(request);
+    }
     if (request.method === 'GET') return getPersonaWebHandler(request);
     if (request.method === 'PATCH') return updatePersonaWebHandler(request);
     if (request.method === 'DELETE') return deletePersonaWebHandler(request);

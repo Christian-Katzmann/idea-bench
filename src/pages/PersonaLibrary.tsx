@@ -21,7 +21,9 @@ import {
 } from '@tanstack/react-query';
 import {
   Copy,
+  Loader2,
   Pencil,
+  PlayCircle,
   Plus,
   Search,
   Sparkles,
@@ -52,6 +54,7 @@ import {
   apiFetch,
   type Persona,
   type PersonaInput,
+  type PersonaTestResult,
 } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
@@ -487,6 +490,10 @@ function PersonaAuthoringForm({
         onChange={setAntiPatterns}
       />
       <TagEditor value={tags} onChange={setTags} />
+      <PersonaTestPanel
+        personaId={personaId}
+        currentSystemPrompt={systemPrompt}
+      />
       <DialogFooter>
         <Button
           type="button"
@@ -602,6 +609,180 @@ function TagEditor({
       <p className="text-[11px] text-muted-foreground">
         Lowercase keywords for filtering: industry, role, seniority.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Inline persona preview — takes a sample prompt + output, runs one
+ * real judge call using the CURRENT form state's system prompt, and
+ * shows the reply. Lets the operator iterate on the prompt without
+ * saving or launching a full simulated run.
+ *
+ * Costs one judge call (~$0.001 on the cheap tier). No DB writes,
+ * no ratings impact.
+ */
+function PersonaTestPanel({
+  personaId,
+  currentSystemPrompt,
+}: {
+  personaId: string | null;
+  currentSystemPrompt: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [promptText, setPromptText] = useState(
+    'Write a short internal memo to a senior stakeholder recommending a vendor switch. Keep it under 150 words.',
+  );
+  const [output, setOutput] = useState('');
+
+  const testMutation = useMutation({
+    mutationFn: () => {
+      // `__draft` routes through the test endpoint using the CURRENT
+      // form state's system prompt rather than anything saved. Works
+      // for both brand-new personas and unsaved edits to existing ones.
+      const id = personaId ?? '__draft';
+      return apiFetch<PersonaTestResult>(
+        `/api/personas/${id}?action=test`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            promptText: promptText.trim(),
+            output: output.trim(),
+            systemPromptOverride: currentSystemPrompt.trim() || undefined,
+          }),
+        },
+      );
+    },
+  });
+
+  const canRun =
+    !testMutation.isPending &&
+    promptText.trim().length > 0 &&
+    output.trim().length > 0 &&
+    currentSystemPrompt.trim().length > 0;
+
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground"
+      >
+        <span className="inline-flex items-center gap-2">
+          <PlayCircle className="size-3.5" />
+          Preview this persona
+        </span>
+        <span
+          className={cn(
+            'text-muted-foreground transition-transform',
+            open && 'rotate-90',
+          )}
+          aria-hidden
+        >
+          &rsaquo;
+        </span>
+      </button>
+      {open ? (
+        <div className="space-y-3 border-t border-border p-3">
+          <p className="text-[11px] text-muted-foreground">
+            One live judge call using your current system prompt. Costs
+            ~$0.001 on the cheap tier; no DB writes.
+          </p>
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Sample prompt
+            </Label>
+            <Textarea
+              rows={2}
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              maxLength={4000}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Sample model output
+            </Label>
+            <Textarea
+              rows={4}
+              value={output}
+              onChange={(e) => setOutput(e.target.value)}
+              placeholder="Paste a candidate response to evaluate"
+              maxLength={4000}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => testMutation.mutate()}
+              disabled={!canRun}
+            >
+              {testMutation.isPending ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Judging…
+                </>
+              ) : (
+                'Run preview'
+              )}
+            </Button>
+            {testMutation.data && 'ok' in testMutation.data && testMutation.data.ok ? (
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                {testMutation.data.judgeDisplayName} ·{' '}
+                {testMutation.data.latencyMs}ms ·{' '}
+                ${testMutation.data.costUsd.toFixed(4)}
+              </span>
+            ) : null}
+          </div>
+          <PersonaTestResult
+            result={testMutation.data}
+            error={
+              testMutation.error instanceof ApiError
+                ? testMutation.error.message
+                : testMutation.error instanceof Error
+                  ? testMutation.error.message
+                  : null
+            }
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PersonaTestResult({
+  result,
+  error,
+}: {
+  result: PersonaTestResult | undefined;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+        {error}
+      </div>
+    );
+  }
+  if (!result) return null;
+  if (!result.ok) {
+    // strict:false narrowing doesn't survive this boundary.
+    const fail = result as Extract<PersonaTestResult, { ok: false }>;
+    return (
+      <div className="rounded-md border border-border bg-surface-highlight p-2 text-xs text-muted-foreground">
+        Judge couldn&rsquo;t produce output — {fail.reason}:{' '}
+        <span className="font-mono">{fail.message}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        Judge reply
+      </Label>
+      <div className="whitespace-pre-wrap rounded-md border border-border bg-background p-3 text-xs leading-relaxed">
+        {result.reply}
+      </div>
     </div>
   );
 }

@@ -23,7 +23,12 @@ export default toVercelHandler(async (request: Request) => {
   const url = new URL(request.url);
   const parts = url.pathname.split('/').filter(Boolean);
   // parts = ['api', 'simulated-runs', ...rest]
-  const rest = parts.slice(2);
+  // `__root` is a vercel.json rewrite sentinel — Vercel's file-system
+  // routing can't match /api/simulated-runs (zero trailing segments)
+  // against a `[...path]` catch-all (which requires ≥1), so the rewrite
+  // in vercel.json injects `__root` to land here.
+  let rest = parts.slice(2);
+  if (rest.length === 1 && rest[0] === '__root') rest = [];
 
   if (rest.length === 0) {
     if (request.method === 'GET') return listSimulatedRunsWebHandler(request);

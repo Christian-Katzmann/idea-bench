@@ -21,7 +21,10 @@ import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 export default toVercelHandler(async (request: Request) => {
   const url = new URL(request.url);
   const parts = url.pathname.split('/').filter(Boolean);
-  const rest = parts.slice(2);
+  // `__root` sentinel from vercel.json rewrite — see the simulated-runs
+  // dispatcher for the full explanation.
+  let rest = parts.slice(2);
+  if (rest.length === 1 && rest[0] === '__root') rest = [];
 
   if (rest.length === 0) {
     if (request.method === 'GET') return listPersonasWebHandler(request);

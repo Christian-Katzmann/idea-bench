@@ -24,13 +24,14 @@ export default toVercelHandler(async (request: Request) => {
   const parts = url.pathname.split('/').filter(Boolean);
   // parts = ['api', 'simulated-runs', ...rest]
   //
-  // Vercel's file-based routing generates single-segment regex for
-  // `[...path]` catch-all files on Node.js Serverless Functions — so
-  // it won't match zero or two+ trailing segments. Two vercel.json
-  // rewrites paper over this:
-  //   /api/simulated-runs           → /api/simulated-runs/__root
-  //   /api/simulated-runs/:id/:act  → /api/simulated-runs/:id?__action=:act
-  // The sentinel + query param route both back to this single handler.
+  // Vercel's file-based routing generates a single-segment regex for
+  // `[...path]` on Node.js Serverless Functions — so the handler only
+  // reliably sees zero or one trailing segments. Two workarounds:
+  //   - /api/simulated-runs (zero) via a vercel.json rewrite that
+  //     injects `__root` as the single path segment.
+  //   - Per-run actions (run/abort) are expressed as a query param on
+  //     the single-segment path: /api/simulated-runs/:id?action=run.
+  //     The client builds these URLs directly — no rewrite needed.
   let rest = parts.slice(2);
   if (rest.length === 1 && rest[0] === '__root') rest = [];
 
@@ -41,10 +42,8 @@ export default toVercelHandler(async (request: Request) => {
   }
 
   if (rest.length === 1) {
-    // `__action` query param means the rewrite captured a second
-    // segment (e.g. /api/simulated-runs/:id/run). Handle before the
-    // single-segment /:id / /preview-cost cases.
-    const action = url.searchParams.get('__action');
+    // Action-qualified paths: /api/simulated-runs/:id?action=run|abort
+    const action = url.searchParams.get('action');
     if (action === 'run') return runSimulatedRunWebHandler(request);
     if (action === 'abort') return abortSimulatedRunWebHandler(request);
     if (action !== null) {

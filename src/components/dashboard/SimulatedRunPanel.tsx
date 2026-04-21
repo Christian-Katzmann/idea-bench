@@ -96,7 +96,10 @@ export function SimulatedRunPanel({ campaignId }: { campaignId: string }) {
       });
 
       try {
-        const res = await fetch(`/api/simulated-runs/${runId}/run`, {
+        // `?action=run` folds the two-segment route into one so the
+        // single-segment Vercel catch-all can dispatch. See the
+        // dispatcher at api/simulated-runs/[...path].ts for why.
+        const res = await fetch(`/api/simulated-runs/${runId}?action=run`, {
           method: 'POST',
           signal: ac.signal,
           headers: { accept: 'text/event-stream' },
@@ -206,7 +209,7 @@ export function SimulatedRunPanel({ campaignId }: { campaignId: string }) {
   const abortMutation = useMutation({
     mutationFn: (runId: string) =>
       apiFetch<{ ok: true; status: SimulatedRunStatus }>(
-        `/api/simulated-runs/${runId}/abort`,
+        `/api/simulated-runs/${runId}?action=abort`,
         { method: 'POST' },
       ),
     onSuccess: (result) => {

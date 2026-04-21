@@ -455,7 +455,19 @@ function PastRunsList({
               {new Date(r.createdAt).toLocaleString()}
             </span>
             {r.panelType === 'persona' ? (
-              <Badge variant="secondary">Persona</Badge>
+              <Badge
+                variant="secondary"
+                title={
+                  r.personaIds && r.personaIds.length > 0
+                    ? `${r.personaIds.length} persona${r.personaIds.length === 1 ? '' : 's'}`
+                    : 'Persona panel'
+                }
+              >
+                Persona
+                {r.personaIds && r.personaIds.length > 0
+                  ? ` · ${r.personaIds.length}`
+                  : ''}
+              </Badge>
             ) : (
               <Badge variant="outline">Generic</Badge>
             )}

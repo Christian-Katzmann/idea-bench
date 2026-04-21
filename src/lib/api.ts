@@ -103,6 +103,12 @@ export interface CampaignDetail {
      * identically to before.
      */
     source: RatingSource;
+    /**
+     * Plan 02 Phase 2: non-null for per-persona simulated rollups.
+     * The dashboard's "By persona" view filters on this; `null` +
+     * `source='simulated'` is the combined "all simulated" rollup.
+     */
+    personaId: string | null;
     rating: number;
     seRating: number | null;
     btStrength: number | null;
@@ -174,6 +180,30 @@ export interface SimulatedRunCostEstimate {
   highUsd: number;
   totalCalls: number;
   perMode: Record<string, { calls: number; usd: number }>;
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  priorities: string[];
+  antiPatterns: string[];
+  tags: string[];
+  isStarter: boolean;
+  derivedFromPersonaId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonaInput {
+  name: string;
+  description: string;
+  systemPrompt: string;
+  priorities?: string[];
+  antiPatterns?: string[];
+  tags?: string[];
+  derivedFromPersonaId?: string | null;
 }
 
 /**

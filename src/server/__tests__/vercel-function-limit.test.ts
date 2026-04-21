@@ -30,8 +30,12 @@ describe('Vercel function entrypoints', () => {
    * intentional: adding a new entrypoint should be a deliberate
    * decision, with a quick review for "can this live inside an
    * existing dispatcher instead". If you raise the limit, update this
-   * comment with why. Budget includes the 14 entrypoints as of Plan 02
-   * Phase 1 (+3 for simulated-runs create/list, detail, actions).
+   * comment with why.
+   *
+   * Budget history:
+   *   14  pre-Plan-02
+   *   15  +3 Phase 1 simulated-runs (consolidated via [id]/[action])
+   *   17  +2 Phase 2 personas (list/create, [id] CRUD)
    */
   it('stays within the configured function-count budget', () => {
     const thisFile = fileURLToPath(import.meta.url);
@@ -40,6 +44,6 @@ describe('Vercel function entrypoints', () => {
 
     const entrypoints = collectApiEntrypoints(apiDir);
 
-    expect(entrypoints.length).toBeLessThanOrEqual(15);
+    expect(entrypoints.length).toBeLessThanOrEqual(17);
   });
 });

@@ -30,7 +30,7 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { toast } from '../components/ui/toast';
-import { ApiError, apiFetch, type CampaignDetail, type PromptMode, type RatingSource, type VotingMode } from '../lib/api';
+import { ApiError, apiFetch, type CampaignDetail, type Persona, type PromptMode, type RatingSource, type VotingMode } from '../lib/api';
 import { QualitativeReader } from '../components/dashboard/QualitativeReader';
 import { SimulatedRunPanel } from '../components/dashboard/SimulatedRunPanel';
 import { STABILITY_LABELS, type Stability } from '../lib/stability';
@@ -206,10 +206,18 @@ export default function CampaignDashboard() {
     });
   }
 
+  // Main per-mode rollups. Always restrict to persona-agnostic rows
+  // (`personaId === null`) — per-persona rows show up in the "By
+  // persona" section below when source='simulated'.
   const sortedRatings = useMemo(() => {
     if (!data) return [];
     return [...data.ratings]
-      .filter((r) => r.category === 'overall' && r.source === ratingsSource)
+      .filter(
+        (r) =>
+          r.category === 'overall' &&
+          r.source === ratingsSource &&
+          r.personaId === null,
+      )
       .sort((a, b) => b.rating - a.rating);
   }, [data, ratingsSource]);
 
@@ -224,6 +232,7 @@ export default function CampaignDashboard() {
         (r) =>
           r.category === 'slider:overall' &&
           r.source === ratingsSource &&
+          r.personaId === null &&
           r.gameCount > 0,
       )
       .sort((a, b) => b.rating - a.rating);
@@ -236,6 +245,7 @@ export default function CampaignDashboard() {
         (r) =>
           r.category === 'approve_reject:overall' &&
           r.source === ratingsSource &&
+          r.personaId === null &&
           r.gameCount > 0,
       )
       .sort((a, b) => b.rating - a.rating);
@@ -248,6 +258,7 @@ export default function CampaignDashboard() {
         (r) =>
           r.category === 'best_of_n:overall' &&
           r.source === ratingsSource &&
+          r.personaId === null &&
           r.gameCount > 0,
       )
       .sort((a, b) => b.rating - a.rating);
@@ -290,6 +301,7 @@ export default function CampaignDashboard() {
     for (const r of data.ratings) {
       if (r.gameCount === 0) continue;
       if (r.source !== ratingsSource) continue;
+      if (r.personaId !== null) continue;
       if (!r.category.startsWith('multi_axis:')) continue;
       const rest = r.category.slice('multi_axis:'.length);
       const colonIdx = rest.indexOf(':');
@@ -307,6 +319,36 @@ export default function CampaignDashboard() {
       }))
       .sort((a, b) => a.dimension.localeCompare(b.dimension));
   }, [data, ratingsSource]);
+
+  /**
+   * Per-persona rollups — one leaderboard per persona that contributed
+   * simulated responses. Grouped from the `source='simulated'` rows
+   * that carry a non-null personaId. Only rendered when the source
+   * filter is set to 'simulated'; for 'human' / 'both' views the
+   * per-persona rows don't exist and this stays empty.
+   */
+  const personaGroups = useMemo(() => {
+    if (!data) return [];
+    const groups = new Map<string, CampaignDetail['ratings']>();
+    for (const r of data.ratings) {
+      if (r.source !== 'simulated') continue;
+      if (r.personaId == null) continue;
+      if (r.category !== 'overall') continue;
+      if (!groups.has(r.personaId)) groups.set(r.personaId, []);
+      groups.get(r.personaId)!.push(r);
+    }
+    return Array.from(groups.entries()).map(([pid, rows]) => ({
+      personaId: pid,
+      rows: [...rows].sort((a, b) => b.rating - a.rating),
+    }));
+  }, [data]);
+
+  const personasQuery = useQuery({
+    queryKey: ['personas-for-dashboard'],
+    queryFn: () => apiFetch<{ personas: Persona[] }>('/api/personas'),
+    enabled: personaGroups.length > 0,
+    staleTime: 60_000,
+  });
 
   const shareLink = useMemo(() => {
     if (!data) return '';
@@ -763,6 +805,19 @@ export default function CampaignDashboard() {
               </div>
             </section>
           )}
+
+          {/* Plan 02 Phase 2: per-persona rollups. Rendered only when
+              the Simulated filter is selected AND the campaign has at
+              least one persona-panel run on record. Each block is a
+              tiny per-persona leaderboard — the main panels above
+              continue to show the combined "all simulated" view. */}
+          {ratingsSource === 'simulated' && personaGroups.length > 0 && (
+            <PerPersonaRollup
+              groups={personaGroups}
+              personas={personasQuery.data?.personas ?? []}
+              loading={personasQuery.isLoading}
+            />
+          )}
         </TabsContent>
 
         {/* Prompts ----------------------------------------------------- */}
@@ -1047,6 +1102,101 @@ function StatTile({
         {value}
       </div>
     </div>
+  );
+}
+
+/**
+ * Plan 02 Phase 2: compact per-persona leaderboard grid. One card per
+ * persona whose responses contributed, sorted by the persona's
+ * alphabetical name. Each card shows the top 4 models by rating — a
+ * tight summary, not a full scorecard. Operators click through to a
+ * persona-only view in a follow-up (Phase 3).
+ */
+function PerPersonaRollup({
+  groups,
+  personas,
+  loading,
+}: {
+  groups: Array<{
+    personaId: string;
+    rows: CampaignDetail['ratings'];
+  }>;
+  personas: Persona[];
+  loading: boolean;
+}) {
+  const personaById = useMemo(
+    () => new Map(personas.map((p) => [p.id, p])),
+    [personas],
+  );
+  const ordered = useMemo(
+    () =>
+      [...groups].sort((a, b) => {
+        const nameA = personaById.get(a.personaId)?.name ?? a.personaId;
+        const nameB = personaById.get(b.personaId)?.name ?? b.personaId;
+        return nameA.localeCompare(nameB);
+      }),
+    [groups, personaById],
+  );
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <ModeBadge mode="tournament" />
+          <div>
+            <h2 className="font-heading text-sm font-semibold text-foreground">
+              By persona
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              {groups.length} persona{groups.length === 1 ? '' : 's'} —
+              what each simulated audience thinks.
+            </p>
+          </div>
+        </div>
+      </header>
+      <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+        {ordered.map((g) => {
+          const persona = personaById.get(g.personaId);
+          return (
+            <div
+              key={g.personaId}
+              className="rounded-lg border border-border bg-background p-3"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span className="inline-flex size-6 items-center justify-center rounded-full bg-surface-highlight text-xs font-semibold">
+                  {(persona?.name ?? '?').charAt(0)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {persona?.name ?? (loading ? 'Loading…' : '(Deleted persona)')}
+                  </p>
+                  {persona?.description ? (
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {persona.description}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <ul className="space-y-1">
+                {g.rows.slice(0, 4).map((r, i) => (
+                  <li
+                    key={r.campaignModelId}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <span className="truncate">{r.displayName}</span>
+                    </span>
+                    <span className="font-mono tabular-nums">{r.rating}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

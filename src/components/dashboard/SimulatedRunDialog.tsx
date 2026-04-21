@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Loader2, ShieldCheck, Info } from 'lucide-react';
+import { Loader2, ShieldCheck, Info, Sparkles, Users2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +30,14 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { toast } from '../ui/toast';
-import { ApiError, apiFetch, type SimulatedRunCostEstimate, type SimulatedRunSummary } from '../../lib/api';
+import {
+  ApiError,
+  apiFetch,
+  type PanelType,
+  type Persona,
+  type SimulatedRunCostEstimate,
+  type SimulatedRunSummary,
+} from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 export interface SimulatedRunDialogProps {
@@ -51,6 +58,8 @@ export function SimulatedRunDialog({
   onOpenChange,
   onCreated,
 }: SimulatedRunDialogProps) {
+  const [panelType, setPanelType] = useState<PanelType>('generic');
+  const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([]);
   const [voterCount, setVoterCount] = useState<number>(DEFAULT_VOTER_COUNT);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxConcurrency, setMaxConcurrency] = useState<number>(5);
@@ -60,12 +69,22 @@ export function SimulatedRunDialog({
   // prior launch bleeding into the next one.
   useEffect(() => {
     if (open) {
+      setPanelType('generic');
+      setSelectedPersonaIds([]);
       setVoterCount(DEFAULT_VOTER_COUNT);
       setShowAdvanced(false);
       setMaxConcurrency(5);
       setCeilingOverride('');
     }
   }, [open]);
+
+  const personasQuery = useQuery({
+    queryKey: ['personas-for-run'],
+    enabled: open,
+    queryFn: () =>
+      apiFetch<{ personas: Persona[] }>(`/api/personas`),
+    staleTime: 30_000,
+  });
 
   const previewQuery = useQuery({
     queryKey: ['simulated-run-preview', campaignId, voterCount],
@@ -95,10 +114,13 @@ export function SimulatedRunDialog({
     mutationFn: async () => {
       const body: Record<string, unknown> = {
         campaignId,
-        panelType: 'generic',
+        panelType,
         voterCount,
         maxConcurrency,
       };
+      if (panelType === 'persona') {
+        body.personaIds = selectedPersonaIds;
+      }
       if (ceilingOverride.trim()) {
         const parsed = parseFloat(ceilingOverride);
         if (Number.isFinite(parsed) && parsed > 0) body.costCeilingUsd = parsed;
@@ -129,9 +151,12 @@ export function SimulatedRunDialog({
     Number.isInteger(voterCount) &&
     voterCount >= MIN_VOTER_COUNT &&
     voterCount <= MAX_VOTER_COUNT;
+  const personaChoiceValid =
+    panelType === 'generic' || selectedPersonaIds.length > 0;
   const submitDisabled =
     launchMutation.isPending ||
     !voterCountValid ||
+    !personaChoiceValid ||
     previewQuery.isError ||
     !previewQuery.data;
 
@@ -149,6 +174,23 @@ export function SimulatedRunDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-2">
+          <PanelTypePicker
+            value={panelType}
+            onChange={(v) => {
+              setPanelType(v);
+              if (v === 'generic') setSelectedPersonaIds([]);
+            }}
+          />
+
+          {panelType === 'persona' ? (
+            <PersonaPicker
+              loading={personasQuery.isLoading}
+              personas={personasQuery.data?.personas ?? []}
+              selected={selectedPersonaIds}
+              onChange={setSelectedPersonaIds}
+            />
+          ) : null}
+
           <div className="space-y-2">
             <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               Voter count
@@ -303,6 +345,155 @@ export function SimulatedRunDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PanelTypePicker({
+  value,
+  onChange,
+}: {
+  value: PanelType;
+  onChange: (v: PanelType) => void;
+}) {
+  const options: Array<{
+    value: PanelType;
+    label: string;
+    hint: string;
+    icon: typeof Users2;
+  }> = [
+    {
+      value: 'generic',
+      label: 'Generic',
+      hint: 'Cross-family quality panel — one leaderboard under "Simulated".',
+      icon: Users2,
+    },
+    {
+      value: 'persona',
+      label: 'Persona',
+      hint: 'Judges evaluate from specific roles — per-persona leaderboards.',
+      icon: Sparkles,
+    },
+  ];
+  return (
+    <div className="space-y-2">
+      <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        Panel type
+      </Label>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((opt) => {
+          const active = opt.value === value;
+          const Icon = opt.icon;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition',
+                active
+                  ? 'border-foreground bg-surface-highlight'
+                  : 'border-border bg-card hover:border-foreground/40',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Icon
+                  className={cn(
+                    'size-4',
+                    active ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                />
+                <span className="text-sm font-medium">{opt.label}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{opt.hint}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PersonaPicker({
+  loading,
+  personas,
+  selected,
+  onChange,
+}: {
+  loading: boolean;
+  personas: Persona[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const selectedSet = new Set(selected);
+  return (
+    <div className="space-y-2">
+      <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        Personas
+      </Label>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Loading personas…</p>
+      ) : personas.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
+          Your persona library is empty. Create at least one persona
+          before launching a persona-panel run — the{' '}
+          <a
+            href="/personas"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Personas page
+          </a>{' '}
+          walks you through authoring.
+        </div>
+      ) : (
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-card p-2">
+          {personas.map((p) => {
+            const active = selectedSet.has(p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() =>
+                  onChange(
+                    active
+                      ? selected.filter((id) => id !== p.id)
+                      : [...selected, p.id],
+                  )
+                }
+                className={cn(
+                  'flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition',
+                  active
+                    ? 'bg-surface-highlight'
+                    : 'hover:bg-surface-highlight/50',
+                )}
+              >
+                <span
+                  className={cn(
+                    'mt-0.5 flex size-4 items-center justify-center rounded border',
+                    active
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border',
+                  )}
+                  aria-hidden
+                >
+                  {active ? '✓' : ''}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{p.name}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {p.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        {selected.length === 0
+          ? 'Pick at least one persona — seats are distributed evenly across your picks.'
+          : `${selected.length} persona${selected.length === 1 ? '' : 's'} selected.`}
+      </p>
+    </div>
   );
 }
 

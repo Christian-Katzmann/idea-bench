@@ -17,6 +17,14 @@ export interface CampaignLeaderboardRow {
    * simulated signal.
    */
   source: schema.RatingSource;
+  /**
+   * Non-null only for Plan 02 Phase 2 per-persona rollups. Rows with
+   * `source='simulated'` are emitted twice for persona runs: once with
+   * `personaId=null` for the combined "all simulated" rollup and once
+   * per contributing persona so the dashboard can break out a
+   * leaderboard per persona without client-side aggregation.
+   */
+  personaId: string | null;
   rating: number;
   seRating: number | null;
   btStrength: number | null;
@@ -117,6 +125,7 @@ export async function buildCampaignDetail(
       .select({
         category: schema.ratings.category,
         source: schema.ratings.source,
+        personaId: schema.ratings.personaId,
         rating: schema.ratings.rating,
         ciLow: schema.ratings.ciLow,
         ciHigh: schema.ratings.ciHigh,

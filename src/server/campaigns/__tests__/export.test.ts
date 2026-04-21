@@ -43,6 +43,7 @@ describe('buildCampaignResultsCsv', () => {
         {
           category: 'overall',
           source: 'both',
+          personaId: null,
           campaignModelId: 'cm-1',
           providerModelId: 'openai/gpt-5',
           displayName: 'GPT-5',

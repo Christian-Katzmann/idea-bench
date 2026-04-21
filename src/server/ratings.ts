@@ -24,7 +24,7 @@
  * to `<prefix>overall`, plus to each tag in its prompt's `category_tags`.
  * The sentinel string `overall` is reserved; user tags must not use it.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, isNotNull } from 'drizzle-orm';
 import { getDb } from './db/client.js';
 import * as schema from './db/schema.js';
 import {
@@ -76,6 +76,7 @@ export async function recomputeCampaignRatings(
     approveRejectResponses,
     bestOfNResponses,
     multiAxisResponses,
+    simulatedRunRows,
   ] = await Promise.all([
     db
       .select()
@@ -105,7 +106,44 @@ export async function recomputeCampaignRatings(
       .select()
       .from(schema.multiAxisResponses)
       .where(eq(schema.multiAxisResponses.campaignId, campaignId)),
+    db
+      .select({ id: schema.simulatedRuns.id })
+      .from(schema.simulatedRuns)
+      .where(eq(schema.simulatedRuns.campaignId, campaignId)),
   ]);
+
+  // Load every simulated participant that belongs to any simulated run
+  // on this campaign so we can map simulated_participant_id → personaId
+  // when partitioning responses. A nullable personaId is normal —
+  // generic runs don't attach a persona.
+  const simulatedParticipants =
+    simulatedRunRows.length === 0
+      ? []
+      : await db
+          .select({
+            id: schema.simulatedParticipants.id,
+            personaId: schema.simulatedParticipants.personaId,
+          })
+          .from(schema.simulatedParticipants)
+          .where(
+            inArray(
+              schema.simulatedParticipants.simulatedRunId,
+              simulatedRunRows.map((r) => r.id),
+            ),
+          );
+  const personaByParticipantId = new Map<string, string | null>();
+  for (const sp of simulatedParticipants) {
+    personaByParticipantId.set(sp.id, sp.personaId);
+  }
+  // The set of distinct non-null persona ids that actually contributed
+  // to this campaign. Drives the per-persona rollup emission loop.
+  const contributingPersonaIds = Array.from(
+    new Set(
+      simulatedParticipants
+        .map((sp) => sp.personaId)
+        .filter((p): p is string => p !== null),
+    ),
+  );
 
   if (campaignModels.length === 0) {
     return {
@@ -145,17 +183,11 @@ export async function recomputeCampaignRatings(
     modelIds,
     promptCategoryTags,
   });
-  for (const source of sourceOrder) {
-    const subsetVotes = bySourceVotes[source];
-    if (subsetVotes.length === 0 && source !== 'both') continue;
-    const subset =
-      source === 'both'
-        ? byCategory
-        : await computeTournamentByCategory({
-            votes: subsetVotes,
-            modelIds,
-            promptCategoryTags,
-          });
+  const pushTournamentRows = (
+    source: schema.RatingSource,
+    personaId: string | null,
+    subset: Record<string, BTOutput>,
+  ) => {
     for (const [cat, bt] of Object.entries(subset)) {
       for (const modelId of modelIds) {
         const rating = Math.round(bt.ratings[modelId]);
@@ -165,6 +197,7 @@ export async function recomputeCampaignRatings(
           campaignModelId: modelId,
           category: cat,
           source,
+          personaId,
           rating,
           seRating: seNum != null ? seNum.toFixed(4) : null,
           ciLow:
@@ -179,6 +212,35 @@ export async function recomputeCampaignRatings(
         });
       }
     }
+  };
+  for (const source of sourceOrder) {
+    const subsetVotes = bySourceVotes[source];
+    if (subsetVotes.length === 0 && source !== 'both') continue;
+    const subset =
+      source === 'both'
+        ? byCategory
+        : await computeTournamentByCategory({
+            votes: subsetVotes,
+            modelIds,
+            promptCategoryTags,
+          });
+    pushTournamentRows(source, null, subset);
+  }
+  // Per-persona tournament rollups — one set per contributing persona.
+  // Filtered to only the votes that persona's participants cast.
+  for (const pid of contributingPersonaIds) {
+    const votesForPersona = bySourceVotes.simulated.filter(
+      (v) =>
+        v.simulatedParticipantId != null &&
+        personaByParticipantId.get(v.simulatedParticipantId) === pid,
+    );
+    if (votesForPersona.length === 0) continue;
+    const subset = await computeTournamentByCategory({
+      votes: votesForPersona,
+      modelIds,
+      promptCategoryTags,
+    });
+    pushTournamentRows('simulated', pid, subset);
   }
 
   // ─── Slider ───────────────────────────────────────────────────────────
@@ -192,7 +254,24 @@ export async function recomputeCampaignRatings(
       promptCategoryTags,
       now,
     })) {
-      inserts.push({ ...row, source });
+      inserts.push({ ...row, source, personaId: null });
+    }
+  }
+  for (const pid of contributingPersonaIds) {
+    const responses = filterByPersona(
+      bySourceSlider.simulated,
+      personaByParticipantId,
+      pid,
+    );
+    if (responses.length === 0) continue;
+    for (const row of computeSliderAggregates({
+      campaignId,
+      responses,
+      modelIds,
+      promptCategoryTags,
+      now,
+    })) {
+      inserts.push({ ...row, source: 'simulated', personaId: pid });
     }
   }
 
@@ -207,7 +286,24 @@ export async function recomputeCampaignRatings(
       promptCategoryTags,
       now,
     })) {
-      inserts.push({ ...row, source });
+      inserts.push({ ...row, source, personaId: null });
+    }
+  }
+  for (const pid of contributingPersonaIds) {
+    const responses = filterByPersona(
+      bySourceApproveReject.simulated,
+      personaByParticipantId,
+      pid,
+    );
+    if (responses.length === 0) continue;
+    for (const row of computeApproveRejectAggregates({
+      campaignId,
+      responses,
+      modelIds,
+      promptCategoryTags,
+      now,
+    })) {
+      inserts.push({ ...row, source: 'simulated', personaId: pid });
     }
   }
 
@@ -222,7 +318,24 @@ export async function recomputeCampaignRatings(
       promptCategoryTags,
       now,
     })) {
-      inserts.push({ ...row, source });
+      inserts.push({ ...row, source, personaId: null });
+    }
+  }
+  for (const pid of contributingPersonaIds) {
+    const responses = filterByPersona(
+      bySourceBestOfN.simulated,
+      personaByParticipantId,
+      pid,
+    );
+    if (responses.length === 0) continue;
+    for (const row of computeBestOfNAggregates({
+      campaignId,
+      responses,
+      modelIds,
+      promptCategoryTags,
+      now,
+    })) {
+      inserts.push({ ...row, source: 'simulated', personaId: pid });
     }
   }
 
@@ -238,7 +351,25 @@ export async function recomputeCampaignRatings(
       promptCategoryTags,
       now,
     })) {
-      inserts.push({ ...row, source });
+      inserts.push({ ...row, source, personaId: null });
+    }
+  }
+  for (const pid of contributingPersonaIds) {
+    const responses = filterByPersona(
+      bySourceMultiAxis.simulated,
+      personaByParticipantId,
+      pid,
+    );
+    if (responses.length === 0) continue;
+    for (const row of computeMultiAxisAggregates({
+      campaignId,
+      responses,
+      prompts,
+      modelIds,
+      promptCategoryTags,
+      now,
+    })) {
+      inserts.push({ ...row, source: 'simulated', personaId: pid });
     }
   }
 
@@ -870,6 +1001,28 @@ function partitionResponsesBySource<T extends VoterTagged>(
   rows: readonly T[],
 ): { human: T[]; simulated: T[]; both: T[] } {
   return partitionBySource(rows);
+}
+
+/**
+ * Filter simulated responses down to a single persona's slice. Used by
+ * the per-persona rollup loops — the outer partition has already
+ * isolated the simulated subset; this whittles further. Responses
+ * written by a participant whose persona lookup doesn't match are
+ * dropped.
+ */
+function filterByPersona<T extends { simulatedParticipantId: string | null }>(
+  rows: readonly T[],
+  personaByParticipantId: Map<string, string | null>,
+  personaId: string,
+): T[] {
+  const out: T[] = [];
+  for (const r of rows) {
+    if (r.simulatedParticipantId == null) continue;
+    if (personaByParticipantId.get(r.simulatedParticipantId) === personaId) {
+      out.push(r);
+    }
+  }
+  return out;
 }
 
 async function loadGenerationToModelMap(

@@ -760,6 +760,20 @@ export const ratings = pgTable(
      * 'human' in that era, since there was no simulated signal yet).
      */
     source: ratingSourceEnum('source').notNull().default('both'),
+    /**
+     * Plan 02 Phase 2 persona segmentation. When `source='simulated'`
+     * AND the rating aggregates a persona-panel run, this names the
+     * persona whose responses contributed. Null otherwise (generic
+     * simulated panels, human responses, or the combined 'both' view).
+     *
+     * The dashboard "By persona" rollup reads rows keyed on
+     * `(source='simulated', personaId=X)`; the "Simulated (all)"
+     * rollup reads `(source='simulated', personaId IS NULL)` — the
+     * aggregator emits both so operators can choose the granularity.
+     */
+    personaId: uuid('persona_id').references(() => personas.id, {
+      onDelete: 'set null',
+    }),
     rating: integer('rating').notNull().default(1000),
     seRating: numeric('se_rating', { precision: 10, scale: 6 }),
     ciLow: integer('ci_low'),
@@ -771,12 +785,24 @@ export const ratings = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex('uniq_rating').on(
-      t.campaignId,
-      t.campaignModelId,
-      t.category,
-      t.source,
-    ),
+    // Persona-aware uniqueness. Rows without a persona
+    // (`personaId IS NULL`) dedup on (campaign, model, category, source);
+    // persona-scoped rows dedup on (campaign, model, category, source,
+    // persona). Two partial indexes mirror the participant/simulated
+    // pattern on the response tables.
+    uniqueIndex('uniq_rating')
+      .on(t.campaignId, t.campaignModelId, t.category, t.source)
+      .where(sql`${t.personaId} IS NULL`),
+    uniqueIndex('uniq_rating_persona')
+      .on(
+        t.campaignId,
+        t.campaignModelId,
+        t.category,
+        t.source,
+        t.personaId,
+      )
+      .where(sql`${t.personaId} IS NOT NULL`),
+    index('ratings_persona').on(t.personaId),
   ],
 );
 

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { Activity, Boxes, Key, LayoutDashboard, Search, Users } from "lucide-react"
+import { Activity, Boxes, Key, LayoutDashboard, Search, Sparkles, Users } from "lucide-react"
 import { ViewSwitcher } from "./view-switcher"
 import { cn } from "@/lib/utils"
 
@@ -51,6 +51,12 @@ const navSections: { label: string; items: NavItem[] }[] = [
         to: "/models",
         icon: Users,
         match: (p) => p.startsWith("/models"),
+      },
+      {
+        label: "Personas",
+        to: "/personas",
+        icon: Sparkles,
+        match: (p) => p.startsWith("/personas"),
       },
     ],
   },

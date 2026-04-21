@@ -12,6 +12,7 @@ const OperatorHome = lazy(() => import('./pages/OperatorHome'));
 const OperatorDashboard = lazy(() => import('./pages/OperatorDashboard'));
 const TeamActivity = lazy(() => import('./pages/TeamActivity'));
 const ModelLibrary = lazy(() => import('./pages/ModelLibrary'));
+const PersonaLibrary = lazy(() => import('./pages/PersonaLibrary'));
 const ApiSettings = lazy(() => import('./pages/ApiSettings'));
 const OperatorLogin = lazy(() => import('./pages/OperatorLogin'));
 const CreateCampaign = lazy(() => import('./pages/CreateCampaign'));
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/dashboard" element={<OperatorDashboard />} />
             <Route path="/team-activity" element={<TeamActivity />} />
             <Route path="/models" element={<ModelLibrary />} />
+            <Route path="/personas" element={<PersonaLibrary />} />
             <Route path="/settings/api" element={<ApiSettings />} />
             <Route path="/campaign/new" element={<CreateCampaign />} />
             <Route path="/campaign/:id" element={<CampaignDashboard />} />

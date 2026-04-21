@@ -36,6 +36,11 @@ describe('Vercel function entrypoints', () => {
    *   14  pre-Plan-02
    *   15  +3 Phase 1 simulated-runs (consolidated via [id]/[action])
    *   17  +2 Phase 2 personas (list/create, [id] CRUD)
+   *   12  -5 Plan 02 deploy: simulated-runs + personas each collapsed
+   *        into a single [[...path]].ts catch-all dispatcher so prod
+   *        fits under Vercel Hobby's 12-function ceiling. The Vite dev
+   *        API plugin (src/server/vite-api-plugin.ts) also learned to
+   *        route [[...path]] patterns to match.
    */
   it('stays within the configured function-count budget', () => {
     const thisFile = fileURLToPath(import.meta.url);
@@ -44,6 +49,6 @@ describe('Vercel function entrypoints', () => {
 
     const entrypoints = collectApiEntrypoints(apiDir);
 
-    expect(entrypoints.length).toBeLessThanOrEqual(17);
+    expect(entrypoints.length).toBeLessThanOrEqual(12);
   });
 });

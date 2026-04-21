@@ -44,16 +44,28 @@ function discoverRoutes(root: string): Route[] {
         walk(full);
       } else if (st.isFile() && /\.(t|j)sx?$/.test(entry)) {
         const rel = relative(root, full).replace(/\\/g, '/');
-        // api/campaigns/index.ts → /api/campaigns
+        // api/campaigns/index.ts         → /api/campaigns
         // api/campaigns/[id]/generate.ts → /api/campaigns/:id/generate
+        // api/personas/[[...path]].ts    → /api/personas + /api/personas/anything
+        // api/foo/[...rest].ts           → /api/foo/one-or-more
         const withoutExt = rel.replace(/\.(t|j)sx?$/, '');
         const withoutIndex = withoutExt.endsWith('/index')
           ? withoutExt.slice(0, -'/index'.length)
           : withoutExt;
-        const pattern =
-          '^/' +
-          withoutIndex.replace(/\[([^/\]]+)]/g, '([^/]+)').replace(/\//g, '/') +
-          '/?$';
+
+        // Order matters: match optional catch-all first so its brackets
+        // don't get eaten by the plain [name] pattern. The catch-all
+        // segment may be preceded by a `/` that must also become
+        // optional when the match is zero-length.
+        //
+        //   `[[...name]]` → `(?:/.*)?` (optional slash + anything)
+        //   `[...name]`   → `.+`       (one or more segments)
+        //   `[name]`      → `([^/]+)`  (one required segment)
+        let compiled = withoutIndex;
+        compiled = compiled.replace(/\/\[\[\.\.\.[^/\]]+]]/g, '(?:/.*)?');
+        compiled = compiled.replace(/\[\.\.\.[^/\]]+]/g, '.+');
+        compiled = compiled.replace(/\[([^/\]]+)]/g, '([^/]+)');
+        const pattern = '^/' + compiled + '/?$';
         routes.push({ filePath: rel, pattern: new RegExp(pattern) });
       }
     }

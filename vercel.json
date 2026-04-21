@@ -3,6 +3,10 @@
   "rewrites": [
     { "source": "/login", "destination": "/login.html" },
     { "source": "/api/simulated-runs", "destination": "/api/simulated-runs/__root" },
+    {
+      "source": "/api/simulated-runs/:id/:action",
+      "destination": "/api/simulated-runs/:id?__action=:action"
+    },
     { "source": "/api/personas", "destination": "/api/personas/__root" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

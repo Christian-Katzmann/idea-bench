@@ -46,12 +46,10 @@ export const abortSimulatedRunWebHandler = withOperator(async (request) => {
 
 function extractRunId(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);
-  if (
-    parts[0] === 'api' &&
-    parts[1] === 'simulated-runs' &&
-    parts[3] === 'abort'
-  ) {
-    return parts[2] ?? null;
+  // Matches both the dev-plugin shape /api/simulated-runs/:id/abort and
+  // the Vercel-rewrite shape /api/simulated-runs/:id?__action=abort.
+  if (parts[0] === 'api' && parts[1] === 'simulated-runs' && parts[2]) {
+    return parts[2];
   }
   return null;
 }

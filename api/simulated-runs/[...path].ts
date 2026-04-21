@@ -23,10 +23,14 @@ export default toVercelHandler(async (request: Request) => {
   const url = new URL(request.url);
   const parts = url.pathname.split('/').filter(Boolean);
   // parts = ['api', 'simulated-runs', ...rest]
-  // `__root` is a vercel.json rewrite sentinel — Vercel's file-system
-  // routing can't match /api/simulated-runs (zero trailing segments)
-  // against a `[...path]` catch-all (which requires ≥1), so the rewrite
-  // in vercel.json injects `__root` to land here.
+  //
+  // Vercel's file-based routing generates single-segment regex for
+  // `[...path]` catch-all files on Node.js Serverless Functions — so
+  // it won't match zero or two+ trailing segments. Two vercel.json
+  // rewrites paper over this:
+  //   /api/simulated-runs           → /api/simulated-runs/__root
+  //   /api/simulated-runs/:id/:act  → /api/simulated-runs/:id?__action=:act
+  // The sentinel + query param route both back to this single handler.
   let rest = parts.slice(2);
   if (rest.length === 1 && rest[0] === '__root') rest = [];
 
@@ -37,18 +41,24 @@ export default toVercelHandler(async (request: Request) => {
   }
 
   if (rest.length === 1) {
+    // `__action` query param means the rewrite captured a second
+    // segment (e.g. /api/simulated-runs/:id/run). Handle before the
+    // single-segment /:id / /preview-cost cases.
+    const action = url.searchParams.get('__action');
+    if (action === 'run') return runSimulatedRunWebHandler(request);
+    if (action === 'abort') return abortSimulatedRunWebHandler(request);
+    if (action !== null) {
+      return new Response(JSON.stringify({ error: 'unknown action' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
     // /api/simulated-runs/{preview-cost | <id>}
     if (rest[0] === 'preview-cost') {
       return previewSimulatedRunCostWebHandler(request);
     }
     return getSimulatedRunWebHandler(request);
-  }
-
-  if (rest.length === 2) {
-    // /api/simulated-runs/:id/<action>
-    const action = rest[1];
-    if (action === 'run') return runSimulatedRunWebHandler(request);
-    if (action === 'abort') return abortSimulatedRunWebHandler(request);
   }
 
   return new Response(JSON.stringify({ error: 'not found' }), {

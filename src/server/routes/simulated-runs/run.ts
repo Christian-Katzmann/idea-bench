@@ -62,13 +62,10 @@ export const runSimulatedRunWebHandler = withOperator(async (request) => {
 
 function extractRunId(url: URL): string | null {
   const parts = url.pathname.split('/').filter(Boolean);
-  // /api/simulated-runs/:id/run
-  if (
-    parts[0] === 'api' &&
-    parts[1] === 'simulated-runs' &&
-    parts[3] === 'run'
-  ) {
-    return parts[2] ?? null;
+  // Matches both /api/simulated-runs/:id/run (dev) and the Vercel-rewrite
+  // shape /api/simulated-runs/:id (with ?__action=run).
+  if (parts[0] === 'api' && parts[1] === 'simulated-runs' && parts[2]) {
+    return parts[2];
   }
   return null;
 }

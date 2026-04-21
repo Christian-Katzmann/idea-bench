@@ -54,16 +54,20 @@ function discoverRoutes(root: string): Route[] {
           : withoutExt;
 
         // Order matters: match optional catch-all first so its brackets
-        // don't get eaten by the plain [name] pattern. The catch-all
-        // segment may be preceded by a `/` that must also become
-        // optional when the match is zero-length.
+        // don't get eaten by the plain [name] pattern. Both catch-all
+        // forms resolve to an OPTIONAL leading slash + anything in dev
+        // — that matches Vercel's effective behavior once the
+        // vercel.json `__root` rewrite is factored in (prod treats
+        // `[...name]` as one-or-more and relies on a separate rewrite
+        // to reach the bare path; dev skips the rewrite layer entirely
+        // so the pattern itself handles both).
         //
-        //   `[[...name]]` → `(?:/.*)?` (optional slash + anything)
-        //   `[...name]`   → `.+`       (one or more segments)
-        //   `[name]`      → `([^/]+)`  (one required segment)
+        //   `[[...name]]` → `(?:/.*)?`
+        //   `[...name]`   → `(?:/.*)?`  (dev-only permissiveness)
+        //   `[name]`      → `([^/]+)`
         let compiled = withoutIndex;
         compiled = compiled.replace(/\/\[\[\.\.\.[^/\]]+]]/g, '(?:/.*)?');
-        compiled = compiled.replace(/\[\.\.\.[^/\]]+]/g, '.+');
+        compiled = compiled.replace(/\/\[\.\.\.[^/\]]+]/g, '(?:/.*)?');
         compiled = compiled.replace(/\[([^/\]]+)]/g, '([^/]+)');
         const pattern = '^/' + compiled + '/?$';
         routes.push({ filePath: rel, pattern: new RegExp(pattern) });

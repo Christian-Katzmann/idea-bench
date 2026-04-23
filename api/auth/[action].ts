@@ -1,6 +1,7 @@
 import { type WebHandler, toVercelHandler } from '../../src/server/vercel-adapter.js';
 import { loginWebHandler } from '../../src/server/routes/auth/login.js';
 import { logoutWebHandler } from '../../src/server/routes/auth/logout.js';
+import { meWebHandler } from '../../src/server/routes/auth/me.js';
 import {
   githubAuthorizeWebHandler,
   githubCallbackWebHandler,
@@ -13,6 +14,7 @@ import {
 const actionHandlers: Record<string, WebHandler> = {
   login: loginWebHandler,
   logout: logoutWebHandler,
+  me: meWebHandler,
   github: githubAuthorizeWebHandler,
   'github-callback': githubCallbackWebHandler,
   'email-send': magicLinkSendWebHandler,

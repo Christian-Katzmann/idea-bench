@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
-import { withOperator } from '../../auth/middleware.js';
+import { withAIOperator } from '../../auth/middleware.js';
 
 /**
  * POST /api/simulated-runs/:id/abort
@@ -11,7 +11,7 @@ import { withOperator } from '../../auth/middleware.js';
  * can also call this from a separate tab to stop a run cleanly. Any
  * completed-seat responses remain durable; only pending seats stop.
  */
-export const abortSimulatedRunWebHandler = withOperator(async (request) => {
+export const abortSimulatedRunWebHandler = withAIOperator(async (request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }

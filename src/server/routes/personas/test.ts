@@ -20,7 +20,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
-import { withOperator } from '../../auth/middleware.js';
+import { withAIOperator } from '../../auth/middleware.js';
 import { judgeQualitative } from '../../simulated-runs/judge-calls.js';
 import {
   defaultGenericMix,
@@ -50,7 +50,7 @@ interface TestRequest {
 
 const MAX_TEXT_LENGTH = 4000;
 
-export const testPersonaWebHandler = withOperator(async (request) => {
+export const testPersonaWebHandler = withAIOperator(async (request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }

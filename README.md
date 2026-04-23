@@ -68,6 +68,24 @@ Per-IP rate limiting (5 attempts / 15 min) guards the GitHub callback, email
 send, and email verify endpoints. In-memory sliding window — acceptable
 given magic links are single-use and short-lived.
 
+### AI spend gate
+
+Login access and AI access are two separate allowlists:
+
+- `OPERATOR_*` (above) decides **who can sign in**.
+- `AI_ALLOWED_IDENTITIES` decides **which of those signed-in operators
+  can trigger OpenRouter calls** (`POST /api/campaigns/:id/generate`,
+  `POST /api/simulated-runs/:id/run`, `POST /api/personas/test`).
+
+Comma-separated, matched case-insensitively against the session's
+`identity` field, enforced by `withAIOperator`. An empty/unset value
+fails closed — AI endpoints return `503 ai_not_configured` instead of
+opening up. A signed-in operator outside the list gets `403 ai_forbidden`.
+
+Password sessions have identity `'operator'` (shared literal, not a
+person), so password logins are implicitly blocked from AI; sign in with
+GitHub or the email magic link when you need to spend.
+
 ## Architecture
 
 - Vite SPA frontend (`src/`).

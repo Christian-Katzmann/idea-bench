@@ -42,6 +42,7 @@ import {
   type SimulatedRunSummary,
 } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { useSession } from '../../hooks/useSession';
 
 interface LiveRunState {
   runId: string;
@@ -61,6 +62,8 @@ export function SimulatedRunPanel({ campaignId }: { campaignId: string }) {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [liveRun, setLiveRun] = useState<LiveRunState | null>(null);
+  const session = useSession();
+  const canRunAi = session.data?.aiAccess === 'allowed';
 
   const runsQuery = useQuery({
     queryKey: ['simulated-runs', campaignId],
@@ -259,16 +262,19 @@ export function SimulatedRunPanel({ campaignId }: { campaignId: string }) {
             Simulated runs
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Cheap LLM judges vote on this campaign&rsquo;s outputs alongside
-            human voters.
+            {canRunAi
+              ? 'Cheap LLM judges vote on this campaign\u2019s outputs alongside human voters.'
+              : 'AI runs are limited to the project owner on this deployment.'}
           </p>
         </div>
-        <Button
-          onClick={() => setDialogOpen(true)}
-          disabled={!!liveRun || !!activeRun}
-        >
-          <PlayCircle className="size-4" /> Launch run
-        </Button>
+        {canRunAi ? (
+          <Button
+            onClick={() => setDialogOpen(true)}
+            disabled={!!liveRun || !!activeRun}
+          >
+            <PlayCircle className="size-4" /> Launch run
+          </Button>
+        ) : null}
       </header>
 
       <div className="p-5 space-y-5">
@@ -279,11 +285,13 @@ export function SimulatedRunPanel({ campaignId }: { campaignId: string }) {
               liveRun.runId ? abortMutation.mutate(liveRun.runId) : undefined
             }
             aborting={abortMutation.isPending}
+            canAbort={canRunAi}
           />
         ) : activeRun ? (
           <ResumeCard
             run={activeRun}
             onResume={() => startStream(activeRun.id)}
+            canResume={canRunAi}
           />
         ) : null}
 
@@ -307,10 +315,12 @@ function LiveRunCard({
   state,
   onAbort,
   aborting,
+  canAbort,
 }: {
   state: LiveRunState;
   onAbort: () => void;
   aborting: boolean;
+  canAbort: boolean;
 }) {
   const pct =
     state.seatsTotal > 0
@@ -343,7 +353,7 @@ function LiveRunCard({
             {terminal ? state.status : 'Running…'}
           </span>
         </div>
-        {!terminal ? (
+        {!terminal && canAbort ? (
           <Button
             size="sm"
             variant="outline"
@@ -399,9 +409,11 @@ function LiveRunCard({
 function ResumeCard({
   run,
   onResume,
+  canResume,
 }: {
   run: SimulatedRunSummary;
   onResume: () => void;
+  canResume: boolean;
 }) {
   return (
     <div className="flex items-center justify-between rounded-lg border border-border bg-surface-highlight p-4">
@@ -412,9 +424,11 @@ function ResumeCard({
           {(run.costActualUsd ?? 0).toFixed(2)} spent
         </p>
       </div>
-      <Button size="sm" onClick={onResume}>
-        <PlayCircle className="size-3" /> Resume stream
-      </Button>
+      {canResume ? (
+        <Button size="sm" onClick={onResume}>
+          <PlayCircle className="size-3" /> Resume stream
+        </Button>
+      ) : null}
     </div>
   );
 }

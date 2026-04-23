@@ -3,6 +3,10 @@
  *
  * `withOperator`     — rejects with 401 unless the request carries a
  *                       valid `operator_session` cookie.
+ * `withAIOperator`   — stricter gate on top of `withOperator`. Only
+ *                       operators whose session `identity` appears in
+ *                       `AI_ALLOWED_IDENTITIES` may reach the handler.
+ *                       Fail-closed: empty env → 503, not open.
  * `withParticipant`  — reads/issues the `participant_id` cookie. Never
  *                       rejects — participants are anonymous by design.
  *                       If no valid cookie exists, one is minted and
@@ -65,6 +69,65 @@ export function withOperator(handler: OperatorHandler) {
       operator: { method: session.method, identity: session.identity },
     });
   };
+}
+
+function parseAiAllowlist(): string[] {
+  return (process.env.AI_ALLOWED_IDENTITIES ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export type AiAccess =
+  | { kind: 'allowed' }
+  | { kind: 'not_configured' }
+  | { kind: 'forbidden' };
+
+/**
+ * Resolves whether an operator may trigger AI spend. Single source of
+ * truth — `withAIOperator` enforces this on the server, `/api/auth/me`
+ * surfaces it to the client so the UI can hide run buttons.
+ *
+ * Password sessions use the literal identity `'operator'`; including
+ * that word in the env var would give AI access to anyone who knows
+ * the shared password. Keep AI behind personal GitHub/email identities.
+ */
+export function checkAiAccess(op: { identity: string }): AiAccess {
+  const allowlist = parseAiAllowlist();
+  if (allowlist.length === 0) return { kind: 'not_configured' };
+  if (allowlist.includes(op.identity.toLowerCase())) {
+    return { kind: 'allowed' };
+  }
+  return { kind: 'forbidden' };
+}
+
+/**
+ * Stricter-than-operator gate for AI-spending endpoints.
+ *
+ * Must-know: login and AI access are now two separate allowlists.
+ * `OPERATOR_*` controls who can sign in; `AI_ALLOWED_IDENTITIES` controls
+ * which of those signed-in operators may trigger OpenRouter calls.
+ *
+ * Fail-closed: an empty `AI_ALLOWED_IDENTITIES` returns 503, not 200. A
+ * forgotten env var stops AI, not overspending.
+ */
+export function withAIOperator(handler: OperatorHandler) {
+  return withOperator(async (req, ctx) => {
+    const access = checkAiAccess(ctx.operator);
+    if (access.kind === 'not_configured') {
+      return new Response(
+        JSON.stringify({ error: 'ai_not_configured' }),
+        { status: 503, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    if (access.kind === 'forbidden') {
+      return new Response(
+        JSON.stringify({ error: 'ai_forbidden' }),
+        { status: 403, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    return handler(req, ctx);
+  });
 }
 
 export function withParticipant(handler: ParticipantHandler) {

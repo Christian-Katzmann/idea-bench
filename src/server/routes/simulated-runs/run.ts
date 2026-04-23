@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
-import { withOperator } from '../../auth/middleware.js';
+import { withAIOperator } from '../../auth/middleware.js';
 import { createSSEStream, sseHeaders } from '../../sse.js';
 import { executeSimulatedRun } from '../../simulated-runs/index.js';
 import { recomputeCampaignRatings } from '../../ratings.js';
@@ -19,7 +19,7 @@ import { recomputeCampaignRatings } from '../../ratings.js';
  * fails, the run's data is still durable and a later human submit
  * (which also recomputes) will catch up.
  */
-export const runSimulatedRunWebHandler = withOperator(async (request) => {
+export const runSimulatedRunWebHandler = withAIOperator(async (request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }

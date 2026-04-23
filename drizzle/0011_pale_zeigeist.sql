@@ -1,0 +1,1 @@
+ALTER TABLE "simulated_runs" ADD COLUMN "seed" text;

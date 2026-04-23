@@ -1,4 +1,4 @@
-import { withOperator } from '../../auth/middleware.js';
+import { withAIOperator } from '../../auth/middleware.js';
 import {
   createSimulatedRun,
   MIN_VOTER_COUNT,
@@ -25,7 +25,7 @@ import type { PanelType, SimulatedRunModelMix } from '../../db/schema.js';
  * in status='pending'; the client then opens POST /:id/run to stream
  * execution.
  */
-export const createSimulatedRunWebHandler = withOperator(async (request) => {
+export const createSimulatedRunWebHandler = withAIOperator(async (request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -61,6 +61,7 @@ export const createSimulatedRunWebHandler = withOperator(async (request) => {
         costCeilingUsd:
           run.costCeilingUsd != null ? Number(run.costCeilingUsd) : null,
         maxConcurrency: run.maxConcurrency,
+        seed: run.seed,
         createdAt: run.createdAt,
       },
       seatsCreated: seats.length,
@@ -127,6 +128,11 @@ function parseBody(input: unknown): ParsedBody | { error: string } {
     typeof o.maxConcurrency === 'number' ? o.maxConcurrency : undefined;
   const costCeilingUsd =
     typeof o.costCeilingUsd === 'number' ? o.costCeilingUsd : undefined;
+  // Optional seed for reproducible runs. Must be a non-empty string.
+  const seed =
+    typeof o.seed === 'string' && o.seed.length > 0 && o.seed.length <= 200
+      ? o.seed
+      : undefined;
 
   return {
     campaignId,
@@ -136,6 +142,7 @@ function parseBody(input: unknown): ParsedBody | { error: string } {
     personaIds,
     maxConcurrency,
     costCeilingUsd,
+    seed,
   };
 }
 

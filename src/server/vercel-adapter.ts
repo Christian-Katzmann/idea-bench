@@ -15,6 +15,7 @@
  * unwraps via the `__webHandler` marker we attach below.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { withObservability } from './lib/with-observability.js';
 
 export type WebHandler = (request: Request) => Response | Promise<Response>;
 
@@ -28,17 +29,34 @@ export interface AdaptedHandler extends NodeHandler {
   __webHandler: WebHandler;
 }
 
-export function toVercelHandler(webHandler: WebHandler): AdaptedHandler {
+export interface ToVercelHandlerOptions {
+  /**
+   * Skip the `withObservability` wrap. The default composition attaches
+   * X-Request-Id + structured success/failure logs to every response.
+   * Opt out only for handlers that need the raw shape (currently none —
+   * SSE is safe because the wrapper only intervenes on pre-stream throws).
+   */
+  skipObservability?: boolean;
+}
+
+export function toVercelHandler(
+  webHandler: WebHandler,
+  opts: ToVercelHandlerOptions = {},
+): AdaptedHandler {
+  const wrappedWebHandler: WebHandler = opts.skipObservability
+    ? webHandler
+    : withObservability(webHandler);
+
   const adapted: NodeHandler = async (req, res) => {
     try {
       const webReq = await nodeToWebRequest(req);
-      const webRes = await webHandler(webReq);
+      const webRes = await wrappedWebHandler(webReq);
       await writeWebResponse(webRes, res);
     } catch (err) {
-      // Last-resort error guard; most handlers catch their own errors
-      // and return JSON. If one throws, at least surface the stack in
-      // the function log and send a 500.
-      console.error('[vercel-adapter] handler threw:', err);
+      // Last-resort error guard — should only fire for request
+      // construction / response writing failures, since wrappedWebHandler
+      // already normalizes thrown errors inside the handler.
+      console.error('[vercel-adapter] adapter threw:', err);
       if (!res.headersSent) {
         res.statusCode = 500;
         res.setHeader('content-type', 'application/json');
@@ -56,7 +74,9 @@ export function toVercelHandler(webHandler: WebHandler): AdaptedHandler {
       }
     }
   };
-  (adapted as AdaptedHandler).__webHandler = webHandler;
+  // Expose the OBSERVABILITY-WRAPPED handler so the dev plugin
+  // (src/server/vite-api-plugin.ts) gets the same behavior as prod.
+  (adapted as AdaptedHandler).__webHandler = wrappedWebHandler;
   return adapted as AdaptedHandler;
 }
 

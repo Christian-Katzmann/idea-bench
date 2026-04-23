@@ -23,6 +23,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { sampleSeed, nextBattle } from '../tournament.js';
+import { prngFromString } from '../lib/seeded-random/index.js';
 import type { SSESend } from '../sse.js';
 import { checkCostCeiling } from './cost.js';
 import {
@@ -221,6 +222,7 @@ export async function executeSimulatedRun(args: {
     runAborted,
     maxConcurrency: run.maxConcurrency,
     ceilingUsd: progress.costCeilingUsd,
+    runSeed: run.seed ?? null,
     consecutiveFailures: { count: 0 },
   });
 
@@ -279,6 +281,13 @@ interface SeatTaskContext {
   runAborted: { flag: boolean; reason: string };
   maxConcurrency: number;
   ceilingUsd: number | null;
+  /**
+   * Optional deterministic seed for bracket selection + tie-break
+   * coin-flips. When present, runTournamentForSeat derives a PRNG from
+   * (seed, seat.id, prompt.id) so the same run config + seed replays
+   * identically. Null → falls back to Math.random (legacy).
+   */
+  runSeed: string | null;
   /**
    * Rolling count of consecutive judge-call failures. Resets on any
    * successful judge call. When it crosses
@@ -458,7 +467,13 @@ async function runTournamentForSeat(args: {
     // normally guarantees this, but belt + suspenders.
     return { callsMade: 0, callsSkipped: 0, callsFailed: 0 };
   }
-  const seedIds = sampleSeed(modelsForPrompt.map((m) => m.id));
+  // Per-(seat, prompt) PRNG: same run seed + same seat + same prompt
+  // → same bracket selection + tie-break advancement on replay.
+  // Independent of seat-worker scheduling order across concurrent seats.
+  const rng = ctx.runSeed
+    ? prngFromString(`${ctx.runSeed}:${seat.id}:${prompt.id}`)
+    : undefined;
+  const seedIds = sampleSeed(modelsForPrompt.map((m) => m.id), rng ?? Math.random);
   const genByModel: Record<string, string> = {};
   const providerByModel: Record<string, string> = {};
   const outputByModel: Record<string, string> = {};
@@ -540,6 +555,7 @@ async function runTournamentForSeat(args: {
         generationAId: next.generationAId,
         generationBId: next.generationBId,
         winner,
+        rng,
       });
       const v = {
         bracketPosition: next.position,
@@ -588,6 +604,7 @@ async function runTournamentForSeat(args: {
       generationAId: next.generationAId,
       generationBId: next.generationBId,
       winner,
+      rng,
     });
     const advancedGenerationId =
       next.position === 'b1' || next.position === 'b2'

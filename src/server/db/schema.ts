@@ -926,6 +926,15 @@ export const simulatedRuns = pgTable(
       .default('0'),
     costCeilingUsd: numeric('cost_ceiling_usd', { precision: 10, scale: 4 }),
     maxConcurrency: integer('max_concurrency').notNull().default(5),
+    /**
+     * String seed used to make `sampleSeed()` (bracket model selection)
+     * and `coinFlip()` (tie advancement) deterministic within this run.
+     * Persisted so operators can spawn a "Replay with same seed" run
+     * with identical bracket + tie-break behaviour. See
+     * src/server/lib/seeded-random. Nullable for runs created before
+     * this feature shipped.
+     */
+    seed: text('seed'),
     error: text('error'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

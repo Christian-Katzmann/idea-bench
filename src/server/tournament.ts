@@ -31,9 +31,15 @@ export interface NextBattle {
   reason: string;
 }
 
-/** Randomly pick 4 campaign_model ids. Used when campaign has >4 models. */
+/**
+ * Pick 4 campaign_model ids via Fisher-Yates. Accepts an optional
+ * caller-provided RNG so simulated runs can be seeded for replay
+ * (see src/server/lib/seeded-random). When omitted, falls back to
+ * Math.random for non-reproducible contexts (real-participant brackets).
+ */
 export function sampleSeed(
   allCampaignModelIds: readonly string[],
+  rng: () => number = Math.random,
 ): BracketSeed {
   if (allCampaignModelIds.length < 4) {
     throw new Error(
@@ -43,18 +49,20 @@ export function sampleSeed(
   if (allCampaignModelIds.length === 4) {
     return [...allCampaignModelIds] as unknown as BracketSeed;
   }
-  // Fisher-Yates, pick first 4.
   const a = [...allCampaignModelIds];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return [a[0], a[1], a[2], a[3]];
 }
 
-/** Random choice for b1/b2 ties. Not deterministic by design. */
-export function coinFlip<T>(a: T, b: T): T {
-  return Math.random() < 0.5 ? a : b;
+/**
+ * Random choice for b1/b2 ties. Accepts an optional RNG for reproducible
+ * simulated runs; defaults to Math.random for real participants.
+ */
+export function coinFlip<T>(a: T, b: T, rng: () => number = Math.random): T {
+  return rng() < 0.5 ? a : b;
 }
 
 export interface TournamentVote {

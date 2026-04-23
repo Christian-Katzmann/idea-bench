@@ -192,6 +192,12 @@ export interface SimulatedVoteInput {
   generationAId: string;
   generationBId: string;
   winner: schema.VoteWinner;
+  /**
+   * Optional RNG for deterministic tie-break advancement when the
+   * simulated judge returns 'tie' / 'both_bad'. Pass a PRNG derived
+   * from (run.seed, seat.id, prompt.id) to make replay reproducible.
+   */
+  rng?: () => number;
 }
 
 export async function writeSimulatedVote(
@@ -203,7 +209,11 @@ export async function writeSimulatedVote(
     if (input.winner === 'A') advancedGenerationId = input.generationAId;
     else if (input.winner === 'B') advancedGenerationId = input.generationBId;
     else
-      advancedGenerationId = coinFlip(input.generationAId, input.generationBId);
+      advancedGenerationId = coinFlip(
+        input.generationAId,
+        input.generationBId,
+        input.rng,
+      );
   }
   try {
     await db.insert(schema.votes).values({

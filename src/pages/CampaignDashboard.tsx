@@ -386,6 +386,14 @@ export default function CampaignDashboard() {
     );
   };
 
+  const handleExportXlsx = () => {
+    window.open(
+      `/api/campaigns/${id}/export-xlsx`,
+      '_blank',
+      'noopener',
+    );
+  };
+
   if (isLoading) {
     return (
       <AppShell
@@ -947,6 +955,13 @@ export default function CampaignDashboard() {
                 description="One row per response event across all evaluation modes — tournament votes, slider scores, approve/reject decisions, best-of-N picks, multi-axis scores, qualitative comments. Use this for external analysis."
                 actionLabel="Export"
                 onClick={handleExportResponsesCsv}
+              />
+              <ActionRow
+                icon={<Download className="size-4" />}
+                title="Export results as Excel"
+                description="Multi-sheet workbook: overview, leaderboard, participants, and responses. Numeric columns typed as numbers for pivot tables."
+                actionLabel="Export Excel"
+                onClick={handleExportXlsx}
               />
               {campaign.status === 'active' && (
                 <ActionRow

@@ -4,6 +4,7 @@ import { closeCampaignWebHandler } from '../../../src/server/routes/campaigns/cl
 import { exportCampaignCsvWebHandler } from '../../../src/server/routes/campaigns/exportCsv.js';
 import { exportCampaignParticipantsCsvWebHandler } from '../../../src/server/routes/campaigns/exportParticipantsCsv.js';
 import { exportCampaignResponsesCsvWebHandler } from '../../../src/server/routes/campaigns/exportResponsesCsv.js';
+import { exportCampaignXlsxWebHandler } from '../../../src/server/routes/campaigns/exportXlsx.js';
 import { qualitativeResponsesWebHandler } from '../../../src/server/routes/campaigns/qualitativeResponses.js';
 import { generateCampaignWebHandler } from '../../../src/server/routes/campaigns/generate.js';
 import { previewCampaignWebHandler } from '../../../src/server/routes/campaigns/preview.js';
@@ -15,6 +16,7 @@ const actionHandlers: Record<string, WebHandler> = {
   export: exportCampaignCsvWebHandler,
   'export-participants': exportCampaignParticipantsCsvWebHandler,
   'export-responses': exportCampaignResponsesCsvWebHandler,
+  'export-xlsx': exportCampaignXlsxWebHandler,
   'qualitative-responses': qualitativeResponsesWebHandler,
   generate: generateCampaignWebHandler,
   preview: previewCampaignWebHandler,

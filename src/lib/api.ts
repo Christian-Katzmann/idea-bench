@@ -13,6 +13,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public body: unknown,
+    public requestId?: string,
   ) {
     // Embed status in message so TanStack Query's retry:false-for-4xx
     // default (see src/main.tsx) works off it.
@@ -47,7 +48,18 @@ export async function apiFetch<T>(
         (body as { error: string }).error) ||
       (typeof body === 'string' ? body.slice(0, 200) : '') ||
       res.statusText;
-    throw new ApiError(msg, res.status, body);
+    // The observability wrapper attaches X-Request-Id; the body also
+    // carries `id` when the wrapper normalized the error. Header wins
+    // because it's always present; the body `id` is a fallback.
+    const requestId =
+      res.headers.get('x-request-id') ||
+      (body &&
+      typeof body === 'object' &&
+      'id' in body &&
+      typeof (body as { id: unknown }).id === 'string'
+        ? (body as { id: string }).id
+        : undefined);
+    throw new ApiError(msg, res.status, body, requestId);
   }
   return body as T;
 }

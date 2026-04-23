@@ -21,6 +21,7 @@ import {
   estimateRunCost,
   type CostEstimateOutput,
 } from './cost.js';
+import { freshRunSeed } from '../lib/seeded-random/index.js';
 
 /** Hard bounds the API layer enforces too, kept in sync. */
 export const MIN_VOTER_COUNT = 10;
@@ -37,6 +38,13 @@ export interface LaunchInput {
   maxConcurrency?: number;
   /** If present, overrides the 2× estimate default. */
   costCeilingUsd?: number;
+  /**
+   * Optional deterministic seed. When omitted, a fresh one is generated.
+   * Used by sampleSeed()/coinFlip() in tournament.ts to produce a
+   * reproducible bracket + tie-break sequence — enables "Replay with
+   * same seed" by passing the original run's seed back in.
+   */
+  seed?: string;
 }
 
 export interface LaunchResult {
@@ -153,6 +161,10 @@ export async function createSimulatedRun(
       ? input.costCeilingUsd
       : defaultCostCeiling(estimate.estimatedUsd);
 
+  const seed = typeof input.seed === 'string' && input.seed.length > 0
+    ? input.seed
+    : freshRunSeed();
+
   // Insert the run row.
   const [run] = await db
     .insert(schema.simulatedRuns)
@@ -170,6 +182,7 @@ export async function createSimulatedRun(
       costActualUsd: '0',
       costCeilingUsd: ceilingUsd.toFixed(4),
       maxConcurrency,
+      seed,
     })
     .returning();
 

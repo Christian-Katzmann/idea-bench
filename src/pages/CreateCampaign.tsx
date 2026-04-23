@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -20,6 +20,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
+import { LazyTiptapPromptEditor } from '../components/editors/LazyTiptapPromptEditor';
 import { PageHeader } from '../components/ui/page-header';
 import { PromptDisplay } from '../components/prompt/PromptDisplay';
 import {
@@ -71,7 +72,24 @@ interface SlotErrorEvent {
   message: string;
   latencyMs: number;
 }
-type SlotEvent = SlotOkEvent | SlotErrorEvent;
+interface SlotBudgetSkipEvent {
+  promptId: string;
+  campaignModelId: string;
+  modelDisplayName: string;
+  status: 'skipped_budget';
+  reason: string;
+  estimatedUsd: number;
+  spentUsd: number;
+  capUsd: number | null;
+}
+type SlotEvent = SlotOkEvent | SlotErrorEvent | SlotBudgetSkipEvent;
+
+interface BudgetExceededEvent {
+  reason: string;
+  estimatedUsd: number;
+  spentUsd: number;
+  capUsd: number | null;
+}
 
 interface CreatedCampaign {
   id: string;
@@ -280,6 +298,10 @@ export default function CreateCampaign() {
   const [slotTotal, setSlotTotal] = useState(0);
   const [slots, setSlots] = useState<Record<string, SlotEvent>>({});
   const [generateError, setGenerateError] = useState<string | null>(null);
+  // Optional per-run USD cap. Empty string = no cap. Parsed at submit time.
+  const [budgetCapInput, setBudgetCapInput] = useState('');
+  const [budgetWarning, setBudgetWarning] =
+    useState<BudgetExceededEvent | null>(null);
 
   const [activateError, setActivateError] = useState<string | null>(null);
   const [isActivating, setIsActivating] = useState(false);
@@ -322,10 +344,18 @@ export default function CreateCampaign() {
     );
   };
 
+  const parsedBudgetUsd = useMemo(() => {
+    const trimmed = budgetCapInput.trim();
+    if (!trimmed) return null;
+    const n = Number.parseFloat(trimmed);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [budgetCapInput]);
+
   const handleGenerate = useCallback(async () => {
     if (isGenerating) return;
     setCreateError(null);
     setGenerateError(null);
+    setBudgetWarning(null);
     setSlots({});
     setGenerationDone(false);
     setIsGenerating(true);
@@ -367,16 +397,21 @@ export default function CreateCampaign() {
       const created = (await createRes.json()) as CreatedCampaign;
       setCampaign(created);
 
-      await runGeneration(created.id, {
-        onStart: (total) => setSlotTotal(total),
-        onSlot: (ev) =>
-          setSlots((prev) => ({
-            ...prev,
-            [slotKey(ev.promptId, ev.campaignModelId)]: ev,
-          })),
-        onDone: () => setGenerationDone(true),
-        onError: (msg) => setGenerateError(msg),
-      });
+      await runGeneration(
+        created.id,
+        {
+          onStart: (total) => setSlotTotal(total),
+          onSlot: (ev) =>
+            setSlots((prev) => ({
+              ...prev,
+              [slotKey(ev.promptId, ev.campaignModelId)]: ev,
+            })),
+          onBudgetExceeded: (ev) => setBudgetWarning(ev),
+          onDone: () => setGenerationDone(true),
+          onError: (msg) => setGenerateError(msg),
+        },
+        { budgetUsd: parsedBudgetUsd },
+      );
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'unknown error');
     } finally {
@@ -390,11 +425,13 @@ export default function CreateCampaign() {
     prompts,
     selectedModels,
     navigate,
+    parsedBudgetUsd,
   ]);
 
   const handleRetryFailed = useCallback(async () => {
     if (isGenerating || !campaign) return;
     setGenerateError(null);
+    setBudgetWarning(null);
     setGenerationDone(false);
     setIsGenerating(true);
     try {
@@ -410,17 +447,18 @@ export default function CreateCampaign() {
               ...prev,
               [slotKey(ev.promptId, ev.campaignModelId)]: ev,
             })),
+          onBudgetExceeded: (ev) => setBudgetWarning(ev),
           onDone: () => setGenerationDone(true),
           onError: (msg) => setGenerateError(msg),
         },
-        { onlyFailed: true },
+        { onlyFailed: true, budgetUsd: parsedBudgetUsd },
       );
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'unknown error');
     } finally {
       setIsGenerating(false);
     }
-  }, [isGenerating, campaign]);
+  }, [isGenerating, campaign, parsedBudgetUsd]);
 
   const handleLaunch = async () => {
     if (!campaign || isActivating) return;
@@ -522,6 +560,9 @@ export default function CreateCampaign() {
                 onStart={handleGenerate}
                 onRetryFailed={handleRetryFailed}
                 canRetryFailed={Boolean(campaign)}
+                budgetCapInput={budgetCapInput}
+                onBudgetCapInput={setBudgetCapInput}
+                budgetWarning={budgetWarning}
               />
             )}
 
@@ -931,21 +972,45 @@ function SimpleFields({
   idx: number;
   onPatch: (patch: Partial<PromptDraft>) => void;
 }) {
+  // Session-only rich editor toggle. Off by default so the ~60KB Tiptap
+  // chunk only loads when a prompt author actually wants formatting.
+  // State is per-prompt; persisting it would require a PromptDraft
+  // field and isn't worth the schema churn for a UI preference.
+  const [richEditor, setRichEditor] = useState(false);
+
   return (
     <div className="flex flex-col gap-1.5">
-      <Label
-        htmlFor={`prompt-text-${idx}`}
-        className="text-[10px] uppercase tracking-wide"
-      >
-        Prompt text
-      </Label>
-      <Textarea
-        id={`prompt-text-${idx}`}
-        value={prompt.text}
-        onChange={(e) => onPatch({ text: e.target.value })}
-        placeholder="Enter the prompt text…"
-        className="min-h-24 bg-card"
-      />
+      <div className="flex items-baseline justify-between gap-3">
+        <Label
+          htmlFor={`prompt-text-${idx}`}
+          className="text-[10px] uppercase tracking-wide"
+        >
+          Prompt text
+        </Label>
+        <button
+          type="button"
+          onClick={() => setRichEditor((r) => !r)}
+          className="text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+          aria-pressed={richEditor}
+        >
+          {richEditor ? 'Plain text' : 'Rich editor'}
+        </button>
+      </div>
+      {richEditor ? (
+        <LazyTiptapPromptEditor
+          value={prompt.text}
+          onChange={(text) => onPatch({ text })}
+          placeholder="Enter the prompt text…"
+        />
+      ) : (
+        <Textarea
+          id={`prompt-text-${idx}`}
+          value={prompt.text}
+          onChange={(e) => onPatch({ text: e.target.value })}
+          placeholder="Enter the prompt text…"
+          className="min-h-24 bg-card"
+        />
+      )}
     </div>
   );
 }
@@ -1131,6 +1196,9 @@ function StepGenerate({
   onStart,
   onRetryFailed,
   canRetryFailed,
+  budgetCapInput,
+  onBudgetCapInput,
+  budgetWarning,
 }: {
   promptCount: number;
   modelCount: number;
@@ -1147,8 +1215,14 @@ function StepGenerate({
   onStart: () => void;
   onRetryFailed: () => void;
   canRetryFailed: boolean;
+  budgetCapInput: string;
+  onBudgetCapInput: (v: string) => void;
+  budgetWarning: BudgetExceededEvent | null;
 }) {
   const total = promptCount * modelCount;
+  const skippedForBudget = slotValues.filter(
+    (s) => s.status === 'skipped_budget',
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -1165,10 +1239,40 @@ function StepGenerate({
         </div>
 
         {!isGenerating && slotsReceived === 0 ? (
-          <Button onClick={onStart} className="mx-auto" size="lg">
-            <Play className="size-4" />
-            Start generation
-          </Button>
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex w-full max-w-xs flex-col gap-1.5">
+              <Label
+                htmlFor="budget-cap"
+                className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+              >
+                Budget cap (USD · optional)
+              </Label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="budget-cap"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.50"
+                  value={budgetCapInput}
+                  onChange={(e) => onBudgetCapInput(e.target.value)}
+                  className="h-9 font-mono tabular-nums"
+                />
+              </div>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Halts remaining slots if committed spend would exceed this cap.
+                Leave empty to run without a limit.
+              </p>
+            </div>
+            <Button onClick={onStart} size="lg">
+              <Play className="size-4" />
+              Start generation
+            </Button>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-xs">
@@ -1195,7 +1299,7 @@ function StepGenerate({
                 style={{ width: `${pct}%` }}
               />
             </div>
-            {(succeeded > 0 || failed > 0) && (
+            {(succeeded > 0 || failed > 0 || skippedForBudget > 0) && (
               <div className="flex items-center gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5 text-success">
                   <CheckCircle2 className="size-3" />
@@ -1207,6 +1311,39 @@ function StepGenerate({
                     {failed} failed
                   </span>
                 )}
+                {skippedForBudget > 0 && (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <AlertTriangle className="size-3" />
+                    {skippedForBudget} skipped (budget)
+                  </span>
+                )}
+              </div>
+            )}
+            {budgetWarning && (
+              <div className="mt-1 rounded-md border border-border bg-surface-highlight/60 px-3 py-2 text-[11px] leading-snug">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  <div className="flex-1">
+                    <div className="font-medium text-foreground">
+                      Budget cap reached
+                    </div>
+                    <div className="mt-0.5 text-muted-foreground">
+                      Spent{' '}
+                      <span className="font-mono tabular-nums text-foreground">
+                        ${budgetWarning.spentUsd.toFixed(4)}
+                      </span>
+                      {budgetWarning.capUsd !== null && (
+                        <>
+                          {' '}of{' '}
+                          <span className="font-mono tabular-nums text-foreground">
+                            ${budgetWarning.capUsd.toFixed(2)}
+                          </span>
+                        </>
+                      )}
+                      . Remaining slots halted.
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             {failed > 0 && !isGenerating && canRetryFailed && (
@@ -1254,7 +1391,9 @@ function StepGenerate({
                   'rounded-md border px-3 py-2 text-xs',
                   slot.status === 'ok'
                     ? 'border-border bg-surface-highlight/40'
-                    : 'border-destructive/30 bg-destructive/5',
+                    : slot.status === 'skipped_budget'
+                      ? 'border-border bg-surface-highlight/30'
+                      : 'border-destructive/30 bg-destructive/5',
                 )}
               >
                 <div className="mb-1 flex items-center justify-between gap-3">
@@ -1264,12 +1403,18 @@ function StepGenerate({
                   <span className="font-mono text-[10px] text-muted-foreground">
                     {slot.status === 'ok'
                       ? `${slot.tokensOut ?? '?'} tok · ${slot.latencyMs}ms`
-                      : `error · ${slot.latencyMs}ms`}
+                      : slot.status === 'skipped_budget'
+                        ? `skipped · budget`
+                        : `error · ${slot.latencyMs}ms`}
                   </span>
                 </div>
                 {slot.status === 'ok' ? (
                   <div className="line-clamp-3 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
                     {slot.output}
+                  </div>
+                ) : slot.status === 'skipped_budget' ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    Would add ~${slot.estimatedUsd.toFixed(4)} over cap.
                   </div>
                 ) : (
                   <div className="text-[11px] text-destructive">
@@ -1386,17 +1531,31 @@ function slotKey(promptId: string, campaignModelId: string): string {
 async function runGeneration(
   campaignId: string,
   handlers: {
-    onStart: (total: number) => void;
+    onStart: (total: number, budgetUsd: number | null) => void;
     onSlot: (ev: SlotEvent) => void;
-    onDone: (summary: { succeeded: number; failed: number }) => void;
+    onBudgetExceeded: (ev: BudgetExceededEvent) => void;
+    onDone: (summary: {
+      succeeded: number;
+      failed: number;
+      skippedForBudget?: number;
+      spentUsd?: number;
+    }) => void;
     onError: (msg: string) => void;
   },
-  options: { onlyFailed?: boolean } = {},
+  options: { onlyFailed?: boolean; budgetUsd?: number | null } = {},
 ): Promise<void> {
   const qs = options.onlyFailed ? '?only=failed' : '';
+  const body: Record<string, unknown> = {};
+  if (options.budgetUsd != null && options.budgetUsd > 0) {
+    body.budgetUsd = options.budgetUsd;
+  }
   const res = await fetch(`/api/campaigns/${campaignId}/generate${qs}`, {
     method: 'POST',
-    headers: { accept: 'text/event-stream' },
+    headers: {
+      accept: 'text/event-stream',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '');
@@ -1422,12 +1581,51 @@ async function runGeneration(
       if (!parsed) continue;
       const { event, data } = parsed;
       if (event === 'start') {
-        const { total } = data as { total: number };
-        handlers.onStart(total);
+        const { total, budgetUsd } = data as {
+          total: number;
+          budgetUsd?: number | null;
+        };
+        handlers.onStart(total, budgetUsd ?? null);
       } else if (event === 'slot') {
         handlers.onSlot(data as SlotEvent);
+      } else if (event === 'budget_exceeded') {
+        const ev = data as {
+          promptId?: string;
+          campaignModelId?: string;
+          modelDisplayName?: string;
+          reason: string;
+          estimatedUsd: number;
+          spentUsd: number;
+          capUsd: number | null;
+        };
+        // Also emit as a slot skip so the slot counter reflects it.
+        if (ev.promptId && ev.campaignModelId) {
+          handlers.onSlot({
+            promptId: ev.promptId,
+            campaignModelId: ev.campaignModelId,
+            modelDisplayName: ev.modelDisplayName ?? 'unknown',
+            status: 'skipped_budget',
+            reason: ev.reason,
+            estimatedUsd: ev.estimatedUsd,
+            spentUsd: ev.spentUsd,
+            capUsd: ev.capUsd,
+          });
+        }
+        handlers.onBudgetExceeded({
+          reason: ev.reason,
+          estimatedUsd: ev.estimatedUsd,
+          spentUsd: ev.spentUsd,
+          capUsd: ev.capUsd,
+        });
       } else if (event === 'done') {
-        handlers.onDone(data as { succeeded: number; failed: number });
+        handlers.onDone(
+          data as {
+            succeeded: number;
+            failed: number;
+            skippedForBudget?: number;
+            spentUsd?: number;
+          },
+        );
       } else if (event === 'error') {
         const { message } = data as { message: string };
         handlers.onError(message);

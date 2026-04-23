@@ -3,6 +3,7 @@ import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
 import { buildCampaignDetail } from '../../campaigns/detail.js';
+import { extractQualitativeThemes } from '../../lib/qualitative-themes.js';
 
 /**
  * GET /api/campaigns/:id/qualitative-responses
@@ -59,6 +60,11 @@ export const qualitativeResponsesWebHandler = withOperator(
       .where(eq(schema.qualitativeResponses.campaignId, id))
       .orderBy(asc(schema.qualitativeResponses.createdAt));
 
+    // Recurring-theme extraction over the free-text corpus. Heuristic
+    // (n-gram frequency + stopword filtering) — not an LLM call. Returns
+    // an empty array when there aren't enough responses to be reliable.
+    const themes = extractQualitativeThemes(rows.map((r) => ({ text: r.text })));
+
     return json(
       {
         campaign: {
@@ -81,6 +87,7 @@ export const qualitativeResponsesWebHandler = withOperator(
           text: r.text,
           createdAt: r.createdAt.toISOString(),
         })),
+        themes,
       },
       200,
     );

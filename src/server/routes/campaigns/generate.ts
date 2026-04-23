@@ -1,11 +1,16 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
-import { withOperator } from '../../auth/middleware.js';
+import { withAIOperator } from '../../auth/middleware.js';
 import {
   callOpenRouter,
   type OpenRouterCallResult,
 } from '../../openrouter.js';
+import { createRunBudget } from '../../lib/generation-budget.js';
+import {
+  buildPromptRefLookup,
+  substitutePromptRefs,
+} from '../../lib/prompt-refs.js';
 
 // TODO(strict-mode): Remove these Extract<> assertions when tsconfig
 // enables `strict: true` (or at least `strictNullChecks: true`). With
@@ -48,7 +53,7 @@ import { createSSEStream, sseHeaders } from '../../sse.js';
  * an active campaign is rejected — it would mutate the outputs that
  * participants are already voting on.
  */
-export const generateCampaignWebHandler = withOperator(async (request: Request) => {
+export const generateCampaignWebHandler = withAIOperator(async (request: Request) => {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
@@ -59,6 +64,27 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
     return json({ error: 'missing campaign id in URL' }, 400);
   }
   const onlyFailed = url.searchParams.get('only') === 'failed';
+
+  // Optional budget cap (USD) for this run. Operator sets per-run; not
+  // persisted on the campaign. Accept from either body (preferred) or
+  // query string. Invalid / non-positive values silently disable
+  // enforcement.
+  let budgetUsd: number | null = null;
+  const queryBudget = url.searchParams.get('budgetUsd');
+  if (queryBudget !== null) {
+    const parsed = Number.parseFloat(queryBudget);
+    if (Number.isFinite(parsed) && parsed > 0) budgetUsd = parsed;
+  }
+  if (budgetUsd === null && request.headers.get('content-type')?.includes('application/json')) {
+    try {
+      const body = (await request.clone().json()) as { budgetUsd?: unknown };
+      if (typeof body.budgetUsd === 'number' && Number.isFinite(body.budgetUsd) && body.budgetUsd > 0) {
+        budgetUsd = body.budgetUsd;
+      }
+    } catch {
+      /* ignore body parse errors — body is optional */
+    }
+  }
 
   const db = getDb();
 
@@ -133,8 +159,25 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
     );
   }
 
+  const runBudget = createRunBudget({
+    runId: `gen:${campaignId}:${Date.now()}`,
+    capUsd: budgetUsd,
+  });
+
+  // Build the prompt-ref lookup once per run. Referenced prompts are
+  // substituted into the final text sent to OpenRouter — @p1 → the first
+  // prompt's text, etc. Unresolved refs pass through literally. This
+  // stays independent of the `onlyFailed` filter: a retried slot still
+  // sees the same substituted prompt.
+  const refLookup = buildPromptRefLookup(
+    prompts.map((p) => ({ orderIndex: p.orderIndex, text: p.text })),
+  );
+
   const stream = createSSEStream(async (send, signal) => {
-    send('start', { total: slots.length });
+    send('start', {
+      total: slots.length,
+      budgetUsd: runBudget.capUsd,
+    });
     if (slots.length === 0) {
       send('done', { succeeded: 0, failed: 0, total: 0 });
       return;
@@ -142,15 +185,46 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
 
     let succeeded = 0;
     let failed = 0;
+    let skippedForBudget = 0;
 
     // Concurrency cap: fan out all at once. OpenRouter's rate limits are
     // per-provider; this is fine for <50 slots (our realistic campaign
     // size). If we ever need to throttle, a simple semaphore goes here.
     const results = await Promise.allSettled(
       slots.map(async ({ prompt, model }) => {
+        // Substitute @pN prompt-refs before the model sees the prompt.
+        // Budget preflight uses the resolved text so cost estimates
+        // reflect what'll actually be sent.
+        const resolvedPromptText = substitutePromptRefs(prompt.text, refLookup);
+        const slotBudgetInput = {
+          providerModelId: model.providerModelId,
+          promptText: `${prompt.context ?? ''}\n${resolvedPromptText}`,
+        };
+        const pre = runBudget.preflight(slotBudgetInput);
+        if (!pre.allow) {
+          // Non-strict tsconfig loses narrowing across async callbacks.
+          const denied = pre as {
+            allow: false;
+            reason: string;
+            estimatedUsd: number;
+          };
+          skippedForBudget++;
+          send('budget_exceeded', {
+            promptId: prompt.id,
+            campaignModelId: model.id,
+            modelDisplayName: model.displayName,
+            reason: denied.reason,
+            estimatedUsd: denied.estimatedUsd,
+            spentUsd: runBudget.spentUsd(),
+            capUsd: runBudget.capUsd,
+          });
+          return;
+        }
+        const allowed = pre as { allow: true; reservedUsd: number };
+
         const result = await callOpenRouter({
           providerModelId: model.providerModelId,
-          prompt: prompt.text,
+          prompt: resolvedPromptText,
           context: prompt.context,
           params:
             (model.params as Record<string, unknown> | null) ?? undefined,
@@ -163,6 +237,13 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
         // the code is unambiguous regardless of strictness.
         if (!result.ok) {
           const err = result as ErrorVariant;
+          // Reconcile the reservation even on failure so the ledger
+          // doesn't leak committed-but-unspent dollars.
+          runBudget.commit(slotBudgetInput, allowed.reservedUsd, {
+            tokensIn: 0,
+            tokensOut: 0,
+            usd: 0,
+          });
           await upsertGenerationError(db, prompt, model, err);
           failed++;
           send('slot', {
@@ -178,6 +259,11 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
         }
 
         const ok = result as OkVariant;
+        runBudget.commit(slotBudgetInput, allowed.reservedUsd, {
+          tokensIn: ok.tokensIn ?? 0,
+          tokensOut: ok.tokensOut ?? 0,
+          usd: ok.costUsd ?? 0,
+        });
         await upsertGeneration(db, prompt, model, ok);
         succeeded++;
         send('slot', {
@@ -205,7 +291,13 @@ export const generateCampaignWebHandler = withOperator(async (request: Request) 
       }
     }
 
-    send('done', { succeeded, failed, total: slots.length });
+    send('done', {
+      succeeded,
+      failed,
+      skippedForBudget,
+      total: slots.length,
+      spentUsd: runBudget.spentUsd(),
+    });
   });
 
   return new Response(stream, { status: 200, headers: sseHeaders() });

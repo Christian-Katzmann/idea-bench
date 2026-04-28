@@ -16,11 +16,13 @@ function fixture(): CampaignWorkbookInputs {
     id: 'cm-a',
     displayName: 'Claude Opus',
     providerModelId: 'anthropic/claude-opus-4-6',
+    variantText: null,
   };
   const modelB = {
     id: 'cm-b',
     displayName: 'GPT-5',
     providerModelId: 'openai/gpt-5',
+    variantText: null,
   };
   const now = new Date('2026-04-22T12:00:00Z');
 
@@ -41,6 +43,7 @@ function fixture(): CampaignWorkbookInputs {
       kind: 'model',
       pinnedProviderModelId: null,
       pinnedSystemPrompt: null,
+      standaloneVariants: false,
     },
     stats: {
       promptCount: 1,
@@ -106,6 +109,8 @@ function fixture(): CampaignWorkbookInputs {
         displayName: modelB.displayName,
       },
     ],
+    perInputBestOfN: [],
+    heatmapCells: [],
   };
 
   const participants = [

@@ -22,6 +22,7 @@ const CAMPAIGN = {
   kind: 'model' as const,
   pinnedProviderModelId: null,
   pinnedSystemPrompt: null,
+  standaloneVariants: false,
 };
 
 describe('buildCampaignResultsCsv', () => {
@@ -42,6 +43,7 @@ describe('buildCampaignResultsCsv', () => {
           id: 'cm-1',
           providerModelId: 'openai/gpt-5',
           displayName: 'GPT-5',
+          variantText: null,
         },
       ],
       prompts: [],
@@ -68,6 +70,8 @@ describe('buildCampaignResultsCsv', () => {
           computedAt: new Date('2026-04-17T10:00:00.000Z'),
         },
       ],
+      perInputBestOfN: [],
+      heatmapCells: [],
     });
 
     expect(csv).toContain('campaign_name,campaign_status,share_slug');

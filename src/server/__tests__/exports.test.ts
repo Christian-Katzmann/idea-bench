@@ -44,6 +44,7 @@ function makeCampaign(
     pinnedProviderModelId:
       kind === 'model' ? null : 'anthropic/claude-opus-4-6',
     pinnedSystemPrompt: null,
+    standaloneVariants: false,
   };
 }
 
@@ -84,6 +85,8 @@ function makeDetail(kind: schema.CampaignKind): CampaignDetailData {
         computedAt: NOW,
       },
     ],
+    perInputBestOfN: [],
+    heatmapCells: [],
   };
 }
 
@@ -243,5 +246,63 @@ describe('XLSX leaderboard sheet — per-kind header', () => {
       makeWorkbookInputs('system_prompt'),
     );
     expect(header).toContain('System Prompt Variant');
+  });
+});
+
+// ── Plan 05 P2-3 — prompt-arena snapshot lock ──────────────────
+// Snapshot the full header rows emitted for kind='prompt' so any
+// drift on the contestant column ("Variant" / "variant_*") trips a
+// visible diff. The exact column ORDER is part of the contract — BI
+// pipelines parse by position, not by name. Locking the full string
+// catches a header rename AND an accidental column reorder.
+
+describe('prompt-arena exports — header snapshots (P2-3)', () => {
+  it('CSV results header for kind=prompt matches snapshot', () => {
+    const csv = buildCampaignResultsCsv(makeDetail('prompt'));
+    const headerLine = csv.split('\n')[0];
+    expect(headerLine).toBe(
+      'campaign_name,campaign_status,share_slug,rank,variant_display_name,variant_provider_id,rating,ci_low,ci_high,win_rate,win_count,loss_count,tie_count,comparisons,stability,computed_at,total_votes,unique_participants,finished_participants,identified_participants,anonymous_participants',
+    );
+    // The contestant column reads as "Variant", never "Model".
+    expect(headerLine).toContain('variant_display_name');
+    expect(headerLine).not.toMatch(/\bmodel_display_name\b/);
+  });
+
+  it('CSV responses header for kind=prompt matches snapshot', () => {
+    const csv = buildCampaignResponsesCsv(emptyResponseInputs('prompt'));
+    const headerLine = csv.split('\n')[0];
+    expect(headerLine).toBe(
+      'campaign_name,share_slug,created_at,mode,prompt_order,prompt_id,prompt_category_tags,participant_id,email,session_id,variant_a_display_name,variant_a_provider_id,variant_b_display_name,variant_b_provider_id,tournament_bracket,tournament_winner,slider_score,approve_reject_approved,best_of_n_chosen,multi_axis_scores_json,qualitative_text,signal_summary',
+    );
+    expect(headerLine).toContain('variant_a_display_name');
+    expect(headerLine).toContain('variant_b_display_name');
+    expect(headerLine).not.toMatch(/\bmodel_a_display_name\b/);
+    expect(headerLine).not.toMatch(/\bmodel_b_display_name\b/);
+  });
+
+  it('XLSX leaderboard header row for kind=prompt matches snapshot', async () => {
+    const header = await readLeaderboardHeader(makeWorkbookInputs('prompt'));
+    expect(header).toEqual([
+      'Rank',
+      'Variant',
+      'Variant provider ID',
+      'Category',
+      'Source',
+      'Persona',
+      'Rating',
+      'SE',
+      'CI Low',
+      'CI High',
+      'Win rate',
+      'Wins',
+      'Losses',
+      'Ties',
+      'Comparisons',
+      'Stability',
+      'Computed at',
+    ]);
+    // Contestant column reads as "Variant" — not "Model".
+    expect(header).toContain('Variant');
+    expect(header).not.toContain('Model');
   });
 });

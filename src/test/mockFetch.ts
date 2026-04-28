@@ -9,6 +9,15 @@ export interface MockRoute {
   status?: number;
   body?: unknown | (() => unknown);
   headers?: Record<string, string>;
+  /**
+   * SSE / streaming support for routes like
+   * `POST /api/campaigns/:id/generate`. When set, the response body is
+   * a `ReadableStream<Uint8Array>` produced by the factory and `body`
+   * is ignored. Default `content-type` flips to `text/event-stream`
+   * unless overridden via `headers`. The factory is invoked once per
+   * matching request so each call gets a fresh, lockable stream.
+   */
+  streamBody?: () => ReadableStream<Uint8Array>;
 }
 
 export function installMockFetch(routes: MockRoute[]) {
@@ -35,6 +44,17 @@ export function installMockFetch(routes: MockRoute[]) {
 
     if (!route) {
       throw new Error(`Unhandled fetch: ${method} ${url}`);
+    }
+
+    if (route.streamBody) {
+      const headers = new Headers({
+        'content-type': 'text/event-stream',
+        ...route.headers,
+      });
+      return new Response(route.streamBody(), {
+        status: route.status ?? 200,
+        headers,
+      });
     }
 
     const headers = new Headers({

@@ -73,6 +73,9 @@ export interface CampaignDetailData {
     kind: schema.CampaignKind;
     pinnedProviderModelId: string | null;
     pinnedSystemPrompt: string | null;
+    /** Plan 05 — `true` when variants run verbatim (no `{{input}}`
+     *  substitution). Always false for kind != 'prompt'. */
+    standaloneVariants: boolean;
   };
   stats: {
     promptCount: number;
@@ -87,9 +90,51 @@ export interface CampaignDetailData {
     id: string;
     providerModelId: string;
     displayName: string;
+    /**
+     * Plan 05 — variant body for prompt/system_prompt arenas. Null on
+     * `kind='model'` campaigns. The dashboard's variant-text side
+     * panel reads this directly so it can render the winner's text
+     * without a second round-trip.
+     */
+    variantText: string | null;
   }>;
   prompts: CampaignPromptRow[];
   ratings: CampaignLeaderboardRow[];
+  /**
+   * Plan 05 P1-B — per-input Best-of-N drilldown. One row per
+   * (prompt × variant) with the count of times this variant was the
+   * chosen winner for that prompt. Empty array for non-prompt-arena
+   * campaigns. Tournament/slider/approve-reject/multi-axis per-input
+   * scores are not aggregated in V1; the dashboard renders a "—" with
+   * an explanatory note for those modes.
+   */
+  perInputBestOfN: Array<{
+    promptId: string;
+    campaignModelId: string;
+    pickCount: number;
+  }>;
+  /**
+   * Plan 06 P2-A — per-(variant, prompt) score grid powering the
+   * heatmap leaderboard. Currently aggregates slider responses only
+   * (system-prompt arenas default to slider; the heatmap is most
+   * meaningful with absolute scores). Empty array on non-system-
+   * prompt arenas; unbounded on the system-prompt path. Sample size
+   * counts both human and simulated voters; CIs are normal-approx
+   * (mean ± 1.96 × stderr) which is fine for sample sizes ≥ 10 — for
+   * smaller cells the dashboard surfaces the count alongside so
+   * operators can read the noise themselves.
+   */
+  heatmapCells: Array<{
+    promptId: string;
+    campaignModelId: string;
+    /** Mean slider score (operator-defined min..max range). */
+    score: number;
+    /** Lower 95% CI bound, null when sampleSize < 2. */
+    ciLow: number | null;
+    /** Upper 95% CI bound, null when sampleSize < 2. */
+    ciHigh: number | null;
+    sampleSize: number;
+  }>;
 }
 
 export async function buildCampaignDetail(
@@ -156,6 +201,81 @@ export async function buildCampaignDetail(
   ]);
 
   const winStats = await computeWinStats(db, id, models);
+
+  // Plan 05 P1-B — per-input Best-of-N rollup. Only fetch when the
+  // campaign is a prompt arena; for kind='model' the dashboard doesn't
+  // surface the drilldown table.
+  const perInputBestOfN: CampaignDetailData['perInputBestOfN'] =
+    campaign.kind === 'prompt'
+      ? (
+          await db
+            .select({
+              promptId: schema.bestOfNResponses.promptId,
+              campaignModelId: schema.bestOfNResponses.chosenCampaignModelId,
+              pickCount: count(schema.bestOfNResponses.id),
+            })
+            .from(schema.bestOfNResponses)
+            .where(eq(schema.bestOfNResponses.campaignId, id))
+            .groupBy(
+              schema.bestOfNResponses.promptId,
+              schema.bestOfNResponses.chosenCampaignModelId,
+            )
+        ).map((row) => ({
+          promptId: row.promptId,
+          campaignModelId: row.campaignModelId,
+          pickCount: Number(row.pickCount),
+        }))
+      : [];
+
+  // Plan 06 P2-A — heatmap cells for system-prompt arenas. Aggregates
+  // slider responses by (prompt, variant) into mean + CI + sample
+  // size. Other modes (multi-axis, approve-reject, tournament,
+  // best-of-N) are out of scope for V1 — system-prompt arenas default
+  // to slider so this covers the realistic flow. Cells with zero
+  // responses don't appear in the array; the dashboard renders them
+  // as greyed empty cells via a left-join on the (variant × prompt)
+  // grid client-side.
+  //
+  // CI: normal-approx 95% interval. `STDDEV_SAMP` is null when
+  // sampleSize < 2; the helper below maps that to null CIs so the
+  // dashboard can render "—" without bogus zero-width bands.
+  const heatmapCells: CampaignDetailData['heatmapCells'] =
+    campaign.kind === 'system_prompt'
+      ? (
+          await db
+            .select({
+              promptId: schema.sliderResponses.promptId,
+              campaignModelId: schema.sliderResponses.campaignModelId,
+              mean: sql<string>`AVG(${schema.sliderResponses.score})::text`,
+              stddev: sql<string | null>`STDDEV_SAMP(${schema.sliderResponses.score})::text`,
+              sampleSize: count(schema.sliderResponses.id),
+            })
+            .from(schema.sliderResponses)
+            .where(eq(schema.sliderResponses.campaignId, id))
+            .groupBy(
+              schema.sliderResponses.promptId,
+              schema.sliderResponses.campaignModelId,
+            )
+        ).map((row) => {
+          const mean = Number(row.mean);
+          const n = Number(row.sampleSize);
+          const stddev = row.stddev != null ? Number(row.stddev) : null;
+          // 95% normal-approx interval. Standard error = stddev / sqrt(n).
+          // 1.96 is the Z-score for two-tailed 0.05.
+          const ciLow =
+            stddev != null && n >= 2 ? mean - (1.96 * stddev) / Math.sqrt(n) : null;
+          const ciHigh =
+            stddev != null && n >= 2 ? mean + (1.96 * stddev) / Math.sqrt(n) : null;
+          return {
+            promptId: row.promptId,
+            campaignModelId: row.campaignModelId,
+            score: mean,
+            ciLow,
+            ciHigh,
+            sampleSize: n,
+          };
+        })
+      : [];
   const enrichedRatings = ratings.map<CampaignLeaderboardRow>((rating) => {
     const winStat = winStats.get(rating.campaignModelId) ?? {
       wins: 0,
@@ -218,6 +338,7 @@ export async function buildCampaignDetail(
       kind: campaign.kind,
       pinnedProviderModelId: campaign.pinnedProviderModelId,
       pinnedSystemPrompt: campaign.pinnedSystemPrompt,
+      standaloneVariants: campaign.standaloneVariants,
     },
     stats: {
       promptCount: promptRows.length,
@@ -230,8 +351,14 @@ export async function buildCampaignDetail(
     },
     models: models.map((model) => ({
       id: model.id,
-      providerModelId: model.providerModelId,
+      // Polymorphic since Plan 04: `providerModelId` is null for
+      // variant contestants. Cast to keep the public type stable —
+      // existing readers that only render `displayName` are unaffected;
+      // dashboard surfaces that render the provider id should fall
+      // back to the campaign's pinned id when this is null.
+      providerModelId: model.providerModelId ?? '',
       displayName: model.displayName,
+      variantText: model.variantText,
     })),
     prompts: promptRows.map((prompt) => ({
       id: prompt.id,
@@ -242,6 +369,8 @@ export async function buildCampaignDetail(
       mode: prompt.mode,
     })),
     ratings: enrichedRatings,
+    perInputBestOfN,
+    heatmapCells,
   };
 }
 

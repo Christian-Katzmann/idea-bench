@@ -34,6 +34,14 @@ export default toVercelHandler(
           models: detail.models,
           prompts: detail.prompts,
           ratings: detail.ratings,
+          // Plan 05 P1-B — per-input Best-of-N drilldown rows. Empty
+          // for non-prompt-arena campaigns; the dashboard reads this
+          // to render the "By input" table without a second round-trip.
+          perInputBestOfN: detail.perInputBestOfN,
+          // Plan 06 P2-A — heatmap cells for system-prompt arenas
+          // (per-(variant, prompt) slider score grid). Empty for
+          // other kinds.
+          heatmapCells: detail.heatmapCells,
         },
         200,
       );

@@ -92,6 +92,13 @@
       "when": 1777355862866,
       "tag": "0012_arena_modes_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777386336406,
+      "tag": "0013_standalone_variants",
+      "breakpoints": true
     }
   ]
 }

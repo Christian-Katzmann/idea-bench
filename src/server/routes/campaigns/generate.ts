@@ -333,19 +333,25 @@ export const generateCampaignWebHandler = withAIOperator(async (request: Request
  *                       template gets `{{input}}` substituted with the
  *                       test case text. The system message is the
  *                       campaign's `pinnedSystemPrompt` if set, else
- *                       the per-test-case `context`.
+ *                       the per-test-case `context`. When the campaign
+ *                       has `standaloneVariants=true`, `renderTemplate`
+ *                       returns the variant body verbatim — Plan 05's
+ *                       advanced opt-in for fully-formed prompts that
+ *                       don't share a template.
  *   - `system_prompt` → campaign supplies the pinned model. The variant
  *                       text becomes the system message; the test case
  *                       text becomes the user prompt.
  *
  * No DB access, no I/O. Caller is responsible for pre-substituting
- * `@pN` references on the test case text (existing prompt-refs path),
- * and for the standalone-variants flag (Plan 05 wires it).
+ * `@pN` references on the test case text (existing prompt-refs path).
  */
 export interface AssembleCallInput {
   campaign: Pick<
     schema.Campaign,
-    'kind' | 'pinnedProviderModelId' | 'pinnedSystemPrompt'
+    | 'kind'
+    | 'pinnedProviderModelId'
+    | 'pinnedSystemPrompt'
+    | 'standaloneVariants'
   >;
   contestant: Pick<
     schema.CampaignModel,
@@ -373,12 +379,16 @@ export function assembleCall(input: AssembleCallInput): OpenRouterCallInput {
       // Pinned model is required by CHECK constraint when kind != 'model'.
       // Variant text is required by CHECK when kind != 'model'.
       // Held-constant system message: pinnedSystemPrompt wins, else the
-      // test-case's per-row context, else null.
+      // test-case's per-row context, else null. When `standaloneVariants`
+      // is true the variant body passes through verbatim and any test-case
+      // text is ignored (PRD: "variants run as-is, ignoring Inputs").
       return {
         providerModelId: campaign.pinnedProviderModelId!,
         context:
           campaign.pinnedSystemPrompt ?? testCase?.context ?? null,
-        prompt: renderTemplate(contestant.variantText!, testCase?.text ?? ''),
+        prompt: renderTemplate(contestant.variantText!, testCase?.text ?? '', {
+          standalone: campaign.standaloneVariants,
+        }),
       };
 
     case 'system_prompt':

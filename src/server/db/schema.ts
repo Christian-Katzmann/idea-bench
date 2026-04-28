@@ -227,6 +227,19 @@ export const campaigns = pgTable(
      * `campaigns_pinned_system_prompt_only_for_prompt` CHECK below.
      */
     pinnedSystemPrompt: text('pinned_system_prompt'),
+    /**
+     * Plan 05 — "Standalone variants" mode. When true, `renderTemplate`
+     * is called with `{ standalone: true }` so each variant's body
+     * passes through verbatim (a literal `{{input}}` inside the variant
+     * is preserved, not substituted). The operator opts into this when
+     * comparing fully-formed prompts that don't share a template.
+     *
+     * Only meaningful for kind='prompt'; other kinds keep it false.
+     * Enforced by the `campaigns_standalone_only_for_prompt` CHECK below.
+     */
+    standaloneVariants: boolean('standalone_variants')
+      .notNull()
+      .default(false),
   },
   // The list endpoint sorts by createdAt DESC; index that direction
   // explicitly so postgres uses it without an extra sort step.
@@ -252,6 +265,12 @@ export const campaigns = pgTable(
     check(
       'campaigns_pinned_system_prompt_only_for_prompt',
       sql`${t.kind} = 'prompt' OR ${t.pinnedSystemPrompt} IS NULL`,
+    ),
+    // Plan 05 — standalone-variants mode is a prompt-arena concept;
+    // model and system_prompt arenas keep it false.
+    check(
+      'campaigns_standalone_only_for_prompt',
+      sql`${t.kind} = 'prompt' OR ${t.standaloneVariants} = false`,
     ),
   ],
 );

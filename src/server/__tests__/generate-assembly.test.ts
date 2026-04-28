@@ -22,6 +22,7 @@ const modelCampaign = (): Campaign => ({
   kind: 'model',
   pinnedProviderModelId: null,
   pinnedSystemPrompt: null,
+  standaloneVariants: false,
 });
 
 const modelContestant = (): Contestant => ({
@@ -79,10 +80,12 @@ describe('assembleCall — kind=model (legacy)', () => {
 describe('assembleCall — kind=prompt', () => {
   const promptCampaign = (
     pinnedSystemPrompt: string | null = null,
+    standaloneVariants = false,
   ): Campaign => ({
     kind: 'prompt',
     pinnedProviderModelId: 'openai/gpt-5',
     pinnedSystemPrompt,
+    standaloneVariants,
   });
 
   it('uses the pinned model and substitutes {{input}} into the variant', () => {
@@ -134,13 +137,110 @@ describe('assembleCall — kind=prompt', () => {
     });
     expect(out.prompt).toBe('Variant: ');
   });
+
+  it('appends an empty line for a tokenless variant when test case is missing', () => {
+    // Counterpart to the {{input}}-bearing case above. With no test
+    // case and no token, the renderTemplate fallback still appends —
+    // this is the empty-input edge that Plan 05 will replace once the
+    // standalone-variants flag is wired through assembleCall (Phase 1).
+    const out = assembleCall({
+      campaign: promptCampaign(),
+      contestant: promptContestant('Standalone variant body.'),
+      testCase: null,
+    });
+    expect(out.prompt).toBe('Standalone variant body.\n\n');
+  });
+
+  // System-message resolution chain (PRD → "Held-constant context"):
+  //   pinnedSystemPrompt → testCase.context → null
+  // assembleCall returns it as `context`. Each rung verified once.
+  describe('system message fallback chain', () => {
+    it('rung 1: pinnedSystemPrompt wins over per-test-case context', () => {
+      const out = assembleCall({
+        campaign: promptCampaign('Pinned persona.'),
+        contestant: promptContestant('V: {{input}}'),
+        testCase: tc('hi', 'per-test context'),
+      });
+      expect(out.context).toBe('Pinned persona.');
+    });
+
+    it('rung 2: falls through to testCase.context when pinnedSystemPrompt is null', () => {
+      const out = assembleCall({
+        campaign: promptCampaign(null),
+        contestant: promptContestant('V: {{input}}'),
+        testCase: tc('hi', 'per-test context'),
+      });
+      expect(out.context).toBe('per-test context');
+    });
+
+    it('rung 3: returns null when neither rung is set', () => {
+      const out = assembleCall({
+        campaign: promptCampaign(null),
+        contestant: promptContestant('V: {{input}}'),
+        testCase: tc('hi', null),
+      });
+      expect(out.context).toBeNull();
+    });
+
+    it('rung 3: returns null when test case itself is missing', () => {
+      const out = assembleCall({
+        campaign: promptCampaign(null),
+        contestant: promptContestant('V: {{input}}'),
+        testCase: null,
+      });
+      expect(out.context).toBeNull();
+    });
+  });
+
+  // Plan 05 P1-C — Standalone-variants wiring through assembleCall.
+  // When the campaign flag is on, `renderTemplate({ standalone: true })`
+  // is called: variant body passes through verbatim including any
+  // literal `{{input}}` token; test-case text is ignored.
+  describe('standaloneVariants flag', () => {
+    it('returns the variant body verbatim when standaloneVariants is true', () => {
+      const out = assembleCall({
+        campaign: promptCampaign(null, true),
+        contestant: promptContestant('Translate: {{input}}'),
+        testCase: tc('hello world'),
+      });
+      // No substitution; literal `{{input}}` preserved.
+      expect(out.prompt).toBe('Translate: {{input}}');
+    });
+
+    it('preserves a tokenless variant verbatim instead of appending input', () => {
+      const out = assembleCall({
+        campaign: promptCampaign(null, true),
+        contestant: promptContestant('You are concise.'),
+        testCase: tc('extra input'),
+      });
+      // Without the flag this would be 'You are concise.\n\nextra input'.
+      expect(out.prompt).toBe('You are concise.');
+    });
+
+    it('still resolves the system message normally under standalone', () => {
+      // standaloneVariants only affects the user prompt; system context
+      // resolution (pinnedSystemPrompt → testCase.context → null) is
+      // unchanged.
+      const out = assembleCall({
+        campaign: promptCampaign('Pinned persona.', true),
+        contestant: promptContestant('V: {{input}}'),
+        testCase: tc('hi', 'per-test context'),
+      });
+      expect(out.context).toBe('Pinned persona.');
+      expect(out.prompt).toBe('V: {{input}}');
+    });
+  });
 });
 
 describe('assembleCall — kind=system_prompt', () => {
-  const sysCampaign = (): Campaign => ({
+  const sysCampaign = (
+    overrides: Partial<Campaign> = {},
+  ): Campaign => ({
     kind: 'system_prompt',
     pinnedProviderModelId: 'anthropic/claude-sonnet-4-6',
+    standaloneVariants: false,
     pinnedSystemPrompt: null,
+    ...overrides,
   });
 
   it("uses the variant text as the system message and the test case as the prompt", () => {
@@ -166,5 +266,33 @@ describe('assembleCall — kind=system_prompt', () => {
     });
     expect(out.context).toBe('Use {{input}} as the placeholder.');
     expect(out.prompt).toBe('hello');
+  });
+
+  it("ignores testCase.context — the variant body is the only system message", () => {
+    // Plan 06 — for system_prompt arenas, the variant IS the system
+    // message. Per-prompt context (used by kind='model') is irrelevant
+    // and would muddy the comparison if leaked into the call.
+    const out = assembleCall({
+      campaign: sysCampaign(),
+      contestant: promptContestant('You are concise.'),
+      testCase: tc('explain entropy', 'leftover per-prompt framing'),
+    });
+    expect(out.context).toBe('You are concise.');
+    expect(out.prompt).toBe('explain entropy');
+  });
+
+  it('ignores pinnedSystemPrompt even if accidentally set', () => {
+    // Plan 06 — pinnedSystemPrompt is reserved for kind='prompt' arenas
+    // (a held-constant persona around variants of a USER message). A
+    // system-prompt arena varies the system message itself; if a row
+    // somehow has pinnedSystemPrompt populated (legacy data, manual
+    // edit), it must NOT shadow the variant being tested.
+    const out = assembleCall({
+      campaign: sysCampaign({ pinnedSystemPrompt: 'leftover persona' }),
+      contestant: promptContestant('You are concise.'),
+      testCase: tc('explain entropy'),
+    });
+    expect(out.context).toBe('You are concise.');
+    expect(out.prompt).toBe('explain entropy');
   });
 });

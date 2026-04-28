@@ -69,6 +69,34 @@ export const activateCampaignWebHandler = withOperator(async (request: Request) 
     return json({ error: 'no prompts' }, 400);
   }
 
+  // Plan 05 P2-1 — templating-mismatch validation. For prompt arenas,
+  // a variant carrying the literal `{{input}}` token without any inputs
+  // configured is the PRD's "confusing failure" path: at vote-time the
+  // token would render literally. Catch it here, before flipping to
+  // active, and surface the offending variant IDs so the launch step
+  // can highlight them inline. Standalone-variants mode opts out — the
+  // variant body is the entire prompt and `prompts` is ignored.
+  if (
+    campaign.kind === 'prompt' &&
+    !campaign.standaloneVariants &&
+    prompts.length === 0
+  ) {
+    const variantIds = models
+      .filter(
+        (m) => typeof m.variantText === 'string' && m.variantText.includes('{{input}}'),
+      )
+      .map((m) => m.id);
+    if (variantIds.length > 0) {
+      return json(
+        {
+          error: '{{input}} token used but no inputs configured',
+          variantIds,
+        },
+        400,
+      );
+    }
+  }
+
   // Count successful generations across the full matrix.
   const promptIds = prompts.map((p) => p.id);
   const expected = prompts.length * models.length;

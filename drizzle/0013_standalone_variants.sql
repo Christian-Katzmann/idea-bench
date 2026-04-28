@@ -1,0 +1,2 @@
+ALTER TABLE "campaigns" ADD COLUMN "standalone_variants" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "campaigns" ADD CONSTRAINT "campaigns_standalone_only_for_prompt" CHECK ("campaigns"."kind" = 'prompt' OR "campaigns"."standalone_variants" = false);

@@ -20,7 +20,28 @@
  * baseline, then scale by mode.
  */
 import type { ProviderModelId } from '../../lib/models.js';
-import type { PromptMode } from '../db/schema.js';
+import type { CampaignKind, PromptMode } from '../db/schema.js';
+
+/**
+ * Plan 06 P1-17 — per-kind input-token surcharge applied to every
+ * judge call. The baseline `MODE_TOKENS[mode].in` was tuned for
+ * model-arena judging (the judge sees a short user prompt + the
+ * model outputs). For system-prompt arenas the test-case prompts
+ * tend to be more substantial real-world inputs and the variant body
+ * itself ends up in the judge's context window via the rendered
+ * generation — a 6k-char variant adds ~1.5k tokens to each call.
+ *
+ * The constant is intentionally conservative (rounds up). HELPER.md
+ * gotcha #3 flagged this for Phase 1; if estimates drift from actuals
+ * by > 25% on real runs we revise the number rather than the shape
+ * of the helper. Migrating to a per-call surcharge passed by the
+ * caller is the natural next step if precision becomes a problem.
+ */
+const KIND_INPUT_SURCHARGE: Record<CampaignKind, number> = {
+  model: 0,
+  prompt: 0,
+  system_prompt: 1500,
+};
 
 /** USD per 1M tokens, per provider. [inputPer1M, outputPer1M]. */
 const PRICING: Record<ProviderModelId, { input: number; output: number }> = {
@@ -58,6 +79,12 @@ export interface CostEstimateInput {
   campaignModelCount: number;
   /** Judge pool — weights must sum to 1.0. */
   modelMix: Array<{ providerModelId: string; weight: number }>;
+  /**
+   * Plan 06 P1-17 — campaign kind. When omitted, defaults to 'model'
+   * for back-compat with callers that don't yet thread the discriminator.
+   * 'system_prompt' bumps per-call input tokens via `KIND_INPUT_SURCHARGE`.
+   */
+  kind?: CampaignKind;
 }
 
 export interface CostEstimateOutput {
@@ -80,6 +107,8 @@ export interface CostEstimateOutput {
  */
 export function estimateRunCost(input: CostEstimateInput): CostEstimateOutput {
   const blended = blendedPricing(input.modelMix);
+  const kind = input.kind ?? 'model';
+  const inputSurcharge = KIND_INPUT_SURCHARGE[kind];
 
   const perMode = {} as Record<PromptMode, { calls: number; usd: number }>;
   const modes: PromptMode[] = [
@@ -113,8 +142,11 @@ export function estimateRunCost(input: CostEstimateInput): CostEstimateOutput {
         : tokens.callsPerPrompt;
     const calls = prompts * input.voterCount * callsPerPromptPerSeat;
     totalCalls += calls;
+    // Plan 06 P1-17 — per-kind input-token surcharge. Output tokens
+    // are unaffected (the judge's response shape doesn't change).
+    const inTokensPerCall = tokens.in + inputSurcharge;
     const usd =
-      (calls * tokens.in * blended.inputPer1M) / 1_000_000 +
+      (calls * inTokensPerCall * blended.inputPer1M) / 1_000_000 +
       (calls * tokens.out * blended.outputPer1M) / 1_000_000;
     perMode[mode] = { calls, usd };
     totalUsd += usd;

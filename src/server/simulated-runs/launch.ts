@@ -154,6 +154,11 @@ export async function createSimulatedRun(
     promptsByMode,
     campaignModelCount: campaignModels.length,
     modelMix,
+    // Plan 06 P1-17 — pass the campaign's kind so the per-call
+    // input-token surcharge applies to system-prompt arenas (long
+    // variant bodies inflate judge context). Older arenas (model /
+    // prompt) get a 0 surcharge.
+    kind: campaign.kind,
   });
 
   const ceilingUsd =

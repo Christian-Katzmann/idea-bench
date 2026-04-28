@@ -99,6 +99,58 @@ describe('estimateRunCost', () => {
     expect(result.perMode.best_of_n.calls).toBe(0);
     expect(result.perMode.qualitative.calls).toBe(0);
   });
+
+  // Plan 06 P1-23 — per-kind input-token surcharge.
+  describe('per-kind input-token surcharge (P1-17)', () => {
+    const baseInput = {
+      voterCount: 10,
+      promptsByMode: buildPromptsByMode({ slider: 5 }),
+      campaignModelCount: 2,
+      modelMix: defaultGenericMix(),
+    };
+
+    it('omits the surcharge for kind=model (default)', () => {
+      const noKind = estimateRunCost(baseInput);
+      const explicitModel = estimateRunCost({ ...baseInput, kind: 'model' });
+      expect(noKind.estimatedUsd).toBeCloseTo(explicitModel.estimatedUsd, 6);
+    });
+
+    it('omits the surcharge for kind=prompt (no system-message inflation)', () => {
+      const promptKind = estimateRunCost({ ...baseInput, kind: 'prompt' });
+      const noKind = estimateRunCost(baseInput);
+      expect(promptKind.estimatedUsd).toBeCloseTo(noKind.estimatedUsd, 6);
+    });
+
+    it('inflates kind=system_prompt cost vs. kind=prompt baseline', () => {
+      const promptKind = estimateRunCost({ ...baseInput, kind: 'prompt' });
+      const systemPromptKind = estimateRunCost({
+        ...baseInput,
+        kind: 'system_prompt',
+      });
+      expect(systemPromptKind.estimatedUsd).toBeGreaterThan(
+        promptKind.estimatedUsd,
+      );
+      // Surcharge of 1500 input tokens on top of slider's 800 baseline
+      // means system_prompt is ~2.875× the prompt-kind input cost.
+      // Output cost is unchanged so the total bump sits below 2.875×.
+      expect(systemPromptKind.estimatedUsd / promptKind.estimatedUsd)
+        .toBeGreaterThan(1.3);
+      expect(systemPromptKind.estimatedUsd / promptKind.estimatedUsd)
+        .toBeLessThan(3);
+    });
+
+    it('preserves call counts under per-kind branching (only token math shifts)', () => {
+      const promptKind = estimateRunCost({ ...baseInput, kind: 'prompt' });
+      const systemPromptKind = estimateRunCost({
+        ...baseInput,
+        kind: 'system_prompt',
+      });
+      expect(systemPromptKind.totalCalls).toBe(promptKind.totalCalls);
+      expect(systemPromptKind.perMode.slider.calls).toBe(
+        promptKind.perMode.slider.calls,
+      );
+    });
+  });
 });
 
 describe('defaultCostCeiling', () => {

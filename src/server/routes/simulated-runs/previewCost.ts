@@ -63,7 +63,12 @@ export const previewSimulatedRunCostWebHandler = withOperator(async (request) =>
   if (!mixCheck.ok) return json({ error: mixCheck.error }, 400);
 
   const db = getDb();
-  const [prompts, campaignModels] = await Promise.all([
+  const [campaignRow, prompts, campaignModels] = await Promise.all([
+    db
+      .select({ kind: schema.campaigns.kind })
+      .from(schema.campaigns)
+      .where(eq(schema.campaigns.id, campaignId))
+      .limit(1),
     db
       .select()
       .from(schema.prompts)
@@ -73,6 +78,8 @@ export const previewSimulatedRunCostWebHandler = withOperator(async (request) =>
       .from(schema.campaignModels)
       .where(eq(schema.campaignModels.campaignId, campaignId)),
   ]);
+  if (campaignRow.length === 0)
+    return json({ error: 'campaign not found' }, 404);
   if (prompts.length === 0)
     return json({ error: 'campaign has no prompts' }, 400);
   if (campaignModels.length === 0)
@@ -93,6 +100,7 @@ export const previewSimulatedRunCostWebHandler = withOperator(async (request) =>
     promptsByMode,
     campaignModelCount: campaignModels.length,
     modelMix,
+    kind: campaignRow[0].kind,
   });
 
   return json(

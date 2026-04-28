@@ -45,6 +45,7 @@ into the participant flow at `http://localhost:3000/vote/<slug>`.
 | `npm run db:push` | Push schema directly to `DATABASE_URL` (dev only — skips migration history). |
 | `npm run db:studio` | Launch Drizzle Studio against `DATABASE_URL`. |
 | `npm run db:seed` | Wipe and re-seed the demo data. **Refuses to run in `NODE_ENV=production`** unless `ALLOW_PROD_SEED=1`. |
+| `npm run db:seed-starter-personas` | Idempotently seed the curated starter persona library from `data/starter-personas.json` into the `personas` table. Skips rows whose `name` already exists. Safe to re-run; same `ALLOW_PROD_SEED=1` guardrail as `db:seed`. Required for the system-prompt-arena persona suggestion card to surface its pre-filtered list to first-time operators (Plan 06 P0-A drift remediation — edit the data file to curate the library). |
 
 ## Operator auth
 

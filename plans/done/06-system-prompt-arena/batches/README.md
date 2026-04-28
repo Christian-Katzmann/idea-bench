@@ -90,7 +90,7 @@ Phase progress is tracked in the phase README.
 
 | Phase                 | Purpose             | Status  |
 | --------------------- | ------------------- | ------- |
-| [phase-0](./phase-0/) | Pre-implementation review & feature-flag flip          | Pending |
-| [phase-1](./phase-1/) | Suite, variants, persona card, cost preview | Pending |
-| [phase-2](./phase-2/) | Heatmap leaderboard & polish  | Pending |
-| [tests](./tests/)     | Test Coverage       | Pending |
+| [phase-0](./phase-0/) | Pre-implementation review & feature-flag flip          | Done |
+| [phase-1](./phase-1/) | Suite, variants, persona card, cost preview | Done |
+| [phase-2](./phase-2/) | Heatmap leaderboard & polish  | Done |
+| [tests](./tests/)     | Test Coverage       | Done |

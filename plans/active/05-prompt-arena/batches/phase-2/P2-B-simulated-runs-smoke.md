@@ -7,11 +7,11 @@ prompt-arena campaign without code changes.
 
 ## Tasks
 
-- [ ] **P2-5**: End-to-end simulated-run test.
+- [x] **P2-5**: End-to-end simulated-run test.
       File: `src/server/__tests__/simulated-prompt-arena.test.ts` (new)
       Action: Build a fixture prompt-arena campaign (3 variants, 3 inputs, pinned model). Trigger a small simulated run (1 generic panel, 3 voters). Confirm: judge calls produce votes/scores; ratings compute; leaderboard renders.
 
-- [ ] **P2-6**: Persona panel smoke test.
+- [x] **P2-6**: Persona panel smoke test.
       File: same file
       Action: Trigger a persona-panel simulated run (1 starter persona, 3 voters). Confirm persona judging cells populate per-variant. Verify the "By persona" rating cut renders on the dashboard fixture.
 

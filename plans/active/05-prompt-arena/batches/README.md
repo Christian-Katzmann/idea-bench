@@ -90,7 +90,7 @@ Phase progress is tracked in the phase README.
 
 | Phase                 | Purpose             | Status  |
 | --------------------- | ------------------- | ------- |
-| [phase-0](./phase-0/) | Feature-flag flip & foundation verify          | Pending |
-| [phase-1](./phase-1/) | Variants step & per-input drilldown | Pending |
+| [phase-0](./phase-0/) | Feature-flag flip & foundation verify          | Complete |
+| [phase-1](./phase-1/) | Variants step & per-input drilldown | Complete |
 | [phase-2](./phase-2/) | Validation, exports & simulated-runs verification  | Pending |
 | [tests](./tests/)     | Test Coverage       | Pending |

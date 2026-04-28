@@ -19,9 +19,9 @@ listed prerequisite batches.
 
 ## Entry Criteria
 
-- [ ] Required implementation batches complete
-- [ ] `npm run lint && npm run build` passes
-- [ ] Existing tests passing
+- [x] Required implementation batches complete
+- [x] `npm run lint && npm run build` passes
+- [x] Existing tests passing
 
 ---
 

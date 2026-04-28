@@ -1,6 +1,6 @@
 # Phase 2 — Heatmap Leaderboard & Polish
 
-**Status:** Pending
+**Status:** Done
 
 ---
 
@@ -33,22 +33,25 @@ columns).
 
 ## Entry Criteria
 
-- [ ] Phase 1 complete; operators can run system-prompt arenas
-- [ ] Plan 04 Phase 2 complete (per-kind export switch wiring)
+- [x] Phase 1 complete; operators can run system-prompt arenas
+- [x] Plan 04 Phase 2 complete (per-kind export switch wiring)
 
 ---
 
 ## Exit Criteria
 
-- [ ] All P2 batches marked complete
-- [ ] Heatmap renders per-(variant, suite-prompt) cells with cell
+- [x] All P2 batches marked complete
+- [x] Heatmap renders per-(variant, suite-prompt) cells with cell
       tooltips
-- [ ] Across-suite rollup is default; heatmap is the toggle
-- [ ] CI badge renders on each variant row
-- [ ] Variant text side panel works (collapse/expand)
-- [ ] Persona-aware results panel renders when a persona panel ran
-- [ ] Per-kind export columns switched to "System Prompt Variant"
-- [ ] `npm run lint && npm run build && npx vitest run` passes
+- [x] Across-suite rollup is default; heatmap is the toggle
+- [x] CI badge renders on each variant row
+      *(rendered once next to the toggle as a shared `SuiteSizeBadge`
+      since N is identical for every variant in V1; documented in
+      P2-7 done-notes)*
+- [x] Variant text side panel works (collapse/expand)
+- [x] Persona-aware results panel renders when a persona panel ran
+- [x] Per-kind export columns switched to "System Prompt Variant"
+- [x] `npm run lint && npm run build && npx vitest run` passes
 
 ---
 

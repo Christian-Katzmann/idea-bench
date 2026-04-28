@@ -1,6 +1,6 @@
 # Phase 1 — Variants Creation Step & Per-Input Drilldown
 
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -58,8 +58,9 @@ per-input drilldown on the campaign dashboard.
 
 | Batch | File | Description | Status |
 |---|---|---|---|
-| P1-A | [P1-A-variants-step.md](./P1-A-variants-step.md) | Variants step + inputs step + pinned-model + Advanced disclosure | Pending |
-| P1-B | [P1-B-leaderboard-drilldown.md](./P1-B-leaderboard-drilldown.md) | Per-input drilldown + variant text panel | Pending |
+| P1-A | [P1-A-variants-step.md](./P1-A-variants-step.md) | Variants step + inputs step + pinned-model + Advanced disclosure | Complete |
+| P1-B | [P1-B-leaderboard-drilldown.md](./P1-B-leaderboard-drilldown.md) | Per-input drilldown + variant text panel | Complete |
+| P1-C | [P1-C-standalone-verbatim.md](./P1-C-standalone-verbatim.md) | Standalone-variants verbatim wiring (schema + assembleCall) | Complete |
 
 ---
 

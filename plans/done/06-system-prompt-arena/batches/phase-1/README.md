@@ -1,6 +1,6 @@
 # Phase 1 — Suite, Variants, Persona Suggestion, Cost Preview
 
-**Status:** Pending
+**Status:** Done
 
 ---
 
@@ -39,20 +39,20 @@ and cost preview at launch.
 
 ## Entry Criteria
 
-- [ ] Phase 0 complete; `ALLOWED_KINDS` widened; drift review signed
-- [ ] Plan 04 Phase 2 (kind picker) complete with system-prompt-arena
+- [x] Phase 0 complete; `ALLOWED_KINDS` widened; drift review signed
+- [x] Plan 04 Phase 2 (kind picker) complete with system-prompt-arena
       option enabled
 
 ---
 
 ## Exit Criteria
 
-- [ ] All P1 batches marked complete
-- [ ] Operator can run a system-prompt arena end-to-end via UI
-- [ ] Voter sees Slider UI by default
-- [ ] Persona panel triggers on launch with selected personas
-- [ ] Cost preview renders with accurate estimate
-- [ ] `npm run lint && npm run build && npx vitest run` passes
+- [x] All P1 batches marked complete
+- [x] Operator can run a system-prompt arena end-to-end via UI
+- [x] Voter sees Slider UI by default
+- [x] Persona panel triggers on launch with selected personas
+- [x] Cost preview renders with accurate estimate
+- [x] `npm run lint && npm run build && npx vitest run` passes
 
 ---
 

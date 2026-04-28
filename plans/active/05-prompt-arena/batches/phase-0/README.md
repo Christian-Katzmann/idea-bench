@@ -1,6 +1,6 @@
 # Phase 0 — Feature-flag flip + foundation verify
 
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -53,7 +53,7 @@ sound for prompt-arena use before building any UI.
 
 | Batch | File | Description | Status |
 |---|---|---|---|
-| P0-A | [P0-A-flag-flip-and-verify.md](./P0-A-flag-flip-and-verify.md) | Widen `ALLOWED_KINDS`; smoke-test the API path; reverify renderTemplate | Pending |
+| P0-A | [P0-A-flag-flip-and-verify.md](./P0-A-flag-flip-and-verify.md) | Widen `ALLOWED_KINDS`; smoke-test the API path; reverify renderTemplate | Complete |
 
 ---
 

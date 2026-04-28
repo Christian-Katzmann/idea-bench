@@ -1,6 +1,6 @@
 # Phase 0 — Pre-Implementation Review & Feature-Flag Flip
 
-**Status:** Pending
+**Status:** Done
 
 ---
 
@@ -39,22 +39,24 @@ working around assumptions that no longer hold.
 
 ## Entry Criteria
 
-- [ ] Plan 04 (Foundation) shipped and merged
-- [ ] Plan 05 (Prompt Arena) shipped and merged
-- [ ] Plan 01 multi-mode handlers shipped (Slider in particular)
-- [ ] Plan 02 (Simulated Runs + Personas) shipped, persona library
+- [x] Plan 04 (Foundation) shipped and merged
+- [x] Plan 05 (Prompt Arena) shipped and merged
+- [x] Plan 01 multi-mode handlers shipped (Slider in particular)
+- [~] Plan 02 (Simulated Runs + Personas) shipped, persona library
       seeded with starter personas
+      *(Persona infrastructure live; starter library seeding deferred —
+      see P0-A Drift Notes. Operator empty-state CTA covers the gap.)*
 
 ---
 
 ## Exit Criteria
 
-- [ ] **P0-A drift review completed and findings documented** (in the
+- [x] **P0-A drift review completed and findings documented** (in the
       batch file's "Drift Notes" section, even if "no drift")
-- [ ] Any high-impact drift escalated to user before proceeding
-- [ ] `ALLOWED_KINDS` widened to include `'system_prompt'`
-- [ ] API smoke test passes for a minimal `kind='system_prompt'` payload
-- [ ] `npm run lint && npm run build && npx vitest run` passes
+- [x] Any high-impact drift escalated to user before proceeding
+- [x] `ALLOWED_KINDS` widened to include `'system_prompt'`
+- [x] API smoke test passes for a minimal `kind='system_prompt'` payload
+- [x] `npm run lint && npm run build && npx vitest run` passes
 
 ---
 

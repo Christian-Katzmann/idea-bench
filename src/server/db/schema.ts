@@ -56,6 +56,39 @@ export const campaignStatusEnum = pgEnum('campaign_status', [
 ]);
 
 /**
+ * Discriminator for what a campaign varies (the X axis):
+ *   - 'model'         varies provider models across a fixed prompt set (today)
+ *   - 'prompt'        varies user-prompt variants on a pinned model
+ *   - 'system_prompt' varies system-prompt variants on a pinned model
+ *
+ * Plan 04 ("Arena Modes Foundation") generalizes campaigns into kinded
+ * experiments. Existing rows migrate to 'model'. The API rejects
+ * non-'model' kinds until Plans 05/06 flip their feature flags.
+ */
+export const campaignKindEnum = pgEnum('campaign_kind', [
+  'model',
+  'prompt',
+  'system_prompt',
+]);
+
+/**
+ * Frozen registry state for the campaign's pinned generator model,
+ * captured at launch time. Mirrors the audit-safety pattern used by
+ * `simulated_runs.modelMix`: registry edits (rename, deprecation,
+ * params change) must not retroactively rewrite a campaign's history.
+ *
+ * Populated only when `campaigns.kind != 'model'`; backfilled onto
+ * existing model-arena rows by the 0012 migration so the audit story
+ * is consistent across kinds.
+ */
+export interface PinnedModelSnapshot {
+  providerModelId: string;
+  displayName: string;
+  params: Record<string, unknown>;
+  snapshotAt: string;
+}
+
+/**
  * How voters identify themselves when starting a campaign:
  *   - 'anonymous'       UI shows only a "Start voting" button; email field
  *                       is hidden. Any email sent in the payload is ignored.
@@ -165,6 +198,35 @@ export const campaigns = pgTable(
      *  preserved until purge so analytics aren't disrupted by undo-able
      *  deletes. */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /**
+     * Plan 04 — what this campaign varies. 'model' is the legacy default;
+     * 'prompt' and 'system_prompt' are unblocked by Plans 05 and 06.
+     * Voter UX never surfaces this — voters compare outputs regardless.
+     */
+    kind: campaignKindEnum('kind').notNull().default('model'),
+    /**
+     * Plan 04 — generator model held constant for kind ∈ {prompt, system_prompt}.
+     * NOT NULL when kind != 'model'; NULL for kind = 'model' (the legacy
+     * shape stores per-model contestants in `campaign_models`). Enforced
+     * by the `campaigns_pinned_model_*` CHECK constraints below.
+     */
+    pinnedProviderModelId: text('pinned_provider_model_id'),
+    /**
+     * Plan 04 — frozen registry state for the pinned model, captured at
+     * launch. Backfilled onto existing model-arena rows by the 0012
+     * migration. See `PinnedModelSnapshot` for the shape.
+     */
+    pinnedModelSnapshot:
+      jsonb('pinned_model_snapshot').$type<PinnedModelSnapshot>(),
+    /**
+     * Plan 04 — held-constant system message for kind='prompt' arenas
+     * (operators iterating on user-prompt phrasing often want a sticky
+     * persona). Distinct from a system-prompt arena, where the system
+     * message *is* the variable. NULL when kind != 'prompt' or when no
+     * system message is desired. Enforced by the
+     * `campaigns_pinned_system_prompt_only_for_prompt` CHECK below.
+     */
+    pinnedSystemPrompt: text('pinned_system_prompt'),
   },
   // The list endpoint sorts by createdAt DESC; index that direction
   // explicitly so postgres uses it without an extra sort step.
@@ -174,6 +236,23 @@ export const campaigns = pgTable(
   (t) => [
     index('campaigns_created_at').on(sql`${t.createdAt} desc`),
     index('campaigns_deleted_at').on(t.deletedAt, t.createdAt),
+    // Plan 04 — kind/contestant alignment. When the campaign varies a
+    // non-model axis, a generator model must be pinned. When it varies
+    // models (legacy), no pin is allowed (the per-model contestants in
+    // `campaign_models` are authoritative).
+    check(
+      'campaigns_pinned_model_when_kinded',
+      sql`${t.kind} = 'model' OR ${t.pinnedProviderModelId} IS NOT NULL`,
+    ),
+    check(
+      'campaigns_no_pinned_model_when_model',
+      sql`${t.kind} != 'model' OR ${t.pinnedProviderModelId} IS NULL`,
+    ),
+    // Held-constant system prompt only makes sense for prompt arenas.
+    check(
+      'campaigns_pinned_system_prompt_only_for_prompt',
+      sql`${t.kind} = 'prompt' OR ${t.pinnedSystemPrompt} IS NULL`,
+    ),
   ],
 );
 
@@ -246,6 +325,21 @@ export const prompts = pgTable(
   (t) => [index('prompts_campaign_order').on(t.campaignId, t.orderIndex)],
 );
 
+/**
+ * Plan 04 misnomer note: this table is now polymorphic — each row is a
+ * "contestant" (the X axis of a vary-X-hold-Y experiment) and may hold a
+ * model (kind='model'), a user-prompt variant (kind='prompt'), or a
+ * system-prompt variant (kind='system_prompt'). The table name stays
+ * `campaign_models` to avoid a churn pass through `campaign_model_id` FK
+ * columns on `generations`, the 6 mode-specific response tables, and
+ * `ratings`. Downstream code treats the FK as "contestant id".
+ *
+ * Per-kind shape (enforced by CHECK constraints below and by the
+ * campaign-level `kind` discriminator):
+ *   kind='model'         → provider_model_id NOT NULL, variant_text NULL
+ *   kind='prompt'        → variant_text NOT NULL, provider_model_id NULL
+ *   kind='system_prompt' → variant_text NOT NULL, provider_model_id NULL
+ */
 export const campaignModels = pgTable(
   'campaign_models',
   {
@@ -253,15 +347,47 @@ export const campaignModels = pgTable(
     campaignId: uuid('campaign_id')
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
-    providerModelId: text('provider_model_id').notNull(),
+    /**
+     * Polymorphic — required for kind='model' contestants, NULL otherwise.
+     * Mirrors the campaign-level `kind` discriminator; per-row CHECK
+     * constraint enforces the per-kind shape.
+     */
+    providerModelId: text('provider_model_id'),
     displayName: text('display_name').notNull(),
     params: jsonb('params').notNull().default({}),
+    /**
+     * Plan 04 — per-kind discriminator. Must match the parent campaign's
+     * `kind` (enforced at the API layer; Postgres CHECK can't reference
+     * another table). 'model' default keeps existing rows valid.
+     */
+    kind: campaignKindEnum('kind').notNull().default('model'),
+    /**
+     * Plan 04 — variant body for kind ∈ {prompt, system_prompt}:
+     *   - kind='prompt'         → user-prompt-variant template, optionally
+     *                             containing `{{input}}` for substitution
+     *                             from the campaign's `prompts` test cases
+     *   - kind='system_prompt'  → system-message body sent verbatim
+     * NULL for kind='model'. Enforced by the
+     * `campaign_models_*_shape` CHECK constraints below.
+     */
+    variantText: text('variant_text'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
     uniqueIndex('uniq_campaign_model').on(t.campaignId, t.providerModelId),
+    // Plan 04 — per-kind nullability shape. Together these enforce that a
+    // contestant row is either a model (provider id, no variant text) or
+    // a prompt/system-prompt variant (variant text, no provider id).
+    check(
+      'campaign_models_model_shape',
+      sql`${t.kind} != 'model' OR (${t.providerModelId} IS NOT NULL AND ${t.variantText} IS NULL)`,
+    ),
+    check(
+      'campaign_models_variant_shape',
+      sql`${t.kind} = 'model' OR (${t.variantText} IS NOT NULL AND ${t.providerModelId} IS NULL)`,
+    ),
   ],
 );
 
@@ -1051,6 +1177,7 @@ export type CampaignStatus = (typeof campaignStatusEnum.enumValues)[number];
 export type VoteWinner = (typeof voteWinnerEnum.enumValues)[number];
 export type VotingMode = (typeof votingModeEnum.enumValues)[number];
 export type PromptMode = (typeof promptModeEnum.enumValues)[number];
+export type CampaignKind = (typeof campaignKindEnum.enumValues)[number];
 
 export type Persona = typeof personas.$inferSelect;
 export type NewPersona = typeof personas.$inferInsert;

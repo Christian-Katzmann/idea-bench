@@ -64,6 +64,15 @@ export interface CampaignDetailData {
     emailPromptMessage: string | null;
     createdAt: Date;
     closedAt: Date | null;
+    /**
+     * Plan 04 — what this campaign varies. Drives the dashboard "kind
+     * pill" + per-kind export column headers. `pinnedModelSnapshot` is
+     * intentionally NOT exposed here — it's audit data that Plans 05/06
+     * surface only where needed.
+     */
+    kind: schema.CampaignKind;
+    pinnedProviderModelId: string | null;
+    pinnedSystemPrompt: string | null;
   };
   stats: {
     promptCount: number;
@@ -206,6 +215,9 @@ export async function buildCampaignDetail(
       emailPromptMessage: campaign.emailPromptMessage,
       createdAt: campaign.createdAt,
       closedAt: campaign.closedAt,
+      kind: campaign.kind,
+      pinnedProviderModelId: campaign.pinnedProviderModelId,
+      pinnedSystemPrompt: campaign.pinnedSystemPrompt,
     },
     stats: {
       promptCount: promptRows.length,

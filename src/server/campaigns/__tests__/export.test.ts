@@ -16,6 +16,12 @@ const CAMPAIGN = {
   emailPromptMessage: null,
   createdAt: new Date('2026-04-17T09:00:00.000Z'),
   closedAt: null,
+  // Plan 04 — type completeness. These tests cover the model-arena
+  // legacy path; the per-kind variant headers get their own tests in
+  // src/server/__tests__/exports.test.ts.
+  kind: 'model' as const,
+  pinnedProviderModelId: null,
+  pinnedSystemPrompt: null,
 };
 
 describe('buildCampaignResultsCsv', () => {

@@ -1,6 +1,58 @@
 import type { CampaignDetailData } from './detail.js';
 import type * as schema from '../db/schema.js';
 
+/**
+ * Plan 04 — per-kind column header copy. The export rows still carry
+ * the same data shape (one contestant row, one provider/variant id);
+ * only the header LABEL shifts so a prompt-arena export reads as
+ * "variant_*" rather than "model_*". BI pipelines that consume these
+ * CSVs will need to handle the per-kind header — operators of
+ * non-model arenas care about variants, not models.
+ */
+interface KindHeaders {
+  /** "model_display_name" / "variant_display_name" / etc. */
+  display: string;
+  /** "provider_model_id" / "variant_provider_id" / etc. */
+  providerId: string;
+  /** Wide A-side variant for the responses CSV. */
+  modelADisplay: string;
+  modelAProviderId: string;
+  modelBDisplay: string;
+  modelBProviderId: string;
+}
+
+export function csvHeadersForKind(kind: schema.CampaignKind): KindHeaders {
+  switch (kind) {
+    case 'model':
+      return {
+        display: 'model_display_name',
+        providerId: 'provider_model_id',
+        modelADisplay: 'model_a_display_name',
+        modelAProviderId: 'model_a_provider_id',
+        modelBDisplay: 'model_b_display_name',
+        modelBProviderId: 'model_b_provider_id',
+      };
+    case 'prompt':
+      return {
+        display: 'variant_display_name',
+        providerId: 'variant_provider_id',
+        modelADisplay: 'variant_a_display_name',
+        modelAProviderId: 'variant_a_provider_id',
+        modelBDisplay: 'variant_b_display_name',
+        modelBProviderId: 'variant_b_provider_id',
+      };
+    case 'system_prompt':
+      return {
+        display: 'system_prompt_variant_display_name',
+        providerId: 'system_prompt_variant_provider_id',
+        modelADisplay: 'system_prompt_variant_a_display_name',
+        modelAProviderId: 'system_prompt_variant_a_provider_id',
+        modelBDisplay: 'system_prompt_variant_b_display_name',
+        modelBProviderId: 'system_prompt_variant_b_provider_id',
+      };
+  }
+}
+
 export function buildCampaignResultsCsv(detail: CampaignDetailData): string {
   const rows = detail.ratings
     .filter((rating) => rating.category === 'overall')
@@ -29,14 +81,15 @@ export function buildCampaignResultsCsv(detail: CampaignDetailData): string {
       detail.stats.anonymousParticipants,
     ]);
 
+  const headers = csvHeadersForKind(detail.campaign.kind);
   return [
     [
       'campaign_name',
       'campaign_status',
       'share_slug',
       'rank',
-      'model_display_name',
-      'provider_model_id',
+      headers.display,
+      headers.providerId,
       'rating',
       'ci_low',
       'ci_high',
@@ -320,6 +373,7 @@ export function buildCampaignResponsesCsv(
   // mental model operators have when auditing a campaign.
   events.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
+  const headers = csvHeadersForKind(inputs.campaign.kind);
   const header = [
     'campaign_name',
     'share_slug',
@@ -331,10 +385,10 @@ export function buildCampaignResponsesCsv(
     'participant_id',
     'email',
     'session_id',
-    'model_a_display_name',
-    'model_a_provider_id',
-    'model_b_display_name',
-    'model_b_provider_id',
+    headers.modelADisplay,
+    headers.modelAProviderId,
+    headers.modelBDisplay,
+    headers.modelBProviderId,
     'tournament_bracket',
     'tournament_winner',
     'slider_score',

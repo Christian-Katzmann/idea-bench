@@ -9,6 +9,30 @@ import { withOperator } from '../../src/server/auth/middleware.js';
 import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /**
+ * Plan 04 feature flag. The schema and validation accept all three
+ * arena kinds, but only `model` is reachable via the API until Plans
+ * 05 (Prompt Arena) and 06 (System-Prompt Arena) ship. Those plans
+ * widen this set when their feature flips.
+ */
+export const ALLOWED_KINDS = new Set<schema.CampaignKind>(['model']);
+
+/**
+ * Per-kind contestant minimums (PRD → "Creation UX" minimums table):
+ *   - model         → ≥4 (tournament bracket constraint)
+ *   - prompt        → ≥2
+ *   - system_prompt → ≥2
+ */
+const KIND_MIN_CONTESTANTS: Record<schema.CampaignKind, number> = {
+  model: 4,
+  prompt: 2,
+  system_prompt: 2,
+};
+
+const VARIANT_TEXT_MAX = 8000;
+const PINNED_SYSTEM_PROMPT_MAX = 8000;
+const VARIANT_DISPLAY_NAME_MAX = 80;
+
+/**
  * POST /api/campaigns
  *
  * Creates a new campaign in `draft` status along with its prompts and
@@ -73,17 +97,42 @@ export default toVercelHandler(withOperator(async (request: Request) => {
 
   const parsed = parseCreatePayload(body);
   if ('error' in parsed) return json({ error: parsed.error }, 400);
-  const { name, description, categories, prompts, providerModelIds } = parsed;
+
+  // Plan 04 feature flag — schema permits all kinds; the API only
+  // accepts those Plans 05/06 have flipped on. Reject early so the
+  // operator gets a clean error instead of a downstream surprise.
+  if (!ALLOWED_KINDS.has(parsed.kind)) {
+    return json(
+      { error: 'arena kind not yet enabled', kind: parsed.kind },
+      400,
+    );
+  }
+
+  const { name, description, categories, prompts, kind } = parsed;
 
   const db = getDb();
   const selectableModels = await listSelectableRegistryModels(db);
   const selectableModelIds = new Set(
     selectableModels.map((model) => model.providerModelId),
   );
-  for (const providerModelId of providerModelIds) {
-    if (!selectableModelIds.has(providerModelId)) {
+
+  // Validate models the contestants reference (kind='model') OR the
+  // pinned generator model (kind ∈ {prompt, system_prompt}).
+  if (kind === 'model') {
+    for (const providerModelId of parsed.providerModelIds) {
+      if (!selectableModelIds.has(providerModelId)) {
+        return json(
+          { error: `providerModelId is not currently selectable: ${providerModelId}` },
+          400,
+        );
+      }
+    }
+  } else {
+    if (!selectableModelIds.has(parsed.pinnedProviderModelId)) {
       return json(
-        { error: `providerModelId is not currently selectable: ${providerModelId}` },
+        {
+          error: `pinnedProviderModelId is not currently selectable: ${parsed.pinnedProviderModelId}`,
+        },
         400,
       );
     }
@@ -97,6 +146,14 @@ export default toVercelHandler(withOperator(async (request: Request) => {
       description,
       categories,
       status: 'draft',
+      kind,
+      // Plan 04 — `pinnedModelSnapshot` stays NULL at create time.
+      // The activate handler captures the snapshot at launch so
+      // operator edits to the registry between create and activate
+      // are reflected in the frozen value.
+      pinnedProviderModelId:
+        kind === 'model' ? null : parsed.pinnedProviderModelId,
+      pinnedSystemPrompt: kind === 'prompt' ? parsed.pinnedSystemPrompt : null,
     })
     .returning();
 
@@ -119,14 +176,24 @@ export default toVercelHandler(withOperator(async (request: Request) => {
   const modelRows = await db
     .insert(schema.campaignModels)
     .values(
-      providerModelIds.map((id) => {
-        const entry = lookupModel(id)!; // validated above
-        return {
-          campaignId: campaign.id,
-          providerModelId: entry.providerModelId,
-          displayName: entry.displayName,
-        };
-      }),
+      kind === 'model'
+        ? parsed.providerModelIds.map((id) => {
+            const entry = lookupModel(id)!; // validated above
+            return {
+              campaignId: campaign.id,
+              kind,
+              providerModelId: entry.providerModelId,
+              displayName: entry.displayName,
+              variantText: null,
+            };
+          })
+        : parsed.variants.map((v, i) => ({
+            campaignId: campaign.id,
+            kind,
+            providerModelId: null,
+            displayName: v.displayName ?? `Variant ${i + 1}`,
+            variantText: v.text,
+          })),
     )
     .returning();
 
@@ -135,31 +202,68 @@ export default toVercelHandler(withOperator(async (request: Request) => {
     {
       id: campaign.id,
       shareSlug: campaign.shareSlug,
+      kind: campaign.kind,
       prompts: promptRows.map((p) => ({ id: p.id, orderIndex: p.orderIndex })),
       models: modelRows.map((m) => ({
         id: m.id,
+        kind: m.kind,
         providerModelId: m.providerModelId,
         displayName: m.displayName,
+        variantText: m.variantText,
       })),
     },
     201,
   );
 }));
 
-interface ParsedPayload {
+interface ParsedPromptRow {
+  text: string;
+  context?: string;
+  categoryTags?: string[];
+  structured?: schema.PromptStructured;
+  mode?: schema.PromptMode;
+  modeConfig?: schema.PromptModeConfig;
+}
+
+interface ParsedVariant {
+  text: string;
+  displayName?: string;
+}
+
+interface ParsedShared {
   name: string;
   description: string;
   categories: string[];
-  prompts: Array<{
-    text: string;
-    context?: string;
-    categoryTags?: string[];
-    structured?: schema.PromptStructured;
-    mode?: schema.PromptMode;
-    modeConfig?: schema.PromptModeConfig;
-  }>;
-  providerModelIds: string[];
+  prompts: ParsedPromptRow[];
 }
+
+/**
+ * Discriminated union: 'model' carries `providerModelIds`; 'prompt' /
+ * 'system_prompt' carry `variants` + `pinnedProviderModelId` (plus an
+ * optional `pinnedSystemPrompt` for 'prompt' only). The handler
+ * narrows on `kind` before reading kind-specific fields.
+ */
+type ParsedPayload = ParsedShared &
+  (
+    | { kind: 'model'; providerModelIds: string[] }
+    | {
+        kind: 'prompt';
+        variants: ParsedVariant[];
+        pinnedProviderModelId: string;
+        pinnedSystemPrompt: string | null;
+      }
+    | {
+        kind: 'system_prompt';
+        variants: ParsedVariant[];
+        pinnedProviderModelId: string;
+      }
+  );
+
+const CAMPAIGN_KINDS: readonly schema.CampaignKind[] = [
+  'model',
+  'prompt',
+  'system_prompt',
+] as const;
 
 const PROMPT_MODES: readonly schema.PromptMode[] = [
   'tournament',
@@ -286,7 +390,7 @@ function parseModeConfig(
   return { ok: true, value: null };
 }
 
-function parseCreatePayload(
+export function parseCreatePayload(
   input: unknown,
 ): ParsedPayload | { error: string } {
   if (typeof input !== 'object' || input === null)
@@ -303,10 +407,20 @@ function parseCreatePayload(
     ? o.categories.filter((x): x is string => typeof x === 'string')
     : [];
 
+  // Plan 04 — `kind` defaults to 'model' for back-compat with existing
+  // clients. Validated against the enum.
+  let kind: schema.CampaignKind = 'model';
+  if (o.kind !== undefined) {
+    if (typeof o.kind !== 'string' || !CAMPAIGN_KINDS.includes(o.kind as schema.CampaignKind)) {
+      return { error: `unknown arena kind: ${String(o.kind)}` };
+    }
+    kind = o.kind as schema.CampaignKind;
+  }
+
   if (!Array.isArray(o.prompts) || o.prompts.length === 0) {
     return { error: 'prompts[] must be non-empty' };
   }
-  const prompts: ParsedPayload['prompts'] = [];
+  const prompts: ParsedPromptRow[] = [];
   for (const raw of o.prompts) {
     if (typeof raw !== 'object' || raw === null)
       return { error: 'each prompt must be an object' };
@@ -345,24 +459,119 @@ function parseCreatePayload(
     });
   }
 
-  if (
-    !Array.isArray(o.providerModelIds) ||
-    o.providerModelIds.length < 4 ||
-    !o.providerModelIds.every((x) => typeof x === 'string')
-  ) {
-    return {
-      error: 'providerModelIds[] requires at least 4 entries (tournament minimum)',
-    };
-  }
-  const ids = Array.from(new Set(o.providerModelIds as string[]));
-  if (ids.length < 4)
-    return { error: 'providerModelIds must have at least 4 distinct entries' };
-  for (const id of ids) {
-    if (!isKnownModel(id))
-      return { error: `unknown providerModelId: ${id}` };
+  const shared: ParsedShared = { name, description, categories, prompts };
+
+  if (kind === 'model') {
+    // Reject kind-specific fields on the legacy path. Operators flip
+    // these only after explicitly choosing a non-model kind.
+    if (o.variants !== undefined) {
+      return { error: 'variants[] is only allowed for prompt/system_prompt kinds' };
+    }
+    if (o.pinnedProviderModelId !== undefined) {
+      return {
+        error: 'pinnedProviderModelId is only allowed for prompt/system_prompt kinds',
+      };
+    }
+    if (o.pinnedSystemPrompt !== undefined) {
+      return { error: 'pinnedSystemPrompt is only allowed for prompt kinds' };
+    }
+
+    const min = KIND_MIN_CONTESTANTS.model;
+    if (
+      !Array.isArray(o.providerModelIds) ||
+      o.providerModelIds.length < min ||
+      !o.providerModelIds.every((x) => typeof x === 'string')
+    ) {
+      return {
+        error: `providerModelIds[] requires at least ${min} entries (tournament minimum)`,
+      };
+    }
+    const ids = Array.from(new Set(o.providerModelIds as string[]));
+    if (ids.length < min)
+      return {
+        error: `providerModelIds must have at least ${min} distinct entries`,
+      };
+    for (const id of ids) {
+      if (!isKnownModel(id))
+        return { error: `unknown providerModelId: ${id}` };
+    }
+    return { ...shared, kind, providerModelIds: ids };
   }
 
-  return { name, description, categories, prompts, providerModelIds: ids };
+  // kind ∈ {prompt, system_prompt}: variant-driven contestants + pinned model.
+  if (o.providerModelIds !== undefined) {
+    return {
+      error: 'providerModelIds[] is only allowed for model kind',
+    };
+  }
+  if (
+    typeof o.pinnedProviderModelId !== 'string' ||
+    !o.pinnedProviderModelId.trim()
+  ) {
+    return { error: 'pinnedProviderModelId is required for prompt/system_prompt kinds' };
+  }
+  const pinnedProviderModelId = o.pinnedProviderModelId.trim();
+  if (!isKnownModel(pinnedProviderModelId)) {
+    return { error: `unknown pinnedProviderModelId: ${pinnedProviderModelId}` };
+  }
+
+  const min = KIND_MIN_CONTESTANTS[kind];
+  if (!Array.isArray(o.variants) || o.variants.length < min) {
+    return { error: `variants[] requires at least ${min} entries for ${kind} kind` };
+  }
+  const variants: ParsedVariant[] = [];
+  for (let i = 0; i < o.variants.length; i++) {
+    const raw = o.variants[i];
+    if (typeof raw !== 'object' || raw === null) {
+      return { error: `variants[${i}] must be an object` };
+    }
+    const v = raw as Record<string, unknown>;
+    const text = typeof v.text === 'string' ? v.text.trim() : '';
+    if (!text) return { error: `variants[${i}].text is required` };
+    if (text.length > VARIANT_TEXT_MAX) {
+      return { error: `variants[${i}].text exceeds ${VARIANT_TEXT_MAX} chars` };
+    }
+    let displayName: string | undefined;
+    if (typeof v.displayName === 'string' && v.displayName.trim()) {
+      displayName = v.displayName.trim().slice(0, VARIANT_DISPLAY_NAME_MAX);
+    }
+    variants.push({ text, displayName });
+  }
+
+  if (kind === 'prompt') {
+    if (
+      o.pinnedSystemPrompt !== undefined &&
+      o.pinnedSystemPrompt !== null &&
+      typeof o.pinnedSystemPrompt !== 'string'
+    ) {
+      return { error: 'pinnedSystemPrompt must be a string' };
+    }
+    let pinnedSystemPrompt: string | null = null;
+    if (typeof o.pinnedSystemPrompt === 'string' && o.pinnedSystemPrompt.trim()) {
+      const sp = o.pinnedSystemPrompt.trim();
+      if (sp.length > PINNED_SYSTEM_PROMPT_MAX) {
+        return {
+          error: `pinnedSystemPrompt exceeds ${PINNED_SYSTEM_PROMPT_MAX} chars`,
+        };
+      }
+      pinnedSystemPrompt = sp;
+    }
+    return {
+      ...shared,
+      kind,
+      variants,
+      pinnedProviderModelId,
+      pinnedSystemPrompt,
+    };
+  }
+
+  // kind === 'system_prompt'
+  if (o.pinnedSystemPrompt !== undefined) {
+    return {
+      error: 'pinnedSystemPrompt is only allowed for prompt kinds (the system message IS the variant for system_prompt kinds)',
+    };
+  }
+  return { ...shared, kind, variants, pinnedProviderModelId };
 }
 
 type ParseStructuredResult =

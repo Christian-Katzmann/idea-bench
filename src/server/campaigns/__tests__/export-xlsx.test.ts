@@ -36,6 +36,11 @@ function fixture(): CampaignWorkbookInputs {
       emailPromptMessage: null,
       createdAt: now,
       closedAt: null,
+      // Plan 04 — type completeness. Per-kind XLSX header coverage
+      // lives in src/server/__tests__/exports.test.ts.
+      kind: 'model',
+      pinnedProviderModelId: null,
+      pinnedSystemPrompt: null,
     },
     stats: {
       promptCount: 1,

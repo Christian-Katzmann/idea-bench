@@ -4,6 +4,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CampaignDashboard from '../CampaignDashboard';
 import { installMockFetch } from '../../test/mockFetch';
+import { arenaOnboardingStorageKey } from '../../components/onboarding/arena-onboarding';
+
+// Suppress the first-visit arena onboarding for every test in this
+// file — it's covered by its own component test and would otherwise
+// auto-open over the dashboard, intercepting `findByRole('dialog')`
+// queries that target action confirmations.
+beforeEach(() => {
+  window.localStorage.setItem(
+    arenaOnboardingStorageKey('model'),
+    new Date().toISOString(),
+  );
+});
+
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 function renderCampaignDashboard(route = '/campaign/campaign-1') {
   const queryClient = new QueryClient({
@@ -25,7 +41,10 @@ function renderCampaignDashboard(route = '/campaign/campaign-1') {
   );
 }
 
-function createCampaignDetail(status: 'active' | 'completed' = 'active') {
+function createCampaignDetail(
+  status: 'active' | 'completed' = 'active',
+  kind: 'model' | 'prompt' | 'system_prompt' = 'model',
+) {
   return {
     campaign: {
       id: 'campaign-1',
@@ -39,6 +58,11 @@ function createCampaignDetail(status: 'active' | 'completed' = 'active') {
       createdAt: '2026-04-17T09:00:00.000Z',
       closedAt:
         status === 'completed' ? '2026-04-17T10:00:00.000Z' : null,
+      // Plan 04 — kind pill in the header reads from this field.
+      kind,
+      pinnedProviderModelId:
+        kind === 'model' ? null : 'anthropic/claude-opus-4-6',
+      pinnedSystemPrompt: null,
     },
     stats: {
       promptCount: 4,
@@ -97,6 +121,39 @@ function createCampaignDetail(status: 'active' | 'completed' = 'active') {
 }
 
 describe('CampaignDashboard', () => {
+  // Plan 04 — kind pill on the dashboard header. The dashboard
+  // component reads `data.campaign.kind` and renders a small badge
+  // alongside the status badge. The fixture below stubs each of the
+  // three kinds; the API still rejects creating prompt/system_prompt
+  // campaigns in V1, but the dashboard component should handle the
+  // payload shape so Plans 05/06 can light it up by flipping a flag.
+  describe('kind pill in header', () => {
+    it.each([
+      ['model', 'Model arena'] as const,
+      ['prompt', 'Prompt arena'] as const,
+      ['system_prompt', 'System-prompt arena'] as const,
+    ])('renders "%s" pill as %s', async (kind, expectedLabel) => {
+      // Suppress onboarding for this kind too — the storage key is
+      // kind-aware (`arenaOnboardingStorageKey('prompt')` etc.).
+      window.localStorage.setItem(
+        arenaOnboardingStorageKey(kind as 'model' | 'prompt' | 'system_prompt'),
+        new Date().toISOString(),
+      );
+      installMockFetch([
+        {
+          url: '/api/campaigns/campaign-1',
+          body: createCampaignDetail('active', kind),
+        },
+      ]);
+
+      renderCampaignDashboard();
+
+      // The pill renders the kind label as a static span; wait for it
+      // to appear after the campaign data loads.
+      expect(await screen.findByText(expectedLabel)).toBeInTheDocument();
+    });
+  });
+
   it('closes an active campaign from the operator page', async () => {
     const user = userEvent.setup();
     let isClosed = false;

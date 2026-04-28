@@ -29,6 +29,55 @@ import type {
 } from './export.js';
 import type * as schema from '../db/schema.js';
 
+/**
+ * Plan 04 — per-kind XLSX header copy. Title-case to match the rest
+ * of the workbook's header convention (the CSV side uses snake_case).
+ * Mirrors `csvHeadersForKind` in shape but with display labels.
+ */
+interface XlsxKindHeaders {
+  /** "Model" / "Variant" / "System Prompt Variant" */
+  contestant: string;
+  /** "Provider ID" / "Variant Provider ID" / "System Prompt Variant Provider ID" */
+  providerId: string;
+  /** "Model A" etc. — wide A/B-side labels for the Responses sheet. */
+  modelA: string;
+  modelAProviderId: string;
+  modelB: string;
+  modelBProviderId: string;
+}
+
+function xlsxHeadersForKind(kind: schema.CampaignKind): XlsxKindHeaders {
+  switch (kind) {
+    case 'model':
+      return {
+        contestant: 'Model',
+        providerId: 'Provider ID',
+        modelA: 'Model A',
+        modelAProviderId: 'Model A provider ID',
+        modelB: 'Model B',
+        modelBProviderId: 'Model B provider ID',
+      };
+    case 'prompt':
+      return {
+        contestant: 'Variant',
+        providerId: 'Variant provider ID',
+        modelA: 'Variant A',
+        modelAProviderId: 'Variant A provider ID',
+        modelB: 'Variant B',
+        modelBProviderId: 'Variant B provider ID',
+      };
+    case 'system_prompt':
+      return {
+        contestant: 'System Prompt Variant',
+        providerId: 'System Prompt Variant provider ID',
+        modelA: 'System Prompt Variant A',
+        modelAProviderId: 'System Prompt Variant A provider ID',
+        modelB: 'System Prompt Variant B',
+        modelBProviderId: 'System Prompt Variant B provider ID',
+      };
+  }
+}
+
 export interface CampaignWorkbookInputs {
   detail: CampaignDetailData;
   participants: ParticipantExportRow[];
@@ -56,6 +105,8 @@ export async function buildCampaignWorkbookBuffer(
 
   return workbookToBuffer(wb);
 }
+
+export { xlsxHeadersForKind };
 
 function addOverviewSheet(
   wb: Awaited<ReturnType<typeof createWorkbook>>,
@@ -91,10 +142,11 @@ function addLeaderboardSheet(
   detail: CampaignDetailData,
 ): void {
   const sheet = addSheet(wb, 'Leaderboard');
+  const headers = xlsxHeadersForKind(detail.campaign.kind);
   addHeaderRow(sheet, [
     'Rank',
-    'Model',
-    'Provider ID',
+    headers.contestant,
+    headers.providerId,
     'Category',
     'Source',
     'Persona',
@@ -189,6 +241,7 @@ function addResponsesSheet(
   inputs: ResponsesExportInputs,
 ): void {
   const sheet = addSheet(wb, 'Responses');
+  const headers = xlsxHeadersForKind(inputs.campaign.kind);
   addHeaderRow(sheet, [
     'Created at',
     'Mode',
@@ -198,10 +251,10 @@ function addResponsesSheet(
     'Participant ID',
     'Email',
     'Session ID',
-    'Model A',
-    'Model A provider ID',
-    'Model B',
-    'Model B provider ID',
+    headers.modelA,
+    headers.modelAProviderId,
+    headers.modelB,
+    headers.modelBProviderId,
     'Tournament bracket',
     'Tournament winner',
     'Slider score',

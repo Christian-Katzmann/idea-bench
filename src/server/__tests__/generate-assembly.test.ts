@@ -1,0 +1,170 @@
+/**
+ * Tests for the Plan 04 per-kind generation assembly. `assembleCall`
+ * is a pure function — no DB, no OpenRouter — so we exercise the
+ * three kinds against minimal fixtures and assert the resulting
+ * `OpenRouterCallInput` has the expected `providerModelId`, `context`,
+ * and `prompt`.
+ *
+ * The `kind='model'` branch is the legacy path; if it diverges, the
+ * existing model-arena flow regresses.
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  assembleCall,
+  type AssembleCallInput,
+} from '../routes/campaigns/generate.js';
+
+type Campaign = AssembleCallInput['campaign'];
+type Contestant = AssembleCallInput['contestant'];
+type TestCase = AssembleCallInput['testCase'];
+
+const modelCampaign = (): Campaign => ({
+  kind: 'model',
+  pinnedProviderModelId: null,
+  pinnedSystemPrompt: null,
+});
+
+const modelContestant = (): Contestant => ({
+  providerModelId: 'anthropic/claude-opus-4-6',
+  variantText: null,
+  params: { temperature: 0.7 },
+});
+
+const promptContestant = (variantText: string): Contestant => ({
+  providerModelId: null,
+  variantText,
+  params: {},
+});
+
+const tc = (text: string, context: string | null = null): TestCase => ({
+  text,
+  context,
+});
+
+describe('assembleCall — kind=model (legacy)', () => {
+  it('assembles a model call from contestant + test case', () => {
+    const out = assembleCall({
+      campaign: modelCampaign(),
+      contestant: modelContestant(),
+      testCase: tc('hello', 'be brief'),
+    });
+    expect(out).toEqual({
+      providerModelId: 'anthropic/claude-opus-4-6',
+      context: 'be brief',
+      prompt: 'hello',
+      params: { temperature: 0.7 },
+    });
+  });
+
+  it('passes a null context through when the test case has none', () => {
+    const out = assembleCall({
+      campaign: modelCampaign(),
+      contestant: modelContestant(),
+      testCase: tc('hello'),
+    });
+    expect(out.context).toBeNull();
+    expect(out.params).toEqual({ temperature: 0.7 });
+  });
+
+  it('coerces null params to undefined (matches the legacy call shape)', () => {
+    const out = assembleCall({
+      campaign: modelCampaign(),
+      contestant: { ...modelContestant(), params: null },
+      testCase: tc('hi'),
+    });
+    expect(out.params).toBeUndefined();
+  });
+});
+
+describe('assembleCall — kind=prompt', () => {
+  const promptCampaign = (
+    pinnedSystemPrompt: string | null = null,
+  ): Campaign => ({
+    kind: 'prompt',
+    pinnedProviderModelId: 'openai/gpt-5',
+    pinnedSystemPrompt,
+  });
+
+  it('uses the pinned model and substitutes {{input}} into the variant', () => {
+    const out = assembleCall({
+      campaign: promptCampaign(),
+      contestant: promptContestant('Translate: {{input}}'),
+      testCase: tc('hello world'),
+    });
+    expect(out.providerModelId).toBe('openai/gpt-5');
+    expect(out.prompt).toBe('Translate: hello world');
+  });
+
+  it('appends test-case text after a blank line when variant has no token', () => {
+    const out = assembleCall({
+      campaign: promptCampaign(),
+      contestant: promptContestant('Standalone variant body.'),
+      testCase: tc('extra input'),
+    });
+    expect(out.prompt).toBe('Standalone variant body.\n\nextra input');
+  });
+
+  it('uses pinnedSystemPrompt as the system message when set', () => {
+    const out = assembleCall({
+      campaign: promptCampaign('You are a translator.'),
+      contestant: promptContestant('Variant: {{input}}'),
+      testCase: tc('hi', 'per-test context'),
+    });
+    expect(out.context).toBe('You are a translator.');
+  });
+
+  it('falls back to the test-case context when no pinnedSystemPrompt', () => {
+    const out = assembleCall({
+      campaign: promptCampaign(null),
+      contestant: promptContestant('Variant: {{input}}'),
+      testCase: tc('hi', 'per-test context'),
+    });
+    expect(out.context).toBe('per-test context');
+  });
+
+  it('handles a missing test case (Plan 05 standalone-variants fallback)', () => {
+    // PRD: "a campaign with kind='prompt' and zero `prompts` rows is
+    // treated as a single synthetic case" — assembleCall accepts a
+    // null testCase; the variant body becomes the prompt with empty
+    // input substituted (or appended as blank line).
+    const out = assembleCall({
+      campaign: promptCampaign(),
+      contestant: promptContestant('Variant: {{input}}'),
+      testCase: null,
+    });
+    expect(out.prompt).toBe('Variant: ');
+  });
+});
+
+describe('assembleCall — kind=system_prompt', () => {
+  const sysCampaign = (): Campaign => ({
+    kind: 'system_prompt',
+    pinnedProviderModelId: 'anthropic/claude-sonnet-4-6',
+    pinnedSystemPrompt: null,
+  });
+
+  it("uses the variant text as the system message and the test case as the prompt", () => {
+    const out = assembleCall({
+      campaign: sysCampaign(),
+      contestant: promptContestant('You are concise.'),
+      testCase: tc('explain entropy'),
+    });
+    expect(out).toEqual({
+      providerModelId: 'anthropic/claude-sonnet-4-6',
+      context: 'You are concise.',
+      prompt: 'explain entropy',
+    });
+  });
+
+  it('does not substitute {{input}} inside the system-prompt variant', () => {
+    // System-prompt arenas test the system message verbatim — there's
+    // no template substitution inside it.
+    const out = assembleCall({
+      campaign: sysCampaign(),
+      contestant: promptContestant('Use {{input}} as the placeholder.'),
+      testCase: tc('hello'),
+    });
+    expect(out.context).toBe('Use {{input}} as the placeholder.');
+    expect(out.prompt).toBe('hello');
+  });
+});

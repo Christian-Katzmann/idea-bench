@@ -4,6 +4,7 @@ import * as schema from '../../db/schema.js';
 import { withAIOperator } from '../../auth/middleware.js';
 import {
   callOpenRouter,
+  type OpenRouterCallInput,
   type OpenRouterCallResult,
 } from '../../openrouter.js';
 import { createRunBudget } from '../../lib/generation-budget.js';
@@ -11,6 +12,7 @@ import {
   buildPromptRefLookup,
   substitutePromptRefs,
 } from '../../lib/prompt-refs.js';
+import { renderTemplate } from '../../lib/render-template.js';
 
 // TODO(strict-mode): Remove these Extract<> assertions when tsconfig
 // enables `strict: true` (or at least `strictNullChecks: true`). With
@@ -194,11 +196,26 @@ export const generateCampaignWebHandler = withAIOperator(async (request: Request
       slots.map(async ({ prompt, model }) => {
         // Substitute @pN prompt-refs before the model sees the prompt.
         // Budget preflight uses the resolved text so cost estimates
-        // reflect what'll actually be sent.
+        // reflect what'll actually be sent. @pN substitution applies
+        // only to the test-case text (kind='model' uses it directly;
+        // kind='prompt' feeds it through `{{input}}` substitution
+        // inside the variant template via assembleCall).
         const resolvedPromptText = substitutePromptRefs(prompt.text, refLookup);
+
+        // Plan 04 — per-kind call assembly. For kind='model' this
+        // produces the same shape the legacy code did; for prompt /
+        // system_prompt arenas the contestant's `variantText` drives
+        // the variable axis and the campaign's pinned model is held
+        // constant.
+        const callInput = assembleCall({
+          campaign,
+          contestant: model,
+          testCase: { text: resolvedPromptText, context: prompt.context },
+        });
+
         const slotBudgetInput = {
-          providerModelId: model.providerModelId,
-          promptText: `${prompt.context ?? ''}\n${resolvedPromptText}`,
+          providerModelId: callInput.providerModelId,
+          promptText: `${callInput.context ?? ''}\n${callInput.prompt}`,
         };
         const pre = runBudget.preflight(slotBudgetInput);
         if (!pre.allow) {
@@ -223,11 +240,10 @@ export const generateCampaignWebHandler = withAIOperator(async (request: Request
         const allowed = pre as { allow: true; reservedUsd: number };
 
         const result = await callOpenRouter({
-          providerModelId: model.providerModelId,
-          prompt: resolvedPromptText,
-          context: prompt.context,
-          params:
-            (model.params as Record<string, unknown> | null) ?? undefined,
+          providerModelId: callInput.providerModelId,
+          prompt: callInput.prompt,
+          context: callInput.context,
+          params: callInput.params,
           signal,
         });
 
@@ -302,6 +318,78 @@ export const generateCampaignWebHandler = withAIOperator(async (request: Request
 
   return new Response(stream, { status: 200, headers: sseHeaders() });
 });
+
+/**
+ * Plan 04 — per-kind generation call assembly. Pure function: given a
+ * campaign, a contestant row (`campaign_models`, polymorphic since
+ * Plan 04), and a test-case prompt, returns the `OpenRouterCallInput`
+ * the runtime should send.
+ *
+ * Kind semantics (PRD → "Generation router"):
+ *   - `model`         → contestant supplies the provider model id and
+ *                       params; the test case supplies the user prompt
+ *                       and the system context.
+ *   - `prompt`        → campaign supplies the pinned model. The variant
+ *                       template gets `{{input}}` substituted with the
+ *                       test case text. The system message is the
+ *                       campaign's `pinnedSystemPrompt` if set, else
+ *                       the per-test-case `context`.
+ *   - `system_prompt` → campaign supplies the pinned model. The variant
+ *                       text becomes the system message; the test case
+ *                       text becomes the user prompt.
+ *
+ * No DB access, no I/O. Caller is responsible for pre-substituting
+ * `@pN` references on the test case text (existing prompt-refs path),
+ * and for the standalone-variants flag (Plan 05 wires it).
+ */
+export interface AssembleCallInput {
+  campaign: Pick<
+    schema.Campaign,
+    'kind' | 'pinnedProviderModelId' | 'pinnedSystemPrompt'
+  >;
+  contestant: Pick<
+    schema.CampaignModel,
+    'providerModelId' | 'variantText' | 'params'
+  >;
+  testCase: { text: string; context: string | null } | null;
+}
+
+export function assembleCall(input: AssembleCallInput): OpenRouterCallInput {
+  const { campaign, contestant, testCase } = input;
+
+  switch (campaign.kind) {
+    case 'model':
+      // Legacy path. `providerModelId` is enforced NOT NULL by CHECK
+      // when kind='model'; the `!` reflects the schema invariant.
+      return {
+        providerModelId: contestant.providerModelId!,
+        context: testCase?.context ?? null,
+        prompt: testCase?.text ?? '',
+        params:
+          (contestant.params as Record<string, unknown> | null) ?? undefined,
+      };
+
+    case 'prompt':
+      // Pinned model is required by CHECK constraint when kind != 'model'.
+      // Variant text is required by CHECK when kind != 'model'.
+      // Held-constant system message: pinnedSystemPrompt wins, else the
+      // test-case's per-row context, else null.
+      return {
+        providerModelId: campaign.pinnedProviderModelId!,
+        context:
+          campaign.pinnedSystemPrompt ?? testCase?.context ?? null,
+        prompt: renderTemplate(contestant.variantText!, testCase?.text ?? ''),
+      };
+
+    case 'system_prompt':
+      // The variant IS the system message; the test case is the user prompt.
+      return {
+        providerModelId: campaign.pinnedProviderModelId!,
+        context: contestant.variantText!,
+        prompt: testCase?.text ?? '',
+      };
+  }
+}
 
 /**
  * Split helpers so each caller passes a narrowed variant. Calling a

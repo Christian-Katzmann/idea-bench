@@ -68,6 +68,89 @@ export async function apiFetch<T>(
 
 export type VotingMode = 'anonymous' | 'email_required' | 'hybrid';
 
+/**
+ * Plan 04 — what a campaign varies (the X axis of the experiment).
+ * Mirrors the server-side `campaign_kind` enum in
+ * `src/server/db/schema.ts`. Until Plans 05/06 flip their feature
+ * flags, the API only accepts `'model'`; CreateCampaign.tsx (Phase 2)
+ * surfaces the kind selector but the other options stay disabled with
+ * a "Coming soon" treatment.
+ */
+export type ArenaKind = 'model' | 'prompt' | 'system_prompt';
+
+/**
+ * Plan 04 — variant contestant for prompt / system_prompt arenas.
+ * `text` is the variant body (user-prompt template for `prompt`,
+ * system-message body for `system_prompt`). `displayName` is the
+ * operator-facing label; the server falls back to `Variant N` when
+ * unset.
+ */
+export interface CampaignVariantInput {
+  text: string;
+  displayName?: string;
+}
+
+/**
+ * Discriminated payload accepted by `POST /api/campaigns`. The legacy
+ * `model` shape carries `providerModelIds`; the prompt/system_prompt
+ * shapes carry `variants` plus a held-constant `pinnedProviderModelId`
+ * (the generator) and — for `prompt` only — an optional
+ * `pinnedSystemPrompt` (the held-constant system message).
+ *
+ * The server's `parseCreatePayload` rejects extra keys per kind so
+ * stray fields surface as 400s rather than silent drops.
+ */
+export type CreateCampaignPayload =
+  | (CreateCampaignBase & {
+      kind?: 'model';
+      providerModelIds: string[];
+    })
+  | (CreateCampaignBase & {
+      kind: 'prompt';
+      variants: CampaignVariantInput[];
+      pinnedProviderModelId: string;
+      pinnedSystemPrompt?: string | null;
+    })
+  | (CreateCampaignBase & {
+      kind: 'system_prompt';
+      variants: CampaignVariantInput[];
+      pinnedProviderModelId: string;
+    });
+
+export interface CreateCampaignBase {
+  name: string;
+  description?: string;
+  categories?: string[];
+  prompts: Array<{
+    text: string;
+    context?: string;
+    categoryTags?: string[];
+    structured?: PromptStructured;
+    mode?: PromptMode;
+    modeConfig?: unknown;
+  }>;
+}
+
+/**
+ * Response from `POST /api/campaigns`. Per-row `kind` and `variantText`
+ * mirror the polymorphic `campaign_models` shape — for `model`
+ * contestants, `providerModelId` is set and `variantText` is null; for
+ * variant contestants, the inverse.
+ */
+export interface CreateCampaignResponse {
+  id: string;
+  shareSlug: string;
+  kind: ArenaKind;
+  prompts: Array<{ id: string; orderIndex: number }>;
+  models: Array<{
+    id: string;
+    kind: ArenaKind;
+    providerModelId: string | null;
+    displayName: string;
+    variantText: string | null;
+  }>;
+}
+
 export interface CampaignSummary {
   id: string;
   shareSlug: string;
@@ -81,8 +164,21 @@ export interface CampaignSummary {
   closedAt: string | null;
 }
 
+/**
+ * Plan 04 — fields that only `CampaignDetail` (not the bulk listing
+ * `CampaignSummary`) carries. The dashboard reads these to render the
+ * per-kind pill and any kind-specific surfaces. `pinnedModelSnapshot`
+ * is intentionally excluded — it's audit data that lands in Plans
+ * 05/06 surfaces, not the V1 dashboard.
+ */
+export interface CampaignKindFields {
+  kind: ArenaKind;
+  pinnedProviderModelId: string | null;
+  pinnedSystemPrompt: string | null;
+}
+
 export interface CampaignDetail {
-  campaign: CampaignSummary;
+  campaign: CampaignSummary & CampaignKindFields;
   stats: {
     promptCount: number;
     modelCount: number;

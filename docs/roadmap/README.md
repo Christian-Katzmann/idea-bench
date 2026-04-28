@@ -36,22 +36,45 @@ judge).
    Reuse infrastructure. Collections of curated prompts with folders + tags;
    campaign duplication as a first-class action. The stickiness feature.
 
+4. [**04-arena-modes-foundation.md**](./04-arena-modes-foundation.md) —
+   Generalizes the campaign into a kinded experiment (`model | prompt |
+   system_prompt`). Polymorphic contestants, pinned generator model, per-kind
+   creation UX. Ships nothing user-facing on its own; unblocks Plans 05 and
+   06.
+
+5. [**05-prompt-arena.md**](./05-prompt-arena.md) — Vary the prompt, hold
+   the model. Operators tune prompt variants on a fixed model with optional
+   `{{input}}` templating across a suite of inputs. Default mode: Best-of-N.
+
+6. [**06-system-prompt-arena.md**](./06-system-prompt-arena.md) — Vary the
+   system prompt, hold the model, evaluate across a suite of user prompts.
+   Default mode: Slider with heatmap drilldown. Persona panels are
+   first-class and pre-suggested on launch — the highest-leverage marriage
+   of personas and prompt evaluation in the product.
+
 ## Sequencing
 
-Implementation order as of 2026-04-20:
+Updated 2026-04-28 — arena modes (Plans 04–06) move ahead of the
+multi-tenancy refactor on the rationale that they validate the product
+wedge; multi-tenancy is plumbing that benefits more from working against
+proven product surfaces.
 
 | When | What |
 |---|---|
-| M1 | Multi-tenancy foundation (prereq for all three) + Campaign Duplication (rides along — Plan 3 Phase 1) |
-| M2 | Multi-mode Phase 1: Slider + Approve/Reject (Plan 1) |
-| M3 | Multi-mode Phase 2: Best-of-N + Multi-Axis + Qualitative (Plan 1) |
-| M4 | Simulated Runs Phase 1: Generic panels (Plan 2) |
-| M5 | Simulated Runs Phase 2: Persona panels + library (Plan 2) + Prompt Collections (Plan 3 Phase 2) |
-| M6 | Polish, calibration pipeline, in-app reports (deferred) |
+| M1 | Multi-mode Phase 1: Slider + Approve/Reject (Plan 1) |
+| M2 | Multi-mode Phase 2: Best-of-N + Multi-Axis + Qualitative (Plan 1) |
+| M3 | Simulated Runs Phase 1: Generic panels (Plan 2) |
+| M4 | Simulated Runs Phase 2: Persona panels + library (Plan 2) |
+| M5 | Arena Modes Foundation (Plan 4) — schema, kind discriminator, creation UX scaffold |
+| M6 | Prompt Arena (Plan 5) + System-Prompt Arena (Plan 6) ship together on top of Plan 4 |
+| M7 | Multi-tenancy refactor (orgs, members, API keys) |
+| M8 | Prompt Collections + Campaign Duplication (Plan 3) — Collections seam wired into Plan 6 system-prompt suites |
+| M9 | Polish, calibration pipeline, in-app reports (deferred) |
 
-Multi-tenancy is the gate — do not start feature work until orgs + members +
-API keys ship cleanly. Plan for ~5–6 weeks on that refactor; the
-single-operator assumption is load-bearing in auth, cookies, and schema.
+Plans 4–6 share an architectural change (campaign kind, polymorphic
+contestants); ship them as a coordinated trio, not three independent
+streams. Multi-tenancy is no longer a gate but is still load-bearing for
+team workflows; plan for ~5–6 weeks on that refactor when its time comes.
 
 ## Dropped from scope
 

@@ -61,6 +61,12 @@ export const previewCampaignWebHandler = withOperator(async (request) => {
           .from(schema.generations)
           .where(inArray(schema.generations.promptId, promptIds));
 
+  // Plan 04 — per-kind shape. The preview consumer renders the same
+  // generations regardless of kind (voters see outputs only), but the
+  // operator-facing preview UI uses `campaign.kind` and the per-row
+  // `kind` / `variantText` to label contestants correctly (e.g.
+  // "Variant 1: <body>" instead of a model name) and to surface the
+  // pinned generator model alongside the variant axis.
   return json(
     {
       campaign: {
@@ -70,6 +76,10 @@ export const previewCampaignWebHandler = withOperator(async (request) => {
         description: campaign.description,
         categories: campaign.categories,
         status: campaign.status,
+        kind: campaign.kind,
+        pinnedProviderModelId: campaign.pinnedProviderModelId,
+        pinnedModelSnapshot: campaign.pinnedModelSnapshot,
+        pinnedSystemPrompt: campaign.pinnedSystemPrompt,
       },
       prompts: prompts.map((p) => ({
         id: p.id,
@@ -80,8 +90,10 @@ export const previewCampaignWebHandler = withOperator(async (request) => {
       })),
       models: campaignModels.map((m) => ({
         id: m.id,
+        kind: m.kind,
         providerModelId: m.providerModelId,
         displayName: m.displayName,
+        variantText: m.variantText,
       })),
       generations: generations
         .filter((g) => g.output != null)

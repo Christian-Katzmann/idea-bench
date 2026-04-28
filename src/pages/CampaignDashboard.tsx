@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from '@/lib/relative-time';
@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  HelpCircle,
   Info,
   Loader2,
   Pencil,
@@ -18,6 +19,11 @@ import {
 import { AppShell } from '../components/layout/app-shell';
 import { ConfirmDestructive } from '../components/modals/confirm-destructive';
 import { EditCampaignDialog } from '../components/modals/edit-campaign';
+import {
+  ArenaOnboarding,
+  arenaOnboardingStorageKey,
+} from '../components/onboarding/arena-onboarding';
+import type { ArenaKind } from '../lib/arena-kind';
 import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { PageHeader } from '../components/ui/page-header';
@@ -60,6 +66,25 @@ function ModeBadge({ mode }: { mode: PromptMode }) {
   );
 }
 
+/**
+ * Plan 04 — operator-only "kind pill" in the dashboard header.
+ * Voters never see this. Subtle styling on purpose: the header
+ * already carries name + status + onboarding controls.
+ */
+const KIND_PILL_LABELS: Record<ArenaKind, string> = {
+  model: 'Model arena',
+  prompt: 'Prompt arena',
+  system_prompt: 'System-prompt arena',
+};
+
+function KindPill({ kind }: { kind: ArenaKind }) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {KIND_PILL_LABELS[kind]}
+    </span>
+  );
+}
+
 export default function CampaignDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,6 +93,11 @@ export default function CampaignDashboard() {
   const [isCloseOpen, setIsCloseOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  // Help button ref so the onboarding modal can restore focus there
+  // after dismiss — important for keyboard / SR users who'd otherwise
+  // land on <body>.
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
   /**
    * Plan 02 source filter. Default 'both' (combined human + simulated
    * signal). When the campaign has no simulated runs, every `both` row
@@ -88,6 +118,38 @@ export default function CampaignDashboard() {
   });
 
   useDocumentTitle(data?.campaign.name ?? 'Campaign');
+
+  // Plan 04 — pulled from the campaign payload (default 'model' until
+  // the query resolves; the 0012 migration backfilled every existing
+  // row to 'model'). Drives the onboarding storage key + the
+  // dashboard kind pill in the header. The cast accommodates a
+  // transient state where the Tanstack Query cache holds a payload
+  // from a pre-deploy build that didn't ship `kind` yet — the next
+  // refetch fixes it.
+  const arenaKind: ArenaKind =
+    (data?.campaign.kind as ArenaKind | undefined) ?? 'model';
+
+  // First-visit auto-open. Deferred until campaign data has landed so
+  // the operator at least sees the dashboard scaffolding for one frame
+  // before the modal pops on top of it. The ref guards against the
+  // 5s polling refetch re-triggering the open every interval.
+  const autoOpenConsideredRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!data) return;
+    if (autoOpenConsideredRef.current) return;
+    autoOpenConsideredRef.current = true;
+    try {
+      const dismissed = window.localStorage.getItem(
+        arenaOnboardingStorageKey(arenaKind),
+      );
+      if (!dismissed) setIsOnboardingOpen(true);
+    } catch {
+      // localStorage can throw in private windows / strict cookie modes —
+      // silently no-op auto-open. Help button still works as the manual
+      // entry point.
+    }
+  }, [arenaKind, data]);
 
   const recompute = useMutation({
     mutationFn: () =>
@@ -441,6 +503,19 @@ export default function CampaignDashboard() {
             <EntityIcon name={campaign.name} size="lg" />
             <span className="min-w-0 truncate">{campaign.name}</span>
             <StatusBadge state={campaign.status as StatusState} />
+            <KindPill kind={arenaKind} />
+            <Button
+              ref={helpButtonRef}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOnboardingOpen(true)}
+              aria-label="Show arena onboarding"
+              title="Re-open the onboarding"
+              className="shrink-0"
+            >
+              <HelpCircle className="size-3.5" />
+              <span className="hidden sm:inline">How it works</span>
+            </Button>
           </span>
         }
         description={campaign.description || undefined}
@@ -1025,6 +1100,26 @@ export default function CampaignDashboard() {
         confirmLabel="Delete campaign"
         isPending={deleteCampaign.isPending}
         onConfirm={() => deleteCampaign.mutate()}
+      />
+
+      <ArenaOnboarding
+        kind={arenaKind}
+        open={isOnboardingOpen}
+        triggerRef={helpButtonRef}
+        onDismiss={() => {
+          setIsOnboardingOpen(false);
+          // Persist on every dismissal — the operator's mental model
+          // is "I closed it, it should stay gone." Re-entry is via
+          // the Help button in the page header.
+          try {
+            window.localStorage.setItem(
+              arenaOnboardingStorageKey(arenaKind),
+              new Date().toISOString(),
+            );
+          } catch {
+            // Ignore — see the auto-open effect for the rationale.
+          }
+        }}
       />
 
       <EditCampaignDialog

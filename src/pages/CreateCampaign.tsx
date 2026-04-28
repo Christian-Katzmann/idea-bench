@@ -29,6 +29,7 @@ import {
   type ModelLibraryData,
   type PromptStructured,
 } from '../lib/api';
+import type { ArenaKind } from '../lib/arena-kind';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { cn } from '../lib/utils';
 
@@ -44,13 +45,40 @@ const SUGGESTED_TAGS = [
 
 const MIN_MODELS = 4; // Tournament requires exactly 4 per bracket.
 
-const STEPS = [
-  { n: 1, label: 'Basics' },
-  { n: 2, label: 'Prompts' },
-  { n: 3, label: 'Models' },
-  { n: 4, label: 'Generate' },
-  { n: 5, label: 'Launch' },
-] as const;
+/**
+ * Plan 04 — wizard steps. Step 0 is the kind picker; steps 1–5 are
+ * Basics → contestants → Generate → Launch with per-kind labels on
+ * the test-case (step 2) and contestant (step 3) steps. Today only
+ * `model` is reachable; Plans 05/06 unblock prompt and system_prompt.
+ */
+const TOTAL_STEPS = 6;
+
+interface WizardStep {
+  n: number;
+  label: string;
+}
+
+function stepsForKind(kind: ArenaKind): readonly WizardStep[] {
+  // Per-kind labels for steps 2 (test cases) and 3 (contestants).
+  // Spec from PRD → "Creation UX (operator)" wizard table.
+  const perKind: Record<ArenaKind, { testCases: string; contestants: string }> = {
+    model: { testCases: 'Prompts', contestants: 'Models' },
+    prompt: { testCases: 'Inputs', contestants: 'Variants' },
+    system_prompt: {
+      testCases: 'Test prompts',
+      contestants: 'Variants',
+    },
+  };
+  const { testCases, contestants } = perKind[kind];
+  return [
+    { n: 0, label: 'Kind' },
+    { n: 1, label: 'Basics' },
+    { n: 2, label: testCases },
+    { n: 3, label: contestants },
+    { n: 4, label: 'Generate' },
+    { n: 5, label: 'Launch' },
+  ];
+}
 
 interface SlotOkEvent {
   promptId: string;
@@ -283,7 +311,13 @@ function flattenPrompt(
 export default function CreateCampaign() {
   const navigate = useNavigate();
   useDocumentTitle('New Campaign');
-  const [step, setStep] = useState(1);
+  // Plan 04 — step indexing is 0..5 with Step 0 = Kind picker.
+  // Existing model-arena flow lives in steps 1..5 (Basics → Launch).
+  const [step, setStep] = useState(0);
+  // Plan 04 — what this campaign varies. Default `model` keeps the
+  // legacy flow byte-for-byte; `prompt` and `system_prompt` are
+  // disabled in the picker until Plans 05/06 ship.
+  const [kind, setKind] = useState<ArenaKind>('model');
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -368,6 +402,10 @@ export default function CreateCampaign() {
           name,
           description,
           categories,
+          // Plan 04 — `kind` defaults to 'model'; Plans 05/06 unlock
+          // the variant-driven payloads (`variants`,
+          // `pinnedProviderModelId`, `pinnedSystemPrompt`).
+          kind,
           prompts: prompts
             .map((p) => ({ p, flat: flattenPrompt(p) }))
             .filter((x): x is { p: PromptDraft; flat: NonNullable<ReturnType<typeof flattenPrompt>> } => x.flat !== null)
@@ -422,6 +460,7 @@ export default function CreateCampaign() {
     name,
     description,
     categories,
+    kind,
     prompts,
     selectedModels,
     navigate,
@@ -494,7 +533,13 @@ export default function CreateCampaign() {
 
   const validPromptCount = prompts.filter((p) => flattenPrompt(p) !== null)
     .length;
+  const steps = stepsForKind(kind);
   const canProgress =
+    // Step 0 (Kind) — only `model` is selectable today; the picker
+    // disables the others, so `kind === 'model'` is effectively
+    // always true at this point. Once Plans 05/06 unlock the other
+    // kinds, `canProgress` here just becomes `true`.
+    (step === 0 && kind === 'model') ||
     (step === 1 && !!name) ||
     (step === 2 && validPromptCount > 0) ||
     (step === 3 && selectedModels.length >= MIN_MODELS) ||
@@ -511,10 +556,14 @@ export default function CreateCampaign() {
       />
 
       <div className="mx-auto mt-6 w-full max-w-3xl">
-        <Stepper activeStep={step} />
+        <Stepper steps={steps} activeStep={step} />
 
         <div className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="px-6 py-7 md:px-8 md:py-8">
+            {step === 0 && (
+              <StepKind kind={kind} onKind={setKind} />
+            )}
+
             {step === 1 && (
               <StepBasics
                 name={name}
@@ -580,8 +629,8 @@ export default function CreateCampaign() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
-              disabled={step === 1 || isGenerating}
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step === 0 || isGenerating}
             >
               <ArrowLeft className="size-3.5" />
               Back
@@ -630,20 +679,28 @@ export default function CreateCampaign() {
 // Stepper
 // ────────────────────────────────────────────────────────────────────────────
 
-function Stepper({ activeStep }: { activeStep: number }) {
-  const activeLabel = STEPS[activeStep - 1]?.label ?? '';
-  const progressPct = (activeStep / STEPS.length) * 100;
+function Stepper({
+  steps,
+  activeStep,
+}: {
+  steps: readonly WizardStep[];
+  activeStep: number;
+}) {
+  const activeLabel = steps[activeStep]?.label ?? '';
+  // 0-indexed `activeStep` means progress = (activeStep + 1) / total.
+  const progressPct = ((activeStep + 1) / steps.length) * 100;
+  const displayStep = activeStep + 1;
   return (
     <>
-      {/* Mobile-only compact header: "Step N of 5 · Label" + 2px progress bar.
+      {/* Mobile-only compact header: "Step N of M · Label" + 2px progress bar.
           The full dotted-stepper below eats horizontal at 360px and its
           labels are second-tier info on a small screen anyway. */}
       <div className="sm:hidden" aria-label="Wizard progress">
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Step{' '}
-            <span className="text-foreground">{activeStep}</span> of{' '}
-            {STEPS.length}
+            <span className="text-foreground">{displayStep}</span> of{' '}
+            {steps.length}
           </span>
           <span className="text-sm font-medium text-foreground">
             {activeLabel}
@@ -652,9 +709,9 @@ function Stepper({ activeStep }: { activeStep: number }) {
         <div
           className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-border"
           role="progressbar"
-          aria-valuenow={activeStep}
+          aria-valuenow={displayStep}
           aria-valuemin={1}
-          aria-valuemax={STEPS.length}
+          aria-valuemax={steps.length}
         >
           <div
             className="h-full bg-foreground transition-all duration-300"
@@ -672,7 +729,7 @@ function Stepper({ activeStep }: { activeStep: number }) {
           aria-hidden
           className="absolute left-4 right-4 top-3.5 -z-10 h-px bg-border"
         />
-        {STEPS.map(({ n, label }) => {
+        {steps.map(({ n, label }) => {
           const isActive = activeStep === n;
           const isDone = activeStep > n;
           return (
@@ -691,7 +748,7 @@ function Stepper({ activeStep }: { activeStep: number }) {
                       : 'border-border bg-card text-muted-foreground',
                 )}
               >
-                {isDone ? <Check className="size-3.5" /> : n}
+                {isDone ? <Check className="size-3.5" /> : n + 1}
               </div>
               <span
                 className={cn(
@@ -712,6 +769,114 @@ function Stepper({ activeStep }: { activeStep: number }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Steps
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Plan 04 — Step 0. Pick the arena kind. Today only `model` is
+ * selectable; `prompt` and `system_prompt` render disabled with a
+ * "Coming soon" badge so operators see the upcoming surface area
+ * without being able to misuse it. Plans 05/06 enable each option
+ * when their feature flips.
+ */
+const KIND_OPTIONS: ReadonlyArray<{
+  kind: ArenaKind;
+  title: string;
+  description: string;
+  comingSoon: boolean;
+}> = [
+  {
+    kind: 'model',
+    title: 'Model arena',
+    description:
+      'Compare different models on a fixed set of prompts. The original ModelArena experience.',
+    comingSoon: false,
+  },
+  {
+    kind: 'prompt',
+    title: 'Prompt arena',
+    description:
+      'Test different user-prompt phrasings on a single pinned model. Useful for prompt iteration.',
+    comingSoon: true,
+  },
+  {
+    kind: 'system_prompt',
+    title: 'System-prompt arena',
+    description:
+      'Test different system messages on a single pinned model across a suite of test prompts.',
+    comingSoon: true,
+  },
+];
+
+function StepKind({
+  kind,
+  onKind,
+}: {
+  kind: ArenaKind;
+  onKind: (k: ArenaKind) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="font-heading text-lg font-semibold text-foreground">
+          What does this campaign vary?
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick the axis you want to compare. The rest of the wizard
+          adapts to the choice. Model arena is the only kind available
+          today.
+        </p>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="Arena kind"
+        className="grid gap-3 sm:grid-cols-3"
+      >
+        {KIND_OPTIONS.map((opt) => {
+          const isSelected = kind === opt.kind;
+          const isDisabled = opt.comingSoon;
+          return (
+            <button
+              key={opt.kind}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              aria-disabled={isDisabled || undefined}
+              disabled={isDisabled}
+              onClick={() => {
+                if (!isDisabled) onKind(opt.kind);
+              }}
+              title={
+                isDisabled
+                  ? 'Coming soon — use Model arena for now.'
+                  : undefined
+              }
+              className={cn(
+                'flex h-full flex-col gap-2 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40',
+                isSelected
+                  ? 'border-foreground bg-card shadow-sm ring-1 ring-foreground/10'
+                  : 'border-border bg-card hover:border-foreground/40',
+                isDisabled && 'cursor-not-allowed opacity-60 hover:border-border',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-heading text-sm font-semibold text-foreground">
+                  {opt.title}
+                </span>
+                {opt.comingSoon && (
+                  <span className="inline-flex items-center rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Coming soon
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {opt.description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function StepBasics({
   name,

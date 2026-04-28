@@ -3,6 +3,7 @@ import { getDb } from '../../db/client.js';
 import * as schema from '../../db/schema.js';
 import { withOperator } from '../../auth/middleware.js';
 import { invalidateAnalyticsSnapshot } from '../../models/library.js';
+import { listSelectableRegistryModels } from '../../models/registry.js';
 
 /**
  * POST /api/campaigns/:id/activate
@@ -48,15 +49,23 @@ export const activateCampaignWebHandler = withOperator(async (request: Request) 
       .where(eq(schema.campaignModels.campaignId, id)),
   ]);
 
-  if (models.length < 4) {
+  // Plan 04 — per-kind contestant minimum at activate time. The
+  // create-payload parser already enforces these (model ≥4, prompt /
+  // system_prompt ≥2); the same gate lives here in case prompts /
+  // models were edited between create and activate, or if the campaign
+  // was created before its kind's minimums were enforced.
+  const minContestants = campaign.kind === 'model' ? 4 : 2;
+  if (models.length < minContestants) {
     return json(
       {
-        error: `need at least 4 models for a tournament; have ${models.length}`,
+        error: `need at least ${minContestants} contestants for ${campaign.kind} kind; have ${models.length}`,
       },
       400,
     );
   }
-  if (prompts.length === 0) {
+  if (prompts.length === 0 && campaign.kind !== 'prompt') {
+    // PRD: prompt arenas with 0 inputs are valid (variants are
+    // standalone). For other kinds the test-case suite is required.
     return json({ error: 'no prompts' }, 400);
   }
 
@@ -84,10 +93,49 @@ export const activateCampaignWebHandler = withOperator(async (request: Request) 
     );
   }
 
-  // Flip to active.
+  // Plan 04 — capture the pinned-model snapshot at launch for
+  // non-model kinds. Idempotent: if the campaign already has a
+  // snapshot (re-activate after editing in some future flow), we
+  // preserve it. Snapshot is non-negotiable for audit — registry
+  // edits down the line must not retroactively rewrite history.
+  let pinnedModelSnapshot: schema.PinnedModelSnapshot | null = null;
+  if (campaign.kind !== 'model' && !campaign.pinnedModelSnapshot) {
+    if (!campaign.pinnedProviderModelId) {
+      // CHECK constraint guarantees this is non-null for non-model
+      // kinds; defensive check for completeness.
+      return json(
+        { error: 'campaign is missing pinnedProviderModelId' },
+        500,
+      );
+    }
+    const registry = await listSelectableRegistryModels(db);
+    const entry = registry.find(
+      (r) => r.providerModelId === campaign.pinnedProviderModelId,
+    );
+    if (!entry) {
+      return json(
+        {
+          error: `pinned model is no longer selectable: ${campaign.pinnedProviderModelId}`,
+        },
+        409,
+      );
+    }
+    pinnedModelSnapshot = {
+      providerModelId: entry.providerModelId,
+      displayName: entry.displayName,
+      params: {},
+      snapshotAt: new Date().toISOString(),
+    };
+  }
+
+  // Flip to active. Set the snapshot in the same UPDATE when applicable.
   await db
     .update(schema.campaigns)
-    .set({ status: 'active', updatedAt: new Date() })
+    .set({
+      status: 'active',
+      updatedAt: new Date(),
+      ...(pinnedModelSnapshot ? { pinnedModelSnapshot } : {}),
+    })
     .where(eq(schema.campaigns.id, id));
 
   invalidateAnalyticsSnapshot();

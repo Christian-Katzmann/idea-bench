@@ -24,6 +24,11 @@ import {
   arenaOnboardingStorageKey,
 } from '../components/onboarding/arena-onboarding';
 import type { ArenaKind } from '../lib/arena-kind';
+import {
+  HeatmapLeaderboard,
+  type HeatmapCell as HeatmapCellInput,
+  type HeatmapPrompt as HeatmapPromptInput,
+} from '../components/heatmap/HeatmapLeaderboard';
 import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
 import { PageHeader } from '../components/ui/page-header';
@@ -77,6 +82,36 @@ const KIND_PILL_LABELS: Record<ArenaKind, string> = {
   system_prompt: 'System-prompt arena',
 };
 
+/**
+ * Per-kind label for the campaign-detail tab strip's "Prompts" tab.
+ * Kept in sync with the wizard's Step 3 label (`stepsForKind` in
+ * CreateCampaign.tsx) and Plan 04's export headers — see PRD Plan 05
+ * "Per-kind labelling helpers". Tab semantics (which prompts the tab
+ * lists) are unchanged; only the visible label varies. Operator-only —
+ * voters never see these tabs.
+ */
+const KIND_TAB_LABELS: Record<ArenaKind, string> = {
+  model: 'Prompts',
+  prompt: 'Inputs',
+  system_prompt: 'Test prompts',
+};
+
+/**
+ * Per-kind labels for the Overview panel's public-voting card. Mirrors
+ * the wizard's Step 2/3 labels and the Plan 04 export header rename
+ * (model_* → variant_*) so wizard, dashboard, Overview, and exports
+ * agree. `contestants` covers what was historically "Models";
+ * `testCases` covers what was historically "Prompts".
+ */
+const KIND_STAT_LABELS: Record<
+  ArenaKind,
+  { contestants: string; testCases: string }
+> = {
+  model: { contestants: 'Models', testCases: 'Prompts' },
+  prompt: { contestants: 'Variants', testCases: 'Inputs' },
+  system_prompt: { contestants: 'Variants', testCases: 'Test prompts' },
+};
+
 function KindPill({ kind }: { kind: ArenaKind }) {
   return (
     <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -105,6 +140,16 @@ export default function CampaignDashboard() {
    * pre-Plan-02 leaderboard exactly.
    */
   const [ratingsSource, setRatingsSource] = useState<RatingSource>('both');
+  /**
+   * Plan 06 P2-A — leaderboard view for system-prompt arenas. The
+   * across-suite rollup is the default (matches the existing slider
+   * scorecard). Operators flip to 'heatmap' to see per-(variant,
+   * prompt) cells. Only meaningful when `arenaKind === 'system_prompt'`;
+   * other kinds ignore this state entirely.
+   */
+  const [leaderboardView, setLeaderboardView] = useState<
+    'rollup' | 'heatmap'
+  >('rollup');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
@@ -392,10 +437,22 @@ export default function CampaignDashboard() {
   const personaGroups = useMemo(() => {
     if (!data) return [];
     const groups = new Map<string, CampaignDetail['ratings']>();
+    // Plan 06 P2-9 — accept the campaign-aggregate row for any mode the
+    // ratings pipeline emits: bare 'overall' (tournament/BT) plus the
+    // per-mode prefixed variants (`slider:overall`, `approve_reject:overall`,
+    // `best_of_n:overall`). System-prompt arenas default to slider so
+    // their per-persona aggregate lands under `slider:overall` — without
+    // matching that prefix this rollup stayed empty for the wedge kind.
+    const PERSONA_AGGREGATE_CATEGORIES = new Set([
+      'overall',
+      'slider:overall',
+      'approve_reject:overall',
+      'best_of_n:overall',
+    ]);
     for (const r of data.ratings) {
       if (r.source !== 'simulated') continue;
       if (r.personaId == null) continue;
-      if (r.category !== 'overall') continue;
+      if (!PERSONA_AGGREGATE_CATEGORIES.has(r.category)) continue;
       if (!groups.has(r.personaId)) groups.set(r.personaId, []);
       groups.get(r.personaId)!.push(r);
     }
@@ -552,7 +609,7 @@ export default function CampaignDashboard() {
             )}
           </TabsTrigger>
           <TabsTrigger value="prompts">
-            Prompts
+            {KIND_TAB_LABELS[arenaKind]}
             {stats.promptCount > 0 && (
               <span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/80">
                 {stats.promptCount}
@@ -598,12 +655,12 @@ export default function CampaignDashboard() {
                   {campaign.shareSlug}
                 </code>
               </KeyValue>
-              <KeyValue label="Models">
+              <KeyValue label={KIND_STAT_LABELS[arenaKind].contestants}>
                 <span className="font-mono text-xs tabular-nums text-foreground">
                   {stats.modelCount}
                 </span>
               </KeyValue>
-              <KeyValue label="Prompts">
+              <KeyValue label={KIND_STAT_LABELS[arenaKind].testCases}>
                 <span className="font-mono text-xs tabular-nums text-foreground">
                   {stats.promptCount}
                 </span>
@@ -683,6 +740,53 @@ export default function CampaignDashboard() {
             )}
           />
 
+          {/* Plan 06 P2-A — leaderboard-view toggle (system-prompt
+              arenas only). Default 'rollup' matches the legacy
+              behavior; 'heatmap' swaps the per-mode panels for the
+              per-(variant, prompt) cell grid.
+              Plan 06 P2-7 — suite-size badge surfaces "based on N
+              test prompts" alongside the toggle so the across-suite
+              sample size is visible regardless of which view the
+              operator picks. The badge replaces an upper-bound
+              warning per PRD; CIs in the data carry the
+              sample-size-thinness signal further. */}
+          {arenaKind === 'system_prompt' && (
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                role="tablist"
+                aria-label="Leaderboard view"
+                className="inline-flex h-9 items-center rounded-md border border-border bg-card p-0.5 text-[12px] font-medium"
+              >
+                {(
+                  [
+                    { id: 'rollup', label: 'Across suite (default)' },
+                    { id: 'heatmap', label: 'By prompt (heatmap)' },
+                  ] as const
+                ).map((opt) => {
+                  const active = leaderboardView === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setLeaderboardView(opt.id)}
+                      className={cn(
+                        'h-full rounded-[5px] px-3 transition-colors',
+                        active
+                          ? 'bg-foreground text-background'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <SuiteSizeBadge promptCount={data.prompts.length} />
+            </div>
+          )}
+
           {/* Composition summary — only shown when the campaign has more
               than one evaluation mode in play. Orients the operator
               before they scroll through the stacked per-mode panels
@@ -708,6 +812,15 @@ export default function CampaignDashboard() {
             </section>
           )}
 
+          {arenaKind === 'system_prompt' && leaderboardView === 'heatmap' && (
+            <SystemPromptHeatmapSection
+              models={data.models}
+              prompts={data.prompts}
+              cells={data.heatmapCells ?? []}
+            />
+          )}
+
+          {(arenaKind !== 'system_prompt' || leaderboardView === 'rollup') && (<>
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
               <div className="flex items-center gap-2">
@@ -816,8 +929,16 @@ export default function CampaignDashboard() {
           {sortedBestOfNRatings.length > 0 && (
             <ModeScorecard
               mode="best_of_n"
-              title="Best-of-N results"
-              description="Win rate per model (share of times picked). Bounds are Wilson 95% intervals."
+              title={
+                arenaKind === 'prompt'
+                  ? 'Across all inputs (Best-of-N rollup)'
+                  : 'Best-of-N results'
+              }
+              description={
+                arenaKind === 'prompt'
+                  ? 'Pick rate per variant across every input. Bounds are Wilson 95% intervals. Drill into the per-input table below to see where each variant wins.'
+                  : 'Win rate per model (share of times picked). Bounds are Wilson 95% intervals.'
+              }
               rows={sortedBestOfNRatings}
               format={(r) => `${r.rating}%`}
               formatRange={(r) =>
@@ -826,6 +947,39 @@ export default function CampaignDashboard() {
                   : null
               }
               sampleLabel="shown"
+            />
+          )}
+
+          {/* Plan 05 P1-B — prompt-arena surface: variant text panel +
+              per-input drilldown. Renders only on kind='prompt' and
+              only when there are variants to show. */}
+          {arenaKind === 'prompt' && data.models.length > 0 && (
+            <VariantTextPanel
+              models={data.models}
+              ratings={sortedBestOfNRatings}
+            />
+          )}
+
+          {arenaKind === 'prompt' && (
+            <PerInputDrilldown
+              campaignId={campaign.id}
+              prompts={data.prompts}
+              models={data.models}
+              perInputBestOfN={data.perInputBestOfN ?? []}
+            />
+          )}
+
+          {/* Plan 06 P2-8 — variant-text side panel for system-prompt
+              arenas. Collapsed by default (system prompts run long;
+              the operator opens it intentionally to read the
+              winner's full text). Sorted by slider rating across the
+              suite — same rollup the slider scorecard above uses. */}
+          {arenaKind === 'system_prompt' && data.models.length > 0 && (
+            <VariantTextPanel
+              models={data.models}
+              ratings={sortedSliderRatings}
+              defaultCollapsed
+              ratingFormat="slider"
             />
           )}
 
@@ -901,6 +1055,7 @@ export default function CampaignDashboard() {
               loading={personasQuery.isLoading}
             />
           )}
+          </>)}
         </TabsContent>
 
         {/* Prompts ----------------------------------------------------- */}
@@ -1614,6 +1769,494 @@ function PromptRow({
         )}
       </div>
     </article>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Plan 05 P1-B — Prompt-arena dashboard surface.
+//
+// Two components:
+//   - `VariantTextPanel` — always-visible (default-expanded) list of
+//     each variant's full text alongside its rank. Long variants
+//     collapse to a max-height with overflow scroll; the "Compare"
+//     focused-pair modal is deferred per the P1-B batch's allowance.
+//   - `PerInputDrilldown` — table of (input × variant) Best-of-N pick
+//     counts. Click a row to expand; on expansion, lazily fetch
+//     /api/campaigns/:id/generations?promptId=… to show the actual
+//     output text for that input. Tournament/slider/approve_reject/
+//     multi_axis prompts render placeholder cells in V1.
+// ────────────────────────────────────────────────────────────────────────────
+
+const LONG_VARIANT_THRESHOLD = 2000;
+
+/**
+ * Plan 06 P2-A — wrapper around `HeatmapLeaderboard` that adapts the
+ * server's `CampaignDetail` payload to the component's input contract.
+ * Renames `campaignModelId` to `variantId`, builds a truncated label
+ * for each prompt's column header, and surfaces a small "Slider scores
+ * 1–10" caption so operators don't have to remember which range the
+ * cell colours encode against.
+ *
+ * No persona-axis filtering yet — V1 aggregates across all responses
+ * (human + simulated combined). Per-persona heatmap views are a
+ * follow-up if operators ask for them.
+ */
+function SystemPromptHeatmapSection({
+  models,
+  prompts,
+  cells,
+}: {
+  models: CampaignDetail['models'];
+  prompts: CampaignDetail['prompts'];
+  cells: CampaignDetail['heatmapCells'];
+}) {
+  const heatmapPrompts: HeatmapPromptInput[] = useMemo(
+    () =>
+      prompts.map((p) => ({
+        id: p.id,
+        // Header label = first line of prompt, truncated to 40 chars.
+        // The full text shows up in the column-header `title` tooltip.
+        label: truncatePromptLabel(p.text),
+        text: p.text,
+        orderIndex: p.orderIndex,
+      })),
+    [prompts],
+  );
+  const heatmapCells: HeatmapCellInput[] = useMemo(
+    () =>
+      cells.map((c) => ({
+        variantId: c.campaignModelId,
+        promptId: c.promptId,
+        score: c.score,
+        ciLow: c.ciLow,
+        ciHigh: c.ciHigh,
+        sampleSize: c.sampleSize,
+      })),
+    [cells],
+  );
+  const heatmapVariants = useMemo(
+    () => models.map((m) => ({ id: m.id, displayName: m.displayName })),
+    [models],
+  );
+  return (
+    <section className="flex flex-col gap-3">
+      <header className="flex items-center justify-between gap-3 px-1">
+        <div>
+          <h2 className="font-heading text-sm font-semibold text-foreground">
+            Per-prompt heatmap
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            Slider score per (variant, suite prompt). Hover a cell for
+            the 95% CI and sample size. Greyed cells haven't been voted
+            on yet.
+          </p>
+        </div>
+      </header>
+      <HeatmapLeaderboard
+        variants={heatmapVariants}
+        suitePrompts={heatmapPrompts}
+        cells={heatmapCells}
+      />
+    </section>
+  );
+}
+
+function truncatePromptLabel(text: string): string {
+  const firstLine = text.split('\n', 1)[0]?.trim() ?? '';
+  if (firstLine.length <= 40) return firstLine || '(empty)';
+  return `${firstLine.slice(0, 40).trim()}…`;
+}
+
+/**
+ * Plan 06 P2-7 — "based on N test prompts" badge. The PRD frames this
+ * as the primary self-correcting nudge for thin suites: warnings get
+ * dismissed; confidence intervals don't. The badge is small + neutral
+ * so it sits next to the leaderboard view toggle without competing
+ * with the data; the hover tooltip carries the explainer copy.
+ *
+ * The single-N model assumes every variant was scored against the
+ * same suite, which is true for V1 system-prompt arenas — the suite
+ * is campaign-level. If a future flow lets variants opt out of
+ * specific prompts, this badge becomes per-variant and moves into
+ * the row instead.
+ */
+export function SuiteSizeBadge({ promptCount }: { promptCount: number }) {
+  const tooltip =
+    'Wider error bars on the leaderboard mean less confidence. Add more test prompts to your suite to tighten the bounds.';
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex h-9 items-center rounded-md border border-dashed border-border bg-card px-3 text-[11px] text-muted-foreground"
+    >
+      based on{' '}
+      <span className="ml-1 font-mono tabular-nums text-foreground">
+        {promptCount}
+      </span>
+      <span className="ml-1">
+        test prompt{promptCount === 1 ? '' : 's'}
+      </span>
+    </span>
+  );
+}
+
+function VariantTextPanel({
+  models,
+  ratings,
+  defaultCollapsed = false,
+  ratingFormat = 'percent',
+}: {
+  models: CampaignDetail['models'];
+  ratings: CampaignDetail['ratings'];
+  /**
+   * Plan 06 P2-8 — system-prompt arenas open the panel collapsed.
+   * Variant bodies run long and the leaderboard above already
+   * communicates the ranking; the side panel is for "read the
+   * winner's text" not "see all variants at a glance".
+   */
+  defaultCollapsed?: boolean;
+  /**
+   * How to render each variant's headline rating.
+   *   - 'percent'  (default) — Plan 05 prompt-arena pick rate, e.g. "37%".
+   *   - 'slider'              — Plan 06 system-prompt-arena slider score
+   *                             (ratings are stored ×100; we render the
+   *                             plain mean to two decimals).
+   */
+  ratingFormat?: 'percent' | 'slider';
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  // Map campaignModelId → rating row to read the rank/score for each
+  // variant. Across-input rollup ratings are already sorted desc by
+  // rating in the parent; using their order gives us per-variant rank.
+  const ratingByModel = useMemo(() => {
+    const map = new Map<string, { rank: number; rating: number }>();
+    ratings.forEach((r, idx) => {
+      map.set(r.campaignModelId, { rank: idx + 1, rating: r.rating });
+    });
+    return map;
+  }, [ratings]);
+
+  // Order: ranked-by-rating first; unranked variants (0 votes yet) at
+  // the end, in their definition order from `models`.
+  const orderedModels = useMemo(() => {
+    return [...models].sort((a, b) => {
+      const ra = ratingByModel.get(a.id);
+      const rb = ratingByModel.get(b.id);
+      if (ra && rb) return ra.rank - rb.rank;
+      if (ra) return -1;
+      if (rb) return 1;
+      return 0;
+    });
+  }, [models, ratingByModel]);
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div>
+          <h2 className="font-heading text-sm font-semibold text-foreground">
+            Variant text
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            {ratingFormat === 'slider'
+              ? 'The full body of each system-prompt variant, ranked by across-suite slider score.'
+              : 'The full body of each variant, ranked by across-input pick rate.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          className="text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {collapsed ? 'Expand' : 'Collapse'}
+        </button>
+      </header>
+      {!collapsed && (
+        <ul className="divide-y divide-border/60">
+          {orderedModels.map((model) => {
+            const rating = ratingByModel.get(model.id);
+            const text = model.variantText ?? '';
+            const isLong = text.length > LONG_VARIANT_THRESHOLD;
+            return (
+              <li
+                key={model.id}
+                className="flex flex-col gap-2 px-5 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {rating?.rank ?? '—'}
+                    </span>
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {model.displayName}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-3 shrink-0">
+                    {rating != null && (
+                      <span className="font-mono text-sm tabular-nums text-foreground">
+                        {ratingFormat === 'slider'
+                          ? (rating.rating / 100).toFixed(2)
+                          : `${rating.rating}%`}
+                      </span>
+                    )}
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {text.length} chars
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'whitespace-pre-wrap rounded-md border border-border bg-surface-highlight/30 px-3 py-2 font-mono text-[12px] leading-relaxed text-foreground',
+                    isLong && 'max-h-64 overflow-y-auto',
+                  )}
+                  data-testid="variant-text-body"
+                >
+                  {text || (
+                    <span className="text-muted-foreground/60">
+                      (empty variant body)
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function PerInputDrilldown({
+  campaignId,
+  prompts,
+  models,
+  perInputBestOfN,
+}: {
+  campaignId: string;
+  prompts: CampaignDetail['prompts'];
+  models: CampaignDetail['models'];
+  perInputBestOfN: CampaignDetail['perInputBestOfN'];
+}) {
+  // Index pickCount by `${promptId}:${campaignModelId}` for O(1) cell
+  // lookup. Per-input total picks is the row sum.
+  const pickByCell = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of perInputBestOfN) {
+      map.set(`${row.promptId}:${row.campaignModelId}`, row.pickCount);
+    }
+    return map;
+  }, [perInputBestOfN]);
+
+  const totalPicksByPrompt = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of perInputBestOfN) {
+      map.set(
+        row.promptId,
+        (map.get(row.promptId) ?? 0) + row.pickCount,
+      );
+    }
+    return map;
+  }, [perInputBestOfN]);
+
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
+
+  if (prompts.length === 0) {
+    return (
+      <section className="rounded-xl border border-border bg-card px-5 py-6 text-center text-sm text-muted-foreground shadow-sm">
+        Standalone variants — no inputs. Each variant's score in the
+        across-input rollup above reflects all votes equally.
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <header className="border-b border-border px-5 py-3">
+        <h2 className="font-heading text-sm font-semibold text-foreground">
+          By input
+        </h2>
+        <p className="text-[11px] text-muted-foreground">
+          Pick count per (input × variant) for Best-of-N prompts. Click a row
+          to read each variant's actual output for that input.
+        </p>
+      </header>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-[12px]">
+          <thead className="bg-surface-highlight/40 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Input</th>
+              {models.map((m) => (
+                <th
+                  key={m.id}
+                  className="px-3 py-2 text-right font-medium"
+                  scope="col"
+                >
+                  {m.displayName}
+                </th>
+              ))}
+              <th className="px-3 py-2 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {prompts.map((prompt) => {
+              const isBestOfN = prompt.mode === 'best_of_n';
+              const totalPicks = totalPicksByPrompt.get(prompt.id) ?? 0;
+              const expanded = expandedPromptId === prompt.id;
+              return (
+                <>
+                  <tr
+                    key={prompt.id}
+                    onClick={() =>
+                      setExpandedPromptId(expanded ? null : prompt.id)
+                    }
+                    className="cursor-pointer transition-colors hover:bg-surface-highlight/30"
+                  >
+                    <td className="px-3 py-2">
+                      <span className="line-clamp-2 text-foreground">
+                        {prompt.text}
+                      </span>
+                      {!isBestOfN && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {MODE_DISPLAY_NAMES[prompt.mode] ?? prompt.mode}
+                        </span>
+                      )}
+                    </td>
+                    {models.map((m) => {
+                      if (!isBestOfN) {
+                        return (
+                          <td
+                            key={m.id}
+                            className="px-3 py-2 text-right text-muted-foreground/60"
+                          >
+                            —
+                          </td>
+                        );
+                      }
+                      const picks =
+                        pickByCell.get(`${prompt.id}:${m.id}`) ?? 0;
+                      const pct =
+                        totalPicks > 0
+                          ? Math.round((picks / totalPicks) * 100)
+                          : 0;
+                      return (
+                        <td
+                          key={m.id}
+                          className="px-3 py-2 text-right font-mono tabular-nums"
+                        >
+                          {totalPicks > 0 ? (
+                            <span className="text-foreground">
+                              {picks}{' '}
+                              <span className="text-muted-foreground/70">
+                                ({pct}%)
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/60">0</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
+                      {isBestOfN ? totalPicks : '—'}
+                    </td>
+                  </tr>
+                  {expanded && (
+                    <tr key={`${prompt.id}-expanded`} className="bg-surface-highlight/20">
+                      <td colSpan={models.length + 2} className="px-3 py-3">
+                        <PromptOutputs
+                          campaignId={campaignId}
+                          promptId={prompt.id}
+                          models={models}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <footer className="border-t border-border px-5 py-2 text-[10px] text-muted-foreground">
+        Per-input scores are available for Best-of-N in V1; other modes
+        ship in a follow-up batch.
+      </footer>
+    </section>
+  );
+}
+
+/**
+ * Lazy-loads `/api/campaigns/:id/generations?promptId=…` when the
+ * operator expands a row. Renders one card per variant with the
+ * actual output (or error) for the selected input.
+ */
+function PromptOutputs({
+  campaignId,
+  promptId,
+  models,
+}: {
+  campaignId: string;
+  promptId: string;
+  models: CampaignDetail['models'];
+}) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['campaign-generations', campaignId, promptId],
+    queryFn: () =>
+      apiFetch<import('../lib/api').GenerationsByPromptResponse>(
+        `/api/campaigns/${campaignId}/generations?promptId=${encodeURIComponent(promptId)}`,
+      ),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Loading outputs…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="text-[11px] text-destructive">
+        {error instanceof Error ? error.message : String(error)}
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const generationByModel = new Map(
+    data.generations.map((g) => [g.campaignModelId, g]),
+  );
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {models.map((m) => {
+        const gen = generationByModel.get(m.id);
+        return (
+          <div
+            key={m.id}
+            className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2"
+          >
+            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="truncate">{m.displayName}</span>
+              {gen?.tokensOut != null && (
+                <span className="font-mono">{gen.tokensOut} tok</span>
+              )}
+            </div>
+            {gen?.error ? (
+              <div className="text-[11px] text-destructive">{gen.error}</div>
+            ) : gen?.output ? (
+              <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed text-foreground">
+                {gen.output}
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground/60">
+                (no generation yet)
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

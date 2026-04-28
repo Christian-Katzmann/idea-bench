@@ -71,10 +71,9 @@ export type VotingMode = 'anonymous' | 'email_required' | 'hybrid';
 /**
  * Plan 04 — what a campaign varies (the X axis of the experiment).
  * Mirrors the server-side `campaign_kind` enum in
- * `src/server/db/schema.ts`. Until Plans 05/06 flip their feature
- * flags, the API only accepts `'model'`; CreateCampaign.tsx (Phase 2)
- * surfaces the kind selector but the other options stay disabled with
- * a "Coming soon" treatment.
+ * `src/server/db/schema.ts`. Plans 05 and 06 have flipped their feature
+ * flags; all three kinds are reachable via the API and the kind picker
+ * in CreateCampaign.tsx.
  */
 export type ArenaKind = 'model' | 'prompt' | 'system_prompt';
 
@@ -110,6 +109,12 @@ export type CreateCampaignPayload =
       variants: CampaignVariantInput[];
       pinnedProviderModelId: string;
       pinnedSystemPrompt?: string | null;
+      /**
+       * Plan 05 — when true, each variant runs verbatim (a literal
+       * `{{input}}` inside the variant body is preserved, not
+       * substituted). Defaults to false. Only valid on kind='prompt'.
+       */
+      standaloneVariants?: boolean;
     })
   | (CreateCampaignBase & {
       kind: 'system_prompt';
@@ -175,6 +180,11 @@ export interface CampaignKindFields {
   kind: ArenaKind;
   pinnedProviderModelId: string | null;
   pinnedSystemPrompt: string | null;
+  /**
+   * Plan 05 — `true` when variants run verbatim (no `{{input}}`
+   * substitution). Always false for kind != 'prompt'.
+   */
+  standaloneVariants: boolean;
 }
 
 export interface CampaignDetail {
@@ -192,6 +202,12 @@ export interface CampaignDetail {
     id: string;
     providerModelId: string;
     displayName: string;
+    /**
+     * Plan 05 — variant body for prompt/system_prompt arenas. Null
+     * (or empty string) on `kind='model'` campaigns. The dashboard
+     * variant-text side panel reads this directly.
+     */
+    variantText: string | null;
   }>;
   prompts: Array<{
     id: string;
@@ -233,6 +249,51 @@ export interface CampaignDetail {
     campaignModelId: string;
     providerModelId: string;
     displayName: string;
+  }>;
+  /**
+   * Plan 05 P1-B — per-input Best-of-N drilldown. One row per
+   * (prompt × variant) with the count of times this variant won for
+   * that input. Empty for non-prompt-arena campaigns.
+   */
+  perInputBestOfN: Array<{
+    promptId: string;
+    campaignModelId: string;
+    pickCount: number;
+  }>;
+  /**
+   * Plan 06 P2-A — per-(prompt, variant) score grid for the heatmap
+   * leaderboard on system-prompt arenas. Aggregates slider responses
+   * (the default mode for this kind). Empty array on other kinds and
+   * on system-prompt arenas with no slider responses yet. The
+   * dashboard back-fills empty cells client-side and renders them
+   * greyed out — never inferred as 0.
+   */
+  heatmapCells: Array<{
+    promptId: string;
+    campaignModelId: string;
+    score: number;
+    ciLow: number | null;
+    ciHigh: number | null;
+    sampleSize: number;
+  }>;
+}
+
+/**
+ * Plan 05 P1-B — response shape for `GET /api/campaigns/:id/generations`.
+ * Lazy-loaded by the dashboard's per-input drilldown when the operator
+ * expands a row to read the actual outputs for a given input.
+ */
+export interface GenerationsByPromptResponse {
+  promptId: string;
+  generations: Array<{
+    id: string;
+    campaignModelId: string;
+    output: string | null;
+    error: string | null;
+    tokensIn: number | null;
+    tokensOut: number | null;
+    latencyMs: number | null;
+    completedAt: string | null;
   }>;
 }
 

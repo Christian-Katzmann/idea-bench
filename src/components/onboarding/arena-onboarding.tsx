@@ -102,10 +102,36 @@ const ONBOARDING_CONTENT: Record<ArenaKind, OnboardingContent> = {
       },
     ],
   },
-  // TODO: copy lands when arena mode ships
   prompt: {
     label: 'Prompt arena',
-    steps: placeholderSteps('Prompt arena'),
+    steps: [
+      {
+        line: 'Many prompt variants.',
+        detail:
+          'You write the candidates — different phrasings, different framings, side by side.',
+      },
+      {
+        line: 'The same model.',
+        detail: 'You pin one model; every variant runs through it.',
+      },
+      {
+        line: 'Voters pick the winner.',
+        detail:
+          'Share a link. Voters see the answers and click the better one.',
+      },
+      {
+        line: 'Anonymous comparisons.',
+        detail: 'Voters never know which variant produced which answer.',
+      },
+      {
+        line: 'The best phrasing rises to the top.',
+        detail: 'Votes turn into a leaderboard you can sort and export.',
+      },
+      {
+        line: 'Activate · Share · Watch.',
+        detail: 'Open voting, send the link, watch results come in.',
+      },
+    ],
   },
   // TODO: copy lands when arena mode ships
   system_prompt: {

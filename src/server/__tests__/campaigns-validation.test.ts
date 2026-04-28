@@ -65,6 +65,16 @@ describe('parseCreatePayload — model kind (legacy regression)', () => {
       error: expect.stringContaining('pinnedProviderModelId'),
     });
   });
+
+  it('rejects standaloneVariants under `model`', () => {
+    const r = parseCreatePayload({
+      ...baseModelPayload(),
+      standaloneVariants: true,
+    });
+    expect(r).toMatchObject({
+      error: expect.stringContaining('standaloneVariants'),
+    });
+  });
 });
 
 describe('parseCreatePayload — prompt kind', () => {
@@ -147,13 +157,72 @@ describe('parseCreatePayload — prompt kind', () => {
       error: expect.stringContaining('providerModelIds'),
     });
   });
+
+  // PRD: prompt arenas with 0 inputs are valid (variants are
+  // "standalone"). The Phase 1 Standalone-variants toggle submits an
+  // empty prompts[] for this case; the parser must accept it. All
+  // other kinds still require a non-empty suite.
+  it('accepts an empty prompts[] (standalone variants)', () => {
+    const r = parseCreatePayload({
+      ...promptArenaPayload(),
+      prompts: [],
+    });
+    if ('error' in r) throw new Error(r.error);
+    expect(r.kind).toBe('prompt');
+    expect(r.prompts).toEqual([]);
+  });
+
+  it('still rejects a missing prompts field (must be an array)', () => {
+    // Empty array OK; absent or non-array still rejected so the
+    // payload contract stays explicit.
+    const { prompts: _, ...rest } = promptArenaPayload();
+    const r = parseCreatePayload(rest);
+    expect(r).toMatchObject({ error: expect.stringContaining('prompts[]') });
+  });
+
+  // Plan 05 P1-C — `standaloneVariants` flag (verbatim render).
+  describe('standaloneVariants flag', () => {
+    it('defaults to false when omitted', () => {
+      const r = parseCreatePayload(promptArenaPayload());
+      if ('error' in r) throw new Error(r.error);
+      if (r.kind === 'prompt') {
+        expect(r.standaloneVariants).toBe(false);
+      }
+    });
+
+    it('accepts standaloneVariants: true', () => {
+      const r = parseCreatePayload({
+        ...promptArenaPayload(),
+        standaloneVariants: true,
+      });
+      if ('error' in r) throw new Error(r.error);
+      if (r.kind === 'prompt') {
+        expect(r.standaloneVariants).toBe(true);
+      }
+    });
+
+    it('rejects non-boolean standaloneVariants', () => {
+      const r = parseCreatePayload({
+        ...promptArenaPayload(),
+        standaloneVariants: 'yes',
+      });
+      expect(r).toMatchObject({
+        error: expect.stringContaining('standaloneVariants must be a boolean'),
+      });
+    });
+  });
 });
 
 describe('parseCreatePayload — system_prompt kind', () => {
   const sysArenaPayload = () => ({
     name: 'Sys arena',
     kind: 'system_prompt' as const,
-    prompts: [PROMPT],
+    // Plan 06 PRD requires ≥3 test prompts (across-suite robustness).
+    prompts: [
+      { text: 'Translate to French: hello.' },
+      { text: 'Translate to French: how are you?' },
+      { text: 'Translate to French: good night.' },
+    ],
     pinnedProviderModelId: 'openai/gpt-5',
     variants: [
       { text: 'You are concise.' },
@@ -161,12 +230,13 @@ describe('parseCreatePayload — system_prompt kind', () => {
     ],
   });
 
-  it('accepts the minimal shape (≥2 variants, pinned model)', () => {
+  it('accepts the minimal shape (≥2 variants, ≥3 test prompts, pinned model)', () => {
     const r = parseCreatePayload(sysArenaPayload());
     if ('error' in r) throw new Error(r.error);
     expect(r.kind).toBe('system_prompt');
     if (r.kind === 'system_prompt') {
       expect(r.variants).toHaveLength(2);
+      expect(r.prompts).toHaveLength(3);
       expect(r.pinnedProviderModelId).toBe('openai/gpt-5');
     }
   });
@@ -178,6 +248,77 @@ describe('parseCreatePayload — system_prompt kind', () => {
     });
     expect(r).toMatchObject({
       error: expect.stringContaining('pinnedSystemPrompt'),
+    });
+  });
+
+  it('rejects standaloneVariants under system_prompt kind', () => {
+    const r = parseCreatePayload({
+      ...sysArenaPayload(),
+      standaloneVariants: true,
+    });
+    expect(r).toMatchObject({
+      error: expect.stringContaining('standaloneVariants'),
+    });
+  });
+
+  it('rejects fewer than 3 test prompts (Plan 06 hard block)', () => {
+    for (const tooFew of [
+      [],
+      [{ text: 'one' }],
+      [{ text: 'one' }, { text: 'two' }],
+    ]) {
+      const r = parseCreatePayload({ ...sysArenaPayload(), prompts: tooFew });
+      expect(r).toMatchObject({
+        error: expect.stringMatching(/at least 3 test prompts|prompts\[\] must be non-empty/),
+      });
+    }
+  });
+
+  // Plan 06 PRD: variant text ≤ 16,000 chars (system prompts run long;
+  // 2× the user-prompt limit). Per-kind cap, separate from the 8k cap
+  // that prompt-arena variants live under.
+  describe('per-kind variant text length cap', () => {
+    it('accepts variant text right at the 16,000-char system_prompt cap', () => {
+      const r = parseCreatePayload({
+        ...sysArenaPayload(),
+        variants: [
+          { text: 'a'.repeat(16000) },
+          { text: 'You are verbose.' },
+        ],
+      });
+      if ('error' in r) throw new Error(r.error);
+      expect(r.kind).toBe('system_prompt');
+    });
+
+    it('rejects variant text over the 16,000-char system_prompt cap', () => {
+      const r = parseCreatePayload({
+        ...sysArenaPayload(),
+        variants: [
+          { text: 'a'.repeat(16001) },
+          { text: 'You are verbose.' },
+        ],
+      });
+      expect(r).toMatchObject({
+        error: expect.stringContaining('exceeds 16000 chars'),
+      });
+    });
+
+    it('rejects prompt-arena variant text over the 8,000-char cap', () => {
+      // Sanity-check that the per-kind split didn't accidentally raise
+      // the kind='prompt' cap to 16k. Prompt arenas keep the 8k limit.
+      const r = parseCreatePayload({
+        name: 'Prompt arena',
+        kind: 'prompt' as const,
+        prompts: [PROMPT],
+        pinnedProviderModelId: 'anthropic/claude-sonnet-4-6',
+        variants: [
+          { text: 'a'.repeat(8001) },
+          { text: 'short {{input}}' },
+        ],
+      });
+      expect(r).toMatchObject({
+        error: expect.stringContaining('exceeds 8000 chars'),
+      });
     });
   });
 });
@@ -192,10 +333,10 @@ describe('parseCreatePayload — kind discriminator', () => {
 });
 
 describe('ALLOWED_KINDS feature flag', () => {
-  it('only includes model in V1 (Plans 05/06 widen this)', () => {
+  it('opens all three kinds (model + prompt + system_prompt) post-Plan-06', () => {
     expect(ALLOWED_KINDS.has('model')).toBe(true);
-    expect(ALLOWED_KINDS.has('prompt')).toBe(false);
-    expect(ALLOWED_KINDS.has('system_prompt')).toBe(false);
-    expect(ALLOWED_KINDS.size).toBe(1);
+    expect(ALLOWED_KINDS.has('prompt')).toBe(true);
+    expect(ALLOWED_KINDS.has('system_prompt')).toBe(true);
+    expect(ALLOWED_KINDS.size).toBe(3);
   });
 });

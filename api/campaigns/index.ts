@@ -10,11 +10,24 @@ import { toVercelHandler } from '../../src/server/vercel-adapter.js';
 
 /**
  * Plan 04 feature flag. The schema and validation accept all three
- * arena kinds, but only `model` is reachable via the API until Plans
- * 05 (Prompt Arena) and 06 (System-Prompt Arena) ship. Those plans
- * widen this set when their feature flips.
+ * arena kinds; the API only accepts those whose plans have flipped
+ * on. Plan 05 (Prompt Arena) opened `'prompt'`; Plan 06 (System-Prompt
+ * Arena) opens `'system_prompt'`. With both shipped, all three kinds
+ * are reachable via the API.
  */
-export const ALLOWED_KINDS = new Set<schema.CampaignKind>(['model']);
+export const ALLOWED_KINDS = new Set<schema.CampaignKind>([
+  'model',
+  'prompt',
+  'system_prompt',
+]);
+
+/**
+ * PRD § "Validation rules" — system-prompt arenas are meaningless on
+ * fewer than 3 user prompts because the whole point is across-suite
+ * robustness. Hard block at the API. Plan 04's per-kind parser allows
+ * non-empty suites; this is the per-kind tightening for `system_prompt`.
+ */
+const SYSTEM_PROMPT_MIN_SUITE = 3;
 
 /**
  * Per-kind contestant minimums (PRD → "Creation UX" minimums table):
@@ -28,7 +41,19 @@ const KIND_MIN_CONTESTANTS: Record<schema.CampaignKind, number> = {
   system_prompt: 2,
 };
 
-const VARIANT_TEXT_MAX = 8000;
+/**
+ * Per-kind variant-text length cap. Plan 05's prompt arena uses 8k
+ * (matches today's prompt limit). Plan 06's system-prompt arena
+ * doubles that — system prompts run long (style guides, brand voice
+ * docs, multi-section refusal policies) and the PRD spells out the
+ * 16k allowance explicitly. `model` is null because that kind has no
+ * variants.
+ */
+const VARIANT_TEXT_MAX: Record<schema.CampaignKind, number | null> = {
+  model: null,
+  prompt: 8000,
+  system_prompt: 16000,
+};
 const PINNED_SYSTEM_PROMPT_MAX = 8000;
 const VARIANT_DISPLAY_NAME_MAX = 80;
 
@@ -154,6 +179,11 @@ export default toVercelHandler(withOperator(async (request: Request) => {
       pinnedProviderModelId:
         kind === 'model' ? null : parsed.pinnedProviderModelId,
       pinnedSystemPrompt: kind === 'prompt' ? parsed.pinnedSystemPrompt : null,
+      // Plan 05 — only kind='prompt' carries standaloneVariants; the
+      // CHECK constraint forbids true on other kinds (the column
+      // defaults to false at the DB level for those).
+      standaloneVariants:
+        kind === 'prompt' ? parsed.standaloneVariants : false,
     })
     .returning();
 
@@ -251,6 +281,12 @@ type ParsedPayload = ParsedShared &
         variants: ParsedVariant[];
         pinnedProviderModelId: string;
         pinnedSystemPrompt: string | null;
+        /**
+         * Plan 05 — when true, `renderTemplate` runs in standalone mode
+         * (variant body verbatim; literal `{{input}}` preserved). Only
+         * meaningful for kind='prompt'; defaults to false.
+         */
+        standaloneVariants: boolean;
       }
     | {
         kind: 'system_prompt';
@@ -417,7 +453,17 @@ export function parseCreatePayload(
     kind = o.kind as schema.CampaignKind;
   }
 
-  if (!Array.isArray(o.prompts) || o.prompts.length === 0) {
+  // PRD: prompt arenas with 0 inputs are valid — variants are
+  // "standalone" and run without {{input}} substitution. The activate
+  // handler already permits the empty-suite case for kind='prompt';
+  // the create parser must agree so the Phase 1 Standalone-variants
+  // toggle round-trips. All other kinds still require a non-empty
+  // suite (model arenas have no concept of standalone contestants;
+  // system_prompt arenas need at least one user prompt to test).
+  if (!Array.isArray(o.prompts)) {
+    return { error: 'prompts[] is required' };
+  }
+  if (o.prompts.length === 0 && o.kind !== 'prompt') {
     return { error: 'prompts[] must be non-empty' };
   }
   const prompts: ParsedPromptRow[] = [];
@@ -475,6 +521,11 @@ export function parseCreatePayload(
     if (o.pinnedSystemPrompt !== undefined) {
       return { error: 'pinnedSystemPrompt is only allowed for prompt kinds' };
     }
+    if (o.standaloneVariants !== undefined) {
+      return {
+        error: 'standaloneVariants is only allowed for prompt kinds',
+      };
+    }
 
     const min = KIND_MIN_CONTESTANTS.model;
     if (
@@ -519,6 +570,9 @@ export function parseCreatePayload(
   if (!Array.isArray(o.variants) || o.variants.length < min) {
     return { error: `variants[] requires at least ${min} entries for ${kind} kind` };
   }
+  // Per-kind cap. Non-null for any kind that carries variants — the
+  // type system enforces this branch is unreachable for kind='model'.
+  const variantTextMax = VARIANT_TEXT_MAX[kind]!;
   const variants: ParsedVariant[] = [];
   for (let i = 0; i < o.variants.length; i++) {
     const raw = o.variants[i];
@@ -528,8 +582,8 @@ export function parseCreatePayload(
     const v = raw as Record<string, unknown>;
     const text = typeof v.text === 'string' ? v.text.trim() : '';
     if (!text) return { error: `variants[${i}].text is required` };
-    if (text.length > VARIANT_TEXT_MAX) {
-      return { error: `variants[${i}].text exceeds ${VARIANT_TEXT_MAX} chars` };
+    if (text.length > variantTextMax) {
+      return { error: `variants[${i}].text exceeds ${variantTextMax} chars` };
     }
     let displayName: string | undefined;
     if (typeof v.displayName === 'string' && v.displayName.trim()) {
@@ -556,12 +610,20 @@ export function parseCreatePayload(
       }
       pinnedSystemPrompt = sp;
     }
+    if (
+      o.standaloneVariants !== undefined &&
+      typeof o.standaloneVariants !== 'boolean'
+    ) {
+      return { error: 'standaloneVariants must be a boolean' };
+    }
+    const standaloneVariants = o.standaloneVariants === true;
     return {
       ...shared,
       kind,
       variants,
       pinnedProviderModelId,
       pinnedSystemPrompt,
+      standaloneVariants,
     };
   }
 
@@ -569,6 +631,21 @@ export function parseCreatePayload(
   if (o.pinnedSystemPrompt !== undefined) {
     return {
       error: 'pinnedSystemPrompt is only allowed for prompt kinds (the system message IS the variant for system_prompt kinds)',
+    };
+  }
+  if (o.standaloneVariants !== undefined) {
+    return {
+      error: 'standaloneVariants is only allowed for prompt kinds',
+    };
+  }
+  // PRD: across-suite robustness is the whole point — fewer than 3 user
+  // prompts makes the result meaningless. Hard block here; the operator
+  // sees this inline at create time rather than discovering it after a
+  // run completes with thin CIs. Confidence intervals on the
+  // leaderboard handle the upper-bound nudging on their own.
+  if (prompts.length < SYSTEM_PROMPT_MIN_SUITE) {
+    return {
+      error: `system_prompt arenas require at least ${SYSTEM_PROMPT_MIN_SUITE} test prompts; got ${prompts.length}`,
     };
   }
   return { ...shared, kind, variants, pinnedProviderModelId };

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -50,6 +50,10 @@ const SUGGESTED_TAGS = [
   'data extraction',
   'reasoning',
   'structured output',
+  'sagsnotat',
+  'myndighedssprog',
+  'borgerkommunikation',
+  'sagsopsummering',
 ];
 
 const MIN_MODELS = 4; // Tournament requires exactly 4 per bracket.
@@ -763,6 +767,118 @@ export default function CreateCampaign() {
     }
   };
 
+  // ───────────────────────────────────────────────────────────────────
+  // DEMO AUTOFILL — temporary, remove after demo.
+  // Toggle via the small "demo" button in the lower-right of the page,
+  // or deep-link with `?demo=1`. With nothing focused, press → to fill
+  // the current step with demo data and advance.
+  // To remove: delete this block, the <DemoToggle> JSX near the
+  // AppShell render, and the four entries appended to SUGGESTED_TAGS.
+  // Nothing else depends on it.
+  // ───────────────────────────────────────────────────────────────────
+  const [demoMode, setDemoMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('demo') === '1') return true;
+    return window.sessionStorage.getItem('campaign-demo-mode') === '1';
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (demoMode) {
+      window.sessionStorage.setItem('campaign-demo-mode', '1');
+    } else {
+      window.sessionStorage.removeItem('campaign-demo-mode');
+    }
+  }, [demoMode]);
+  const demoLatestRef = useRef({
+    step,
+    demoMode,
+    MODELS: [] as { providerModelId: string }[],
+    isGenerating,
+    generationDone,
+    handleGenerate,
+  });
+  demoLatestRef.current = {
+    step,
+    demoMode,
+    MODELS: (modelLibrary?.rows ?? []).filter((m) => m.enabled && !m.legacy),
+    isGenerating,
+    generationDone,
+    handleGenerate,
+  };
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handler = (ev: KeyboardEvent) => {
+      if (ev.key !== 'ArrowRight') return;
+      if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+      if (!demoLatestRef.current.demoMode) {
+        console.debug('[demo] ArrowRight ignored — demo mode is OFF');
+        return;
+      }
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) {
+        console.debug(
+          `[demo] ArrowRight ignored — focus is on <${tag?.toLowerCase()}> (click on the page background, then try again)`,
+        );
+        return;
+      }
+      console.debug(`[demo] ArrowRight → autofilling step ${demoLatestRef.current.step}`);
+      ev.preventDefault();
+
+      const latest = demoLatestRef.current;
+      if (latest.step === 0) {
+        // Nothing to autofill — kind is already 'model' by default.
+        return;
+      }
+      if (latest.step === 1) {
+        setName('Sprogmodeller i sagsbehandling — Q2 evaluering');
+        setDescription(
+          'Sammenligning af kandidatmodeller på kerneopgaver i sagsbehandlingen: notater om borgerforløb, korrespondance med andre kommuner og opsummering af sagsakter. Målet er at vælge en standardmodel, der rammer en respektfuld, klar og myndig tone.',
+        );
+        setCategories(['sagsnotat', 'myndighedssprog']);
+        return;
+      }
+      if (latest.step === 2) {
+        const p1 = emptyPrompt('tournament');
+        p1.text =
+          'Skriv et kort notat til ydelseskontoret på baggrund af konteksten nedenfor. Forklar baggrunden for indstillingen i et sagligt og myndigt sprog, og medtag en kort vurdering af borgerens progression. Marker personoplysninger med firkantede parenteser, fx [borgerens navn], [adresse] og [CPR-nummer].';
+        p1.context =
+          'Borger: 34 år, mand. På kontanthjælp siden marts 2024.\nForløb: 13 ugers virksomhedspraktik hos lokal købmand, afsluttet 22. april.\nPraktikvurdering fra arbejdsgiver: "Stabilt fremmøde alle 13 uger, god til kundekontakt, kan med fordel få mere oplæring i kassesystemet. Vi vil gerne tage ham som løntilskud."\nTidligere indsatser: FVU-dansk modul 2 (afsluttet 2025); jobsøgningsforløb hos ekstern leverandør første halvår 2025 uden ansættelse.\nHelbred: Ingen aktuelle skånehensyn.\nSagsbehandlers vurdering: Klar progression i mødestabilitet og selvstændighed. Indstilling: 6 måneders løntilskudsstilling med henblik på efterfølgende ordinær ansættelse.';
+
+        const p2 = emptyPrompt('tournament');
+        p2.text =
+          'Lav en opsummering på maks. 200 ord af journalnotaterne nedenfor. Den skal dække borgerens helbredsmæssige situation, hidtidige indsatser, samarbejdet med mentor og status på arbejdsevnen. Skriv neutralt og uden gentagelser, så en ny sagsbehandler hurtigt kan sætte sig ind i sagen. Marker personoplysninger med firkantede parenteser, fx [borgerens navn] og [mentors navn].';
+        p2.context =
+          'Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.\n\nJournalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.\n\nJournalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.\n\nJournalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.\n\nJournalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.';
+
+        const p3 = emptyPrompt('tournament');
+        p3.text =
+          'Skriv en mail til en sagsbehandler i tilflytningskommunen på baggrund af konteksten nedenfor. Forklar, hvor borgeren står i Min Plan, hvilke aftaler der er indgået, og hvad det næste skridt bør være. Hold sproget kollegialt og konkret, så modtageren kan overtage sagen uden at skulle bede om uddybning. Marker personoplysninger med firkantede parenteser, fx [borgerens navn], [tilflytningskommune] og [modtagers navn].';
+        p3.context =
+          'Borger: Kvinde, 28 år. Flytter fra vores kommune til ny kommune pr. 1. juni 2026.\nYdelse: Dagpenge. Uddannelse: SOSU-assistent.\nStatus i Min Plan: Jobsøgningsforløb påbegyndt 15. januar 2026.\nIndgåede aftaler:\n- Ugentlig jobsøgningssamtale (senest afholdt 20. april).\n- CV-workshop hos ekstern leverandør, afsluttet 12. marts.\n- Mindst 4 ansøgninger pr. uge inden for sundhedssektoren.\n- Optaget på venteliste til 6 ugers jobrettet uddannelse i geriatri, forventet opstart august 2026.\nAktuel jobsøgning: 18 ansøgninger sendt siden januar, 2 samtaler, ingen tilbud.\nSagsbehandlers anbefaling: Fortsætte jobsøgningssporet med fokus på den jobrettede uddannelse til august.';
+
+        setPrompts([p1, p2, p3]);
+        return;
+      }
+      if (latest.step === 3) {
+        const ids = latest.MODELS.slice(0, 4).map((m) => m.providerModelId);
+        if (ids.length < MIN_MODELS) {
+          // Library not loaded yet — bail rather than half-fill.
+          return;
+        }
+        setSelectedModels(ids);
+        return;
+      }
+      // step 4 (Generate) and step 5 (Launch) have no fields to fill —
+      // operator clicks the action buttons themselves.
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const slotValues: SlotEvent[] = Object.values(slots);
   const slotsReceived = slotValues.length;
   const succeeded = slotValues.filter((s) => s.status === 'ok').length;
@@ -1052,6 +1168,24 @@ export default function CreateCampaign() {
           </footer>
         </div>
       </div>
+      {/* DEMO AUTOFILL — toggle. Remove with the rest of the demo block. */}
+      <button
+        type="button"
+        onClick={() => setDemoMode((v) => !v)}
+        title={
+          demoMode
+            ? 'Demo mode ON — press → to autofill each step. Click to disable.'
+            : 'Enable demo mode (autofill on →)'
+        }
+        className={cn(
+          'fixed bottom-4 right-4 z-50 rounded-full px-3 py-1 text-[10px] font-medium tracking-wide transition-colors',
+          demoMode
+            ? 'bg-emerald-700 text-white shadow-md hover:bg-emerald-700/90'
+            : 'border border-border bg-card/70 text-muted-foreground/60 hover:text-foreground',
+        )}
+      >
+        {demoMode ? 'DEMO ●' : 'demo'}
+      </button>
     </AppShell>
   );
 }

@@ -23,6 +23,8 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { LazyTiptapPromptEditor } from '../components/editors/LazyTiptapPromptEditor';
+import { AttachmentDropzone } from '../components/attachments/AttachmentDropzone';
+import { appendToContext } from '../lib/attachments/appendToContext';
 import { PageHeader } from '../components/ui/page-header';
 import { PromptDisplay } from '../components/prompt/PromptDisplay';
 import {
@@ -793,6 +795,7 @@ export default function CreateCampaign() {
   const demoLatestRef = useRef({
     step,
     demoMode,
+    kind,
     MODELS: [] as { providerModelId: string }[],
     isGenerating,
     generationDone,
@@ -801,6 +804,7 @@ export default function CreateCampaign() {
   demoLatestRef.current = {
     step,
     demoMode,
+    kind,
     MODELS: (modelLibrary?.rows ?? []).filter((m) => m.enabled && !m.legacy),
     isGenerating,
     generationDone,
@@ -833,6 +837,23 @@ export default function CreateCampaign() {
         return;
       }
       if (latest.step === 1) {
+        if (latest.kind === 'system_prompt') {
+          setName('Rapportskabelon-system-prompt — V2 evaluering');
+          setDescription(
+            'Sammenligning af system-prompts der udfylder en HTML-rapportskabelon med information fra borgerens sagsnotater. Modellen og test-input holdes konstant; vi sammenligner, hvilken system-prompt der giver de mest skabelon-tro og fagligt korrekte rapporter.',
+          );
+          setCategories(['myndighedssprog', 'sagsopsummering']);
+          return;
+        }
+        if (latest.kind === 'prompt') {
+          setName('Opsummerings-prompt: hvilken formulering virker bedst?');
+          setDescription(
+            'Vi tester forskellige formuleringer af samme opgave — opsummering af sagsakter til en ny sagsbehandler. Modellen holdes konstant; vi sammenligner, hvilken instruktion der giver de mest brugbare opsummeringer.',
+          );
+          setCategories(['sagsopsummering', 'sagsnotat']);
+          return;
+        }
+        // model arena (default)
         setName('Sprogmodeller i sagsbehandling — Q2 evaluering');
         setDescription(
           'Sammenligning af kandidatmodeller på kerneopgaver i sagsbehandlingen: notater om borgerforløb, korrespondance med andre kommuner og opsummering af sagsakter. Målet er at vælge en standardmodel, der rammer en respektfuld, klar og myndig tone.',
@@ -841,6 +862,51 @@ export default function CreateCampaign() {
         return;
       }
       if (latest.step === 2) {
+        if (latest.kind === 'system_prompt') {
+          // Test prompts are complete HTML docs (template + Aktiviteter +
+          // journal notes). Slider eval, axis = template fidelity.
+          const sliderCfg = {
+            min: 1,
+            max: 10,
+            minLabel: 'Skabelon brudt',
+            maxLabel: 'Skabelon tro',
+          };
+          const t1 = emptyPrompt('slider');
+          t1.sliderConfig = sliderCfg;
+          t1.text =
+            '[INSTRUCTION] Fokusér på borgerens progression de seneste 6 måneder. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.</p>\n<p>Journalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.</p>\n<p>Journalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.</p>\n<p>Journalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.</p>\n<p>Journalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.</p>';
+
+          const t2 = emptyPrompt('slider');
+          t2.sliderConfig = sliderCfg;
+          t2.text =
+            '[INSTRUCTION] Skriv kort med fokus på rekonvalescensforløb og raskmelding. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 14. januar 2026 — Opfølgningssamtale sygedagpenge uge 8. Borger sygemeldt 17. november 2025 efter akut diskusprolaps i lænden, opereret 4. december. Forventet rekonvalescens 8–12 uger. Aftalt opfølgning om 4 uger.</p>\n<p>Journalnotat 11. februar 2026 — Telefonisk kontakt. Borger melder fortsatte smerter, men er begyndt på genoptræning hos kommunal fysioterapeut 2x/uge. Afventer kontrol hos kirurg 25. februar.</p>\n<p>Journalnotat 4. marts 2026 — Statusmøde. Kirurg melder god heling, men borger har fortsat smerter ved længerevarende stillesiddende arbejde (kontorjob). Aftalt delvis raskmelding 4 timer/dag fra 17. marts, ugentlig opfølgning.</p>\n<p>Journalnotat 8. april 2026 — Borger har genoptaget arbejdet 6 timer/dag siden 1. april. Smerter aftaget. Vurdering: fuld raskmelding indenfor 4 uger sandsynlig. Næste opfølgning 22. april.</p>';
+
+          const t3 = emptyPrompt('slider');
+          t3.sliderConfig = sliderCfg;
+          t3.text =
+            '[INSTRUCTION] Skriv med fokus på borgerens initiativ og brancheskift. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 3. september 2025 — Opstartssamtale efter overgang fra dagpenge til kontanthjælp. Borger, 41 år, kvinde, uddannet pædagog, ledig siden marts 2024. Vurdering: jobparat. Aftalt: ugentlig jobsøgningssamtale, krav om mindst 4 ansøgninger/uge.</p>\n<p>Journalnotat 14. november 2025 — Status efter 10 ugers jobsøgning. 38 ansøgninger sendt, 5 samtaler, ingen tilbud. Borger udtrykker frustration over alderssegregering på arbejdsmarkedet. Drøftet brancheskift til SOSU-området.</p>\n<p>Journalnotat 12. januar 2026 — Borger har påbegyndt 6 ugers jobrettet uddannelse i SOSU-grundfag. Stabilt fremmøde. Aftalt: efter endt uddannelse opstart i virksomhedspraktik på lokalt plejecenter.</p>\n<p>Journalnotat 28. februar 2026 — Uddannelse afsluttet med tilfredsstillende resultat. Virksomhedspraktik 8 uger på Plejecenter Egeparken påbegyndt 24. februar. Foreløbig god feedback fra leder.</p>';
+
+          setPrompts([t1, t2, t3]);
+          return;
+        }
+        if (latest.kind === 'prompt') {
+          // Inputs to substitute via {{input}} on each variant.
+          const i1 = emptyPrompt('best_of_n');
+          i1.text =
+            'Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.\n\nJournalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.\n\nJournalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.\n\nJournalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.\n\nJournalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.';
+
+          const i2 = emptyPrompt('best_of_n');
+          i2.text =
+            'Journalnotat 14. januar 2026 — Opfølgningssamtale sygedagpenge uge 8. Borger sygemeldt 17. november 2025 efter akut diskusprolaps i lænden, opereret 4. december. Forventet rekonvalescens 8–12 uger. Aftalt opfølgning om 4 uger.\n\nJournalnotat 11. februar 2026 — Telefonisk kontakt. Borger melder fortsatte smerter, men er begyndt på genoptræning hos kommunal fysioterapeut 2x/uge. Afventer kontrol hos kirurg 25. februar.\n\nJournalnotat 4. marts 2026 — Statusmøde. Kirurg melder god heling, men borger har fortsat smerter ved længerevarende stillesiddende arbejde (kontorjob). Aftalt delvis raskmelding 4 timer/dag fra 17. marts, ugentlig opfølgning.\n\nJournalnotat 8. april 2026 — Borger har genoptaget arbejdet 6 timer/dag siden 1. april. Smerter aftaget. Vurdering: fuld raskmelding indenfor 4 uger sandsynlig. Næste opfølgning 22. april.';
+
+          const i3 = emptyPrompt('best_of_n');
+          i3.text =
+            'Journalnotat 3. september 2025 — Opstartssamtale efter overgang fra dagpenge til kontanthjælp. Borger, 41 år, kvinde, uddannet pædagog, ledig siden marts 2024. Vurdering: jobparat. Aftalt: ugentlig jobsøgningssamtale, krav om mindst 4 ansøgninger/uge.\n\nJournalnotat 14. november 2025 — Status efter 10 ugers jobsøgning. 38 ansøgninger sendt, 5 samtaler, ingen tilbud. Borger udtrykker frustration over alderssegregering på arbejdsmarkedet. Drøftet brancheskift til SOSU-området.\n\nJournalnotat 12. januar 2026 — Borger har påbegyndt 6 ugers jobrettet uddannelse i SOSU-grundfag. Stabilt fremmøde. Aftalt: efter endt uddannelse opstart i virksomhedspraktik på lokalt plejecenter.\n\nJournalnotat 28. februar 2026 — Uddannelse afsluttet med tilfredsstillende resultat. Virksomhedspraktik 8 uger på Plejecenter Egeparken påbegyndt 24. februar. Foreløbig god feedback fra leder.';
+
+          setPrompts([i1, i2, i3]);
+          return;
+        }
+        // model arena (default) — 3 case prompts with their own contexts.
         const p1 = emptyPrompt('tournament');
         p1.text =
           'Skriv et kort notat til ydelseskontoret på baggrund af konteksten nedenfor. Forklar baggrunden for indstillingen i et sagligt og myndigt sprog, og medtag en kort vurdering af borgerens progression. Marker personoplysninger med firkantede parenteser, fx [borgerens navn], [adresse] og [CPR-nummer].';
@@ -863,6 +929,54 @@ export default function CreateCampaign() {
         return;
       }
       if (latest.step === 3) {
+        if (latest.kind === 'system_prompt') {
+          // Three system-prompt versions for the same HTML-template-fill
+          // report-generation task. V2 is the production prompt verbatim.
+          // Pinned model auto-seeds via the existing useEffect.
+          setVariants([
+            {
+              displayName: 'Minimal',
+              text:
+                'Du genererer professionelle rapporter på dansk ved at udfylde en HTML-skabelon med information fra borgerens sagsnotater.\n\nInputtet er ét HTML-dokument: alt før <h1>Aktiviteter</h1> er skabelonen, alt fra og med Aktiviteter-overskriften er kildenotater. Bevar alle HTML-tags i skabelonen uændret. Erstat hjælpetekst i firkantede parenteser med relevant information fra notaterne.\n\nGæt aldrig. Hvis information mangler, skriv [Information not available in case notes]. Bevar [[KEEP-N]]-tokens og <span data-protected="true">-elementer uændret. Skriv al ny tekst på dansk.',
+            },
+            {
+              displayName: 'Produktionsprompt',
+              text:
+                '## Core Purpose\nGenerate professional reports by extracting and summarizing relevant information from source notes to fill the provided template structure, while **preserving every single HTML tag, attribute, and layout element that exists in the template portion** of the input.\n\n---\n\n## Input Format\n\nThe input may start with an instruction wrapper in this format: `[INSTRUCTION] ... [/INSTRUCTION]`, followed by a new line and then the HTML document.\nIf present, use the instruction as guidance only, then exclude the wrapper from output.\nSystem rules in this prompt always take priority over user-provided instruction. If there is any conflict, follow these rules.\n\nAfter handling the optional wrapper, the remaining input arrives as **one continuous HTML document.\nUse the following rule to split the document into "Template" and "Source Notes":\n\n• **Template** = Everything that appears **before** the first level‑1 heading whose inner text is exactly **"Aktiviteter"** (case‑sensitive, Danish spelling).\n• **Source Notes** = The `<h1 …>Aktiviteter</h1>` heading **itself** **plus** everything that follows it to the end of the document.\n – The `<h1>` tag can contain any `id`, `class`, or other attributes (e.g. `<h1 id="mcetoc_1iq8fv06i0">Aktiviteter</h1>`).\n – The `<h1>` tag is normally of the format `<h1 id="mcetoc_1iq8fXXXXX">Aktiviteter</h1>`) where the last five Xs can be a number or a letter.\n – If multiple "Aktiviteter" headings exist, the first one marks the split point.\n\nExample structure\n`[HTML … template …]`\n`<h1>Aktiviteter</h1>`\n`[HTML … source notes …]`\n\n---\n\n## Core Principles\n\n1. **Maintain exact headings, formatting, and HTML tags** found in the template section.\n2. **Extract information systematically**: for each template section, thoroughly scan the entire source notes section for relevant content.\n3. **Summarize effectively**: condense lengthy notes into concise, professional points that address each section\'s focus.\n4. Do not alter or remove any token matching `[[KEEP-<number>]]`; output each token verbatim.\n5. Keep every <span> element that carries a data-protected or data-anonymized attribute completely unchanged (opening tag, attributes, inner text, and closing tag). You may read its text for context, but must not edit it.\n6. **Remove instructional text**: any help/placeholder text present in the template must be deleted in the final output. Do not remove immutable `[[KEEP-<number>]]` tokens.\n7. **Mark genuinely missing information**: keep the heading but write `[Information not available in case notes]` when, after thorough search, data is absent.\n8. **Prioritize accuracy over completeness**: never guess or invent details.\n9. **HTML handling**\n   - Ignore HTML tags in the source notes while extracting information.\n   - Preserve every HTML tag (e.g., `div`, `span`, `table`, `tr`, `td`, attributes, inline styles) that appears in the template.\n   - Do not add, remove, or rearrange template tags.\n\n---\n\n## Information Extraction Process\n\nFor each section/heading in the template:\n\n1. Understand the section\'s purpose.\n2. Search all source notes for all data points relevant to that purpose.\n3. Extract key facts, observations, dates, measurements, and direct statements.\n4. Synthesize them into short, formal sentences or bullet points (as appropriate).\n5. Eliminate any duplicate or irrelevant content.\n6. Leave template help placeholders only if information is truly unavailable, using the missing‑information marker from Core Principle 5.\n7. Write the synthesized text inside the original template tags without altering the HTML structure.\n\n---\n\n## Information Synthesis Guidelines\n\n• Combine multiple occurrences of the same topic into one coherent summary.\n• Include quantifiable data (dates, numbers, frequencies) whenever they appear.\n• Highlight cause‑effect relationships explicitly stated in the notes.\n• Maintain chronological order when that makes the summary clearer or when the template asks for it.\n• Convert informal language into objective, professional wording.\n• Avoid redundancy.\n\n---\n\n## Output Quality Standards\n\n• Formal, objective tone.\n• Specific examples where available.\n• No speculative statements.\n• No repetition.\n• Consistent perspective and tense across the report.\n• All original template HTML must remain unchanged except where you insert extracted text.\n• All newly generated text (i.e., all content you add yourself) must be written in Danish.\n\n---\n\n## Important Reminders\n\n• Never fabricate information.\n• Only include content supported by the source notes. Try to be as verbose as possible, but avoid including information that is not relevant.\n• Provide partial information rather than declaring an entire section missing.\n• Search the entire source notes section before concluding that information is unavailable.\n• Your final answer to the user must be the fully filled‑in HTML template, ready for use.\n• Immutable tokens matching `[[KEEP-<number>]]` and protected/anonymized <span> tags must remain identical to the input; never modify or delete them.',
+            },
+            {
+              displayName: 'Persona + tænk-først',
+              text:
+                'Du er en erfaren dansk sagsbehandler med 15 års erfaring i beskæftigelsesindsatsen. Du udfylder rapportskabeloner ved først at tænke metodisk og derefter skrive.\n\nTrin 1: Læs hele HTML-skabelonen og forstå hver sektions formål. Skabelonen er alt før <h1>Aktiviteter</h1>; sagsnotaterne følger efter.\n\nTrin 2: Scan alle sagsnotater systematisk. Find for hver skabelon-sektion de relevante datapunkter (datoer, observationer, citater, beslutninger).\n\nTrin 3: Syntetisér i et fagligt myndighedssprog. Kombinér gentagelser. Bevar kronologi hvor det giver mening. Konvertér uformelt sprog til objektiv formulering.\n\nTrin 4: Skriv det endelige output ved at indsætte den syntetiserede tekst i de oprindelige template-tags. Skift aldrig HTML-strukturen. Bevar hver [[KEEP-N]]-token og hvert <span data-protected="true">-element bogstaveligt.\n\nHvis du efter grundig søgning ikke finder information til en sektion, skriv [Information not available in case notes] og behold sektionsoverskriften.\n\nAl ny tekst på dansk. Aldrig gætterier.',
+            },
+          ]);
+          return;
+        }
+        if (latest.kind === 'prompt') {
+          // Four phrasings of the same case-summary task.
+          // Pinned model auto-seeds via the existing useEffect; we don't
+          // override it so the operator can pick if they prefer.
+          setVariants([
+            {
+              displayName: 'Kort & neutral',
+              text: 'Lav en kort opsummering af sagsakterne nedenfor til en ny sagsbehandler. Maks. 200 ord. Skriv neutralt og uden gentagelser.\n\n{{input}}',
+            },
+            {
+              displayName: 'Struktureret',
+              text: 'Du er en erfaren sagsbehandler. Læs sagsakterne nedenfor og skriv en opsummering på maks. 200 ord opdelt i tre afsnit:\n1. Borgerens situation og helbred\n2. Hidtidige indsatser\n3. Aktuel status og næste skridt\n\n{{input}}',
+            },
+            {
+              displayName: 'Tænk-først',
+              text: 'Læs sagsakterne nedenfor grundigt. Identificér først, hvilke informationer der er kritiske for en ny sagsbehandler, og hvilke der er baggrundsstøj. Skriv derefter en kondenseret opsummering på maks. 200 ord, der prioriterer det kritiske.\n\n{{input}}',
+            },
+            {
+              displayName: 'Overdragelse',
+              text: 'Forestil dig, at du overdrager sagen til en kollega, der starter i morgen. Skriv en sagsopsummering på maks. 200 ord, som giver kollegaen alt det, hun skal vide for at træde rigtigt i den første samtale med borgeren. Hold sproget fagligt og uden gentagelser.\n\n{{input}}',
+            },
+          ]);
+          return;
+        }
+        // model arena (default) — pick the first 4 enabled non-legacy models.
         const ids = latest.MODELS.slice(0, 4).map((m) => m.providerModelId);
         if (ids.length < MIN_MODELS) {
           // Library not loaded yet — bail rather than half-fill.
@@ -1654,6 +1768,14 @@ function PromptCard({
   const flat = flattenPrompt(prompt);
   const hasContent = flat !== null;
 
+  // Latest context, exposed to the AttachmentDropzone callback so a batch
+  // of dropped files all read the up-to-date value (each iteration of the
+  // dropzone's sequential loop runs after a parent re-render but inside
+  // the same captured closure). Without the ref, file 2 in a batch would
+  // overwrite file 1's append.
+  const contextRef = useRef(prompt.context);
+  contextRef.current = prompt.context;
+
   // Build a live preview shape matching the battle-screen prompt contract.
   // Use the ACTUAL text the LLM will receive so creators notice if the
   // structured → flattened concatenation produces something awkward.
@@ -1709,6 +1831,22 @@ function PromptCard({
           onChange={(e) => onPatch({ context: e.target.value })}
           placeholder="Background info or system instructions…"
           className="min-h-16 bg-card text-sm"
+        />
+        <AttachmentDropzone
+          controlsId={`prompt-context-${idx}`}
+          onAppend={(filename, text) => {
+            const current = contextRef.current;
+            const r = appendToContext(current, filename, text);
+            if (!r.rejected) {
+              contextRef.current = r.next;
+              onPatch({ context: r.next });
+            }
+            return {
+              appended: r.next.length - current.length,
+              truncated: r.truncated,
+              rejected: r.rejected,
+            };
+          }}
         />
       </div>
 

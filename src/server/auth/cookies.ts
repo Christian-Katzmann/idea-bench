@@ -164,7 +164,13 @@ export interface SetCookieOptions {
   sameSite?: 'Strict' | 'Lax' | 'None';
 }
 
-/** Builds a Set-Cookie header value. HttpOnly + Secure are always set. */
+// Secure is required by browsers for cross-site cookies in prod, but WKWebView
+// (and the strict-loopback path in some other clients) refuses Secure cookies
+// over plain http://localhost. Drop the flag outside production so the desktop
+// launcher and other dev-over-HTTP clients persist the session.
+const SECURE_FLAG = process.env.NODE_ENV === 'production' ? 'Secure' : null;
+
+/** Builds a Set-Cookie header value. HttpOnly is always set; Secure in prod. */
 export function buildSetCookie(
   name: string,
   value: string,
@@ -175,7 +181,7 @@ export function buildSetCookie(
     `Max-Age=${Math.floor(opts.maxAgeMs / 1000)}`,
     `Path=${opts.path ?? '/'}`,
     'HttpOnly',
-    'Secure',
+    ...(SECURE_FLAG ? [SECURE_FLAG] : []),
     `SameSite=${opts.sameSite ?? 'Lax'}`,
   ];
   return parts.join('; ');
@@ -183,5 +189,6 @@ export function buildSetCookie(
 
 /** Builds a Set-Cookie header that clears the named cookie. */
 export function buildClearCookie(name: string, path = '/'): string {
-  return `${name}=; Max-Age=0; Path=${path}; HttpOnly; Secure; SameSite=Lax`;
+  const secure = SECURE_FLAG ? `${SECURE_FLAG}; ` : '';
+  return `${name}=; Max-Age=0; Path=${path}; HttpOnly; ${secure}SameSite=Lax`;
 }

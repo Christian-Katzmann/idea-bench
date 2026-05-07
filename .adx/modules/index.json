@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "id": "frontend-pages",
+      "path": "src/pages",
+      "purpose": "Route-level React screens for operator login, dashboard, campaign creation/detail, settings, model/persona libraries, participant voting, and personal results.",
+      "common_changes": ["page UI", "route behavior", "TanStack Query usage", "form flows"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["auth-and-ai-spend", "server-client-boundary"]
+    },
+    {
+      "id": "components",
+      "path": "src/components",
+      "purpose": "Reusable UI, layout, dashboard, heatmap, modal, model, onboarding, prompt, attachment, editor, and voting components.",
+      "common_changes": ["component UI", "design-system reuse", "interaction states", "accessibility"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["server-client-boundary"]
+    },
+    {
+      "id": "client-lib",
+      "path": "src/lib",
+      "purpose": "Client-safe utilities and shared types that may be imported by browser bundles.",
+      "common_changes": ["shared helpers", "attachment parsing", "IDs", "model metadata"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["server-client-boundary"]
+    },
+    {
+      "id": "server-domain",
+      "path": "src/server",
+      "purpose": "Server-only domain logic for auth, database access, campaign detail/export, simulated runs, OpenRouter, Vercel adapter, and API support.",
+      "common_changes": ["business logic", "auth checks", "database reads/writes", "AI generation", "server tests"],
+      "relevant_commands": ["lint", "test-run"],
+      "risks": ["auth-and-ai-spend", "server-client-boundary", "database-migrations"]
+    },
+    {
+      "id": "api-entrypoints",
+      "path": "api",
+      "purpose": "Vercel Function entrypoints that adapt HTTP requests to server-domain handlers.",
+      "common_changes": ["route wiring", "request validation", "cron endpoint", "function consolidation"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["deploy-and-production", "vercel-function-count", "auth-and-ai-spend"]
+    },
+    {
+      "id": "database",
+      "path": "drizzle",
+      "purpose": "Committed SQL migrations and Drizzle metadata generated from src/server/db/schema.ts.",
+      "common_changes": ["schema migration", "index changes", "migration metadata"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["database-migrations", "database-seeding"]
+    },
+    {
+      "id": "scripts",
+      "path": "scripts",
+      "purpose": "Operational scripts for migrations, seed data, deploy preflight, desktop launcher, synthetic votes, and local inspection.",
+      "common_changes": ["operational automation", "desktop appification", "database utilities"],
+      "relevant_commands": ["lint"],
+      "risks": ["database-migrations", "database-seeding", "deploy-and-production", "desktop-launcher"]
+    },
+    {
+      "id": "design-system",
+      "path": "docs/design-system",
+      "purpose": "Canonical visual and interaction language for ModelArena UI work.",
+      "common_changes": ["design guidance", "token decisions", "UI conventions"],
+      "relevant_commands": ["git-status"],
+      "risks": ["generated-and-build-artifacts"]
+    },
+    {
+      "id": "deploy-config",
+      "path": "vercel.json",
+      "purpose": "Vercel build command, rewrites, asset cache headers, and cron configuration.",
+      "common_changes": ["routing rewrites", "cache headers", "cron schedule", "build preflight"],
+      "relevant_commands": ["lint", "test-run", "build"],
+      "risks": ["deploy-and-production", "vercel-function-count"]
+    }
+  ]
+}

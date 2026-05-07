@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "levels": {
+    "orientation": ["git-status"],
+    "fast": ["git-status", "lint"],
+    "test": ["git-status", "lint", "test-run"],
+    "build": ["git-status", "lint", "build"],
+    "full": ["git-status", "lint", "test-run", "build"]
+  },
+  "change_type_matrix": [
+    {
+      "change_type": "docs-or-adx",
+      "commands": ["git-status"],
+      "notes": "Validate JSON contracts when ADX files change. No app tests required unless docs tooling or code examples changed."
+    },
+    {
+      "change_type": "frontend-ui",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "Use targeted component/page tests when narrowing failures. Browser preview is recommended for visible UI changes."
+    },
+    {
+      "change_type": "frontend-routing-or-assets",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "After build, use preview when verifying production HTML, route rewrites, or hashed assets."
+    },
+    {
+      "change_type": "server-api",
+      "commands": ["git-status", "lint", "test-run"],
+      "notes": "Add or update Vitest coverage under src/server/**/__tests__ or related route tests. Smoke via local fetch only when a server is intentionally running."
+    },
+    {
+      "change_type": "database-schema",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "Use db-generate only for intentional schema changes. Ask before db-migrate, db-push, db-seed, or any command requiring a live DATABASE_URL."
+    },
+    {
+      "change_type": "auth-or-ai-spend",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "Exercise fail-closed behavior for auth and AI-spend paths. Do not inspect secret values."
+    },
+    {
+      "change_type": "deploy-config-or-cron",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "Ask before deploy-check or any deploy. Verify Vercel function-count and cron behavior with existing tests where possible."
+    },
+    {
+      "change_type": "desktop-launcher",
+      "commands": ["git-status", "lint"],
+      "notes": "Desktop build/install commands mutate local generated files or machine state. Ask before install; build only when needed for launcher work."
+    },
+    {
+      "change_type": "dependencies",
+      "commands": ["git-status", "lint", "test-run", "build"],
+      "notes": "Use npm only. Review package-lock.json changes carefully."
+    },
+    {
+      "change_type": "generated-output-only",
+      "commands": ["git-status"],
+      "notes": "Do not edit dist/, desktop/, assets/icons/, or generated Drizzle files unless they are intentional outputs from the relevant command."
+    }
+  ]
+}

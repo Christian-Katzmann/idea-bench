@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "git-status",
+      "intent": "status",
+      "command": ["git", "status", "--short"],
+      "cwd": ".",
+      "safety": "read_only",
+      "timeout_seconds": 30,
+      "when_to_run": "Before and after changes.",
+      "success_signal": "Exits 0 and lists changed files if any.",
+      "recovery_hint": "If this fails, confirm you are inside the modelarena Git checkout."
+    },
+    {
+      "id": "install",
+      "intent": "setup dependencies",
+      "command": ["npm", "install"],
+      "cwd": ".",
+      "safety": "network",
+      "timeout_seconds": 180,
+      "when_to_run": "Only when node_modules is missing or dependencies changed.",
+      "success_signal": "npm exits 0 and package-lock.json remains consistent.",
+      "recovery_hint": "Use npm because package-lock.json is the lockfile. Do not switch package managers."
+    },
+    {
+      "id": "dev",
+      "intent": "run local Vite app and local API plugin",
+      "command": ["npm", "run", "dev"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 20,
+      "when_to_run": "When a browser preview or manual local smoke test is needed.",
+      "success_signal": "Vite starts on http://localhost:3000.",
+      "recovery_hint": "If port 3000 is busy, stop the existing server or run Vite with an explicit alternate port. The Vite API plugin replaces vercel dev for local work."
+    },
+    {
+      "id": "dev-api-vercel",
+      "intent": "run Vercel dev server",
+      "command": ["npm", "run", "dev:api"],
+      "cwd": ".",
+      "safety": "network",
+      "timeout_seconds": 60,
+      "when_to_run": "Only when explicitly investigating Vercel CLI behavior.",
+      "success_signal": "vercel dev starts successfully.",
+      "recovery_hint": "src/server/README.md documents that vercel dev previously failed non-interactively; prefer npm run dev for ordinary local work."
+    },
+    {
+      "id": "lint",
+      "intent": "typecheck",
+      "command": ["npm", "run", "lint"],
+      "cwd": ".",
+      "safety": "read_only",
+      "timeout_seconds": 120,
+      "when_to_run": "For most code changes.",
+      "success_signal": "TypeScript exits 0.",
+      "recovery_hint": "Fix TypeScript errors in the changed area first; avoid broad refactors."
+    },
+    {
+      "id": "test-watch",
+      "intent": "run Vitest in watch mode",
+      "command": ["npm", "test"],
+      "cwd": ".",
+      "safety": "read_only",
+      "timeout_seconds": 30,
+      "when_to_run": "Interactive local development only.",
+      "success_signal": "Vitest starts and reports test status.",
+      "recovery_hint": "For non-interactive agent verification, prefer test-run."
+    },
+    {
+      "id": "test-run",
+      "intent": "run full Vitest suite once",
+      "command": ["npm", "run", "test:run"],
+      "cwd": ".",
+      "safety": "read_only",
+      "timeout_seconds": 180,
+      "when_to_run": "For server, shared logic, and broad UI changes.",
+      "success_signal": "Vitest exits 0.",
+      "recovery_hint": "If failures predate your change, capture the failing tests and do not hide them."
+    },
+    {
+      "id": "build",
+      "intent": "production build",
+      "command": ["npm", "run", "build"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 180,
+      "when_to_run": "For frontend, routing, Vite config, public asset, and deploy-adjacent changes.",
+      "success_signal": "Vite build exits 0 and writes dist/.",
+      "recovery_hint": "dist/ is generated and ignored. Fix build errors at their source rather than editing dist/."
+    },
+    {
+      "id": "preview",
+      "intent": "serve production build locally",
+      "command": ["npm", "run", "preview"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 20,
+      "when_to_run": "After npm run build when verifying built routing/assets.",
+      "success_signal": "Vite preview starts.",
+      "recovery_hint": "Run build first if preview cannot find dist/."
+    },
+    {
+      "id": "clean",
+      "intent": "remove generated build output",
+      "command": ["npm", "run", "clean"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 30,
+      "when_to_run": "When a stale dist/ build is confusing local verification.",
+      "success_signal": "dist/ is removed.",
+      "recovery_hint": "Only removes generated dist/. Do not use broader rm commands."
+    },
+    {
+      "id": "db-generate",
+      "intent": "generate Drizzle migration from schema diff",
+      "command": ["npm", "run", "db:generate"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 120,
+      "when_to_run": "After intentional schema changes in src/server/db/schema.ts.",
+      "success_signal": "A new migration appears in drizzle/ and meta snapshots update.",
+      "recovery_hint": "Review generated SQL carefully. Commit migration output with the schema change."
+    },
+    {
+      "id": "db-migrate",
+      "intent": "apply pending migrations to DATABASE_URL",
+      "command": ["npm", "run", "db:migrate"],
+      "cwd": ".",
+      "safety": "requires_secret",
+      "timeout_seconds": 180,
+      "when_to_run": "Only after confirming DATABASE_URL targets the intended development database.",
+      "success_signal": "Migrations applied message and exit 0.",
+      "recovery_hint": "Do not run against an unknown or production DATABASE_URL without explicit approval."
+    },
+    {
+      "id": "db-push",
+      "intent": "push schema directly to DATABASE_URL",
+      "command": ["npm", "run", "db:push"],
+      "cwd": ".",
+      "safety": "human_approval_required",
+      "timeout_seconds": 180,
+      "when_to_run": "Rarely, for development-only schema experiments when explicitly approved.",
+      "success_signal": "Drizzle push exits 0.",
+      "recovery_hint": "This skips migration history. Prefer db-generate plus db-migrate."
+    },
+    {
+      "id": "db-studio",
+      "intent": "open Drizzle Studio",
+      "command": ["npm", "run", "db:studio"],
+      "cwd": ".",
+      "safety": "requires_secret",
+      "timeout_seconds": 30,
+      "when_to_run": "When manually inspecting a known development database.",
+      "success_signal": "Drizzle Studio starts, usually on port 4983.",
+      "recovery_hint": "Confirm DATABASE_URL and avoid exposing secrets in output."
+    },
+    {
+      "id": "db-seed",
+      "intent": "wipe and reseed demo data",
+      "command": ["npm", "run", "db:seed"],
+      "cwd": ".",
+      "safety": "destructive",
+      "timeout_seconds": 180,
+      "when_to_run": "Only for a confirmed development database when demo data reset is intended.",
+      "success_signal": "Seed script exits 0 and prints created share slugs.",
+      "recovery_hint": "This truncates app tables. The script refuses NODE_ENV=production unless ALLOW_PROD_SEED=1, but still confirm the database target first."
+    },
+    {
+      "id": "db-seed-starter-personas",
+      "intent": "seed curated starter personas",
+      "command": ["npm", "run", "db:seed-starter-personas"],
+      "cwd": ".",
+      "safety": "requires_secret",
+      "timeout_seconds": 180,
+      "when_to_run": "When a development database needs the curated starter persona library.",
+      "success_signal": "Script reports inserted/skipped persona counts.",
+      "recovery_hint": "Idempotent by name, but still confirm DATABASE_URL. Production requires explicit override."
+    },
+    {
+      "id": "deploy-check",
+      "intent": "database deploy preflight",
+      "command": ["npm", "run", "deploy:check"],
+      "cwd": ".",
+      "safety": "requires_secret",
+      "timeout_seconds": 120,
+      "when_to_run": "Before deploys or when validating the target database migration state.",
+      "success_signal": "Database deployment preflight passed.",
+      "recovery_hint": "Requires DATABASE_URL and reads the target database. Confirm the environment before running."
+    },
+    {
+      "id": "desktop-icons",
+      "intent": "generate desktop app icons",
+      "command": ["npm", "run", "desktop:icons"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 120,
+      "when_to_run": "When desktop launcher icon assets need regeneration.",
+      "success_signal": "Icon assets are generated under ignored assets/icons/.",
+      "recovery_hint": "assets/icons/ is generated and ignored."
+    },
+    {
+      "id": "desktop-build",
+      "intent": "build local macOS desktop launcher",
+      "command": ["npm", "run", "desktop:build"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 180,
+      "when_to_run": "When changing or testing desktop launcher scripts.",
+      "success_signal": "Desktop app bundle is generated under ignored desktop/.",
+      "recovery_hint": "desktop/ is generated and ignored. Rebuild if the repo path changes because the launcher bakes paths."
+    },
+    {
+      "id": "desktop-install",
+      "intent": "install local macOS desktop launcher",
+      "command": ["npm", "run", "desktop:install"],
+      "cwd": ".",
+      "safety": "human_approval_required",
+      "timeout_seconds": 180,
+      "when_to_run": "Only when Christian wants the local desktop app installed.",
+      "success_signal": "The app is installed in the expected macOS location.",
+      "recovery_hint": "This changes local machine state. Ask before running."
+    },
+    {
+      "id": "desktop-quit",
+      "intent": "stop desktop launcher server/window",
+      "command": ["npm", "run", "desktop:quit"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 60,
+      "when_to_run": "When the desktop launcher has a lingering local server or window.",
+      "success_signal": "Launcher processes stop.",
+      "recovery_hint": "Use when appified dev server processes persist after closing the window."
+    }
+  ]
+}

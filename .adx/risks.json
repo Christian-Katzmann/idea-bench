@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "risks": [
+    {
+      "id": "secrets-and-local-env",
+      "area": "secrets and environment configuration",
+      "paths": [".env.local", ".env.production.local", ".env*", ".vercel/", ".env.example"],
+      "risk": "Local env files can contain database URLs, auth secrets, OpenRouter keys, OAuth secrets, and Resend credentials.",
+      "required_behavior": "Do not read, print, summarize, or edit secret-bearing env files unless Christian explicitly asks. Use .env.example for variable names.",
+      "approval": "human_required",
+      "evidence": [".gitignore:7", ".env.example:1", "README.md:50", "README.md:72"]
+    },
+    {
+      "id": "database-migrations",
+      "area": "database schema and migration history",
+      "paths": ["src/server/db/schema.ts", "drizzle/", "drizzle.config.ts", "scripts/migrate.ts"],
+      "risk": "Schema and migration changes can alter live data shape and deploy behavior.",
+      "required_behavior": "Generate migrations only for intentional schema changes. Review SQL. Ask before applying migrations to any live DATABASE_URL.",
+      "approval": "approval_before_live_database",
+      "evidence": ["README.md:43", "README.md:44", "drizzle.config.ts:6", "scripts/migrate.ts:1"]
+    },
+    {
+      "id": "database-seeding",
+      "area": "database seed scripts",
+      "paths": ["scripts/seed.ts", "scripts/seed-starter-personas.ts", "data/starter-personas.json"],
+      "risk": "The demo seed truncates app tables, and starter persona seeding writes to the configured database.",
+      "required_behavior": "Confirm DATABASE_URL targets a development database before running seeds. Never use ALLOW_PROD_SEED=1 without explicit approval.",
+      "approval": "human_required",
+      "evidence": ["README.md:47", "scripts/seed.ts:18", "scripts/seed-starter-personas.ts:18"]
+    },
+    {
+      "id": "deploy-and-production",
+      "area": "deployment and production behavior",
+      "paths": ["vercel.json", "scripts/preflight-db.ts", "api/cron/", ".vercel/"],
+      "risk": "Deploy config, preflight checks, and cron routes affect production routing, database safety, and scheduled cleanup.",
+      "required_behavior": "Ask before deploys, production config changes, or commands that inspect production database state.",
+      "approval": "human_required",
+      "evidence": ["vercel.json:2", "vercel.json:17", "scripts/preflight-db.ts:10"]
+    },
+    {
+      "id": "auth-and-ai-spend",
+      "area": "operator auth and AI-spending endpoints",
+      "paths": ["api/auth/", "src/server/auth/", "api/campaigns/", "api/simulated-runs/", "api/personas/", "src/server/openrouter.ts", "src/server/routes/simulated-runs/"],
+      "risk": "Auth changes can expose operator access; AI endpoint changes can spend money or weaken fail-closed behavior.",
+      "required_behavior": "Preserve allowlists, fail-closed behavior, rate limits, and tests. Do not add password identity to AI_ALLOWED_IDENTITIES.",
+      "approval": "review_required",
+      "evidence": ["README.md:50", "README.md:72", ".env.example:22"]
+    },
+    {
+      "id": "server-client-boundary",
+      "area": "server-only code boundary",
+      "paths": ["src/server/", "api/", "src/pages/", "src/components/", "src/lib/"],
+      "risk": "Importing server runtime code into client bundles can leak assumptions, break browser builds, or expose env-dependent code.",
+      "required_behavior": "Do not import runtime server code from src/server/** into client pages/components/libs. Shared client-safe types and utilities belong in src/lib/.",
+      "approval": "review_required",
+      "evidence": ["src/server/README.md:44"]
+    },
+    {
+      "id": "vercel-function-count",
+      "area": "Vercel Function entrypoints",
+      "paths": ["api/", "src/server/__tests__/vercel-function-limit.test.ts"],
+      "risk": "Adding new function files can increase deploy surface and violate the intentionally capped function budget.",
+      "required_behavior": "Prefer extending existing dispatchers such as api/operator/[kind].ts or catch-all routes before adding entrypoints. Update tests deliberately if the budget changes.",
+      "approval": "review_required",
+      "evidence": ["src/server/__tests__/vercel-function-limit.test.ts:25"]
+    },
+    {
+      "id": "generated-and-build-artifacts",
+      "area": "generated output",
+      "paths": ["dist/", "desktop/", "assets/icons/", "drizzle/meta/", "package-lock.json"],
+      "risk": "Generated outputs can be stale or noisy; package-lock changes can alter dependency resolution.",
+      "required_behavior": "Do not hand-edit generated build outputs. Review lockfile and Drizzle metadata changes carefully when commands produce them.",
+      "approval": "review_required",
+      "evidence": [".gitignore:1", ".gitignore:12", "README.md:43"]
+    },
+    {
+      "id": "desktop-launcher",
+      "area": "local macOS desktop launcher",
+      "paths": ["scripts/desktop-*.sh", "scripts/run-template.sh", "scripts/wrapper.swift", "scripts/appify.config.json", "desktop/"],
+      "risk": "Launcher scripts manage local processes, generated app bundles, baked repo paths, and local machine state.",
+      "required_behavior": "Ask before installing the desktop app. Rebuild after path or launcher changes. Do not assume generated desktop/ output should be committed.",
+      "approval": "human_required_for_install",
+      "evidence": ["package.json:22", ".gitignore:12", "scripts/run-template.sh:26"]
+    }
+  ],
+  "dangerous_command_patterns": [
+    "ALLOW_PROD_SEED",
+    "db:push",
+    "db:migrate",
+    "db:seed",
+    "deploy",
+    "vercel",
+    "DATABASE_URL",
+    ".env",
+    "rm -rf",
+    "desktop:install"
+  ]
+}

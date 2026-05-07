@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-04-30T22:05:43Z",
+  "root": "/Users/christiankatzmann/Dev/ïdea.com/modelarena",
+  "source": "adx-forensic audit performed before implementation",
+  "repo_read": {
+    "kind": "app",
+    "stakes": "high",
+    "maturity_before": "basic",
+    "actual_git_root": "/Users/christiankatzmann/Dev/ïdea.com/modelarena",
+    "workspace_wrapper": "/Users/christiankatzmann/Dev/ïdea.com"
+  },
+  "scores_before": {
+    "arrive": 1,
+    "start": 3,
+    "change": 2,
+    "verify": 2,
+    "recover": 1,
+    "compound": 0
+  },
+  "scores_after_doctor": {
+    "arrive": 4,
+    "start": 5,
+    "change": 4,
+    "verify": 3,
+    "recover": 5,
+    "compound": 2
+  },
+  "score_after_adx_score": {
+    "total": 24,
+    "max_total": 30,
+    "arrive": 5,
+    "start": 5,
+    "change": 5,
+    "verify": 4,
+    "recover": 5,
+    "compound": 0
+  },
+  "findings": [
+    {
+      "id": "missing-canonical-agents",
+      "finding": "No canonical AGENTS.md existed at the workspace wrapper or the app Git root.",
+      "evidence": ["AGENTS.md missing", "modelarena/AGENTS.md missing", "adx_doctor output"],
+      "impact": "Cold Codex/default agents may not receive repo-specific operating guidance.",
+      "confidence": "high",
+      "recommended_artifact": "AGENTS.md"
+    },
+    {
+      "id": "missing-command-contract",
+      "finding": "Package scripts existed but there was no machine-readable command registry.",
+      "evidence": ["package.json:scripts", "package-lock.json", "README.md Scripts"],
+      "impact": "Agents must infer cwd, package manager, safety class, and env requirements.",
+      "confidence": "high",
+      "recommended_artifact": ".adx/commands.json"
+    },
+    {
+      "id": "safety-surfaces-uncatalogued",
+      "finding": "Database, deploy, secrets, auth, AI-spend, cron, and desktop launcher risks were real but uncatalogued.",
+      "evidence": [".env.example", ".gitignore", "scripts/seed.ts", "scripts/migrate.ts", "vercel.json", "src/server/__tests__/vercel-function-limit.test.ts"],
+      "impact": "Agents may run risky commands or touch sensitive paths without approval boundaries.",
+      "confidence": "high",
+      "recommended_artifact": ".adx/risks.json"
+    },
+    {
+      "id": "missing-verification-matrix",
+      "finding": "Test, lint, and build commands existed, but no authoritative matrix mapped checks to change types.",
+      "evidence": ["package.json:scripts", "vitest.config.ts", "README.md"],
+      "impact": "Agents may under-verify high-risk changes or over-run irrelevant checks.",
+      "confidence": "high",
+      "recommended_artifact": ".adx/verification.json"
+    },
+    {
+      "id": "recovery-knowledge-scattered",
+      "finding": "Recovery notes and gotchas were scattered across README, src/server/README.md, and handoff docs.",
+      "evidence": ["src/server/README.md", "../HANDOFF-NEXT-SESSION.md"],
+      "impact": "Agents may rediscover known Vercel dev, build, test, and DB failure modes.",
+      "confidence": "high",
+      "recommended_artifact": ".adx/recovery.md"
+    }
+  ],
+  "earned_bundles": [
+    "boot",
+    "commands",
+    "verification",
+    "safety",
+    "recovery",
+    "modules",
+    "maintenance"
+  ],
+  "negative_recommendations": [
+    "Do not install blocking hooks.",
+    "Do not duplicate full guidance across AGENTS.md, CLAUDE.md, and CODEX.md.",
+    "Do not store secrets or summarize values from local env files.",
+    "Do not add repo-local skills yet."
+  ],
+  "post_implementation_validation": [
+    "All ADX JSON files parsed with python3 -m json.tool.",
+    "adx_manifest.py validate --root . passed.",
+    "adx_score.py --root . reported ADX readiness 24/30.",
+    "adx_doctor.py --root . --json reported no findings and no unknown verification command references."
+  ]
+}

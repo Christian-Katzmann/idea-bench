@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "repo": {
+    "name": "modelarena",
+    "kind": "app",
+    "stakes": "high",
+    "summary": "ModelArena is a React 19, Vite, TypeScript, Vercel Functions, Neon Postgres, and Drizzle app for running blind AI model evaluation campaigns on idea.com. It includes operator auth, participant voting, AI generation through OpenRouter, database migrations, cron cleanup, desktop launcher scripts, and production deploy configuration."
+  },
+  "entrypoints": {
+    "canonical": "AGENTS.md",
+    "overlays": []
+  },
+  "contracts": {
+    "boot": true,
+    "commands": true,
+    "verification": true,
+    "safety": true,
+    "recovery": true,
+    "modules": true,
+    "memory": false,
+    "probes": false,
+    "maintenance": true
+  },
+  "paths": {
+    "commands": ".adx/commands.json",
+    "verification": ".adx/verification.json",
+    "risks": ".adx/risks.json",
+    "recovery": ".adx/recovery.md",
+    "journal": ".adx/journal.jsonl",
+    "claims": ".adx/claims.jsonl",
+    "modules": ".adx/modules/index.json",
+    "audit": ".adx/audit/latest.json",
+    "implementation_receipts": ".adx/implementation/"
+  },
+  "last_audit": ".adx/audit/latest.json",
+  "last_verified": "2026-04-30T22:05:43Z"
+}

@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   checkCostCeiling,
   defaultCostCeiling,
+  estimateGenerationCost,
   estimateRunCost,
 } from '../cost.js';
 import { defaultGenericMix } from '../panel-assembly.js';
@@ -150,6 +151,78 @@ describe('estimateRunCost', () => {
         promptKind.perMode.slider.calls,
       );
     });
+  });
+});
+
+describe('estimateGenerationCost', () => {
+  it('returns zero when there are no prompts or no contestants', () => {
+    expect(
+      estimateGenerationCost({ promptCount: 0, providerModelIds: ['anthropic/claude-haiku-4-5'] }),
+    ).toEqual({ estimatedUsd: 0, lowUsd: 0, highUsd: 0 });
+    expect(
+      estimateGenerationCost({ promptCount: 5, providerModelIds: [] }),
+    ).toEqual({ estimatedUsd: 0, lowUsd: 0, highUsd: 0 });
+  });
+
+  it('scales linearly with prompt count', () => {
+    const five = estimateGenerationCost({
+      promptCount: 5,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    const twenty = estimateGenerationCost({
+      promptCount: 20,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    expect(twenty.estimatedUsd / five.estimatedUsd).toBeCloseTo(4, 4);
+  });
+
+  it('scales linearly with contestant count when models are identical', () => {
+    const one = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    const four = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: Array(4).fill('anthropic/claude-haiku-4-5'),
+    });
+    expect(four.estimatedUsd / one.estimatedUsd).toBeCloseTo(4, 4);
+  });
+
+  it('costs more for premium models than cheap-tier', () => {
+    const cheap = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    const premium = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['anthropic/claude-opus-4-6'],
+    });
+    expect(premium.estimatedUsd).toBeGreaterThan(cheap.estimatedUsd * 5);
+  });
+
+  it('emits 0.5x / 2x bands around the point estimate', () => {
+    const result = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    expect(result.lowUsd).toBeCloseTo(result.estimatedUsd * 0.5, 4);
+    expect(result.highUsd).toBeCloseTo(result.estimatedUsd * 2, 4);
+  });
+
+  it('falls through to cheap-tier average for unknown model ids', () => {
+    const known = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['anthropic/claude-haiku-4-5'],
+    });
+    const unknown = estimateGenerationCost({
+      promptCount: 10,
+      providerModelIds: ['fictional-provider/imaginary-model'],
+    });
+    // Unknown rates are conservative ($1 in / $3 out per 1M) — close
+    // enough to Haiku that the estimate sits in a sane order of magnitude
+    // and never returns zero.
+    expect(unknown.estimatedUsd).toBeGreaterThan(0);
+    expect(unknown.estimatedUsd).toBeLessThan(known.estimatedUsd * 5);
   });
 });
 

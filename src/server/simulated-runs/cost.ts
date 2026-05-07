@@ -172,6 +172,58 @@ export function defaultCostCeiling(estimateUsd: number): number {
 }
 
 /**
+ * Pre-generation cost preview for the campaign-create wizard's Step 4
+ * (Generate). Unlike `estimateRunCost` (which estimates judging cost
+ * on simulated runs), this estimates the *generation* cost: running
+ * each prompt through each contestant model once, before any voting.
+ *
+ * Inputs:
+ *  - `promptCount`: distinct prompts (or test cases) the operator
+ *    has authored in step 2.
+ *  - `providerModelIds`: the contestants. For model-arena this is
+ *    the selected model set; for prompt / system-prompt arenas it's
+ *    `[pinnedProviderModelId]` repeated once per variant — every
+ *    variant routes through the same pinned model. Caller passes the
+ *    flat list so this helper stays kind-agnostic.
+ *
+ * Token assumption: 1500 input + 800 output per generation. Output
+ * length varies more than judge calls (which have a tight schema), so
+ * the ±band is wider — 0.5×–2× rather than 0.75×–1.25×. Treat the
+ * point estimate as an order-of-magnitude signal for picking a
+ * sensible budget cap, not a precise prediction.
+ */
+export function estimateGenerationCost(input: {
+  promptCount: number;
+  providerModelIds: string[];
+}): { estimatedUsd: number; lowUsd: number; highUsd: number } {
+  const TOKENS_IN = 1500;
+  const TOKENS_OUT = 800;
+
+  if (input.promptCount === 0 || input.providerModelIds.length === 0) {
+    return { estimatedUsd: 0, lowUsd: 0, highUsd: 0 };
+  }
+
+  // Sum the per-prompt cost across the contestant set, then scale by
+  // promptCount. Unknown providerModelIds fall through to the
+  // cheap-tier average so the estimate doesn't understate.
+  let perPromptUsd = 0;
+  for (const id of input.providerModelIds) {
+    const p = PRICING[id as ProviderModelId];
+    const inputRate = p?.input ?? 1.0;
+    const outputRate = p?.output ?? 3.0;
+    perPromptUsd +=
+      (TOKENS_IN * inputRate + TOKENS_OUT * outputRate) / 1_000_000;
+  }
+  const total = perPromptUsd * input.promptCount;
+
+  return {
+    estimatedUsd: round4(total),
+    lowUsd: round4(total * 0.5),
+    highUsd: round4(total * 2),
+  };
+}
+
+/**
  * Ceiling check — called by the runner after each judge call's actual
  * cost lands. Returns `exceeded` when the run should stop.
  */

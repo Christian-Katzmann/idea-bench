@@ -38,6 +38,7 @@ import type { ArenaKind } from '../lib/arena-kind';
 import { suggestPersonas } from '../server/simulated-runs/persona-suggest';
 import {
   defaultCostCeiling,
+  estimateGenerationCost,
   estimateRunCost,
 } from '../server/simulated-runs/cost';
 import { defaultGenericMix } from '../server/simulated-runs/panel-assembly';
@@ -1009,6 +1010,37 @@ export default function CreateCampaign() {
     .length;
   const steps = stepsForKind(kind);
 
+  // Pre-generation cost preview shown on Step 4. Helps the operator pick
+  // a budget cap with an informed expectation rather than guessing. The
+  // estimate updates live as the model set, prompt count, or variant
+  // count change. Returns zero before the operator has selected the
+  // contestants — Step 4 only shows the preview once contestants exist.
+  // Standalone-variant prompt arenas have 0 inputs but still generate
+  // one row per variant; the server treats that as a single synthetic
+  // case, so we mirror it here with `effectivePromptCount`.
+  const effectivePromptCount =
+    kind === 'prompt' && standaloneVariants ? 1 : validPromptCount;
+  const generationCostEstimate = useMemo(() => {
+    const ids: string[] =
+      kind === 'prompt' || kind === 'system_prompt'
+        ? // Every variant runs through the pinned model. Repeat the id
+          // per variant so the helper sees the right contestant count.
+          pinnedProviderModelId
+          ? Array.from({ length: validVariantCount }, () => pinnedProviderModelId)
+          : []
+        : selectedModels;
+    return estimateGenerationCost({
+      promptCount: effectivePromptCount,
+      providerModelIds: ids,
+    });
+  }, [
+    kind,
+    pinnedProviderModelId,
+    validVariantCount,
+    selectedModels,
+    effectivePromptCount,
+  ]);
+
   // Plan 06 P1-19 — cost preview for system-prompt arenas. The
   // generation cost is already paid by the time the operator reaches
   // Step 5 (we sum the per-slot `costUsd` reported by the SSE stream).
@@ -1170,14 +1202,10 @@ export default function CreateCampaign() {
                 // Standalone-variant prompt arenas have 0 inputs; the
                 // server treats this as a single synthetic case so the
                 // generated slot count equals variants × 1.
-                promptCount={
-                  kind === 'prompt' && standaloneVariants
-                    ? 1
-                    : validPromptCount
-                }
+                promptCount={effectivePromptCount}
                 modelCount={
                   kind === 'prompt' || kind === 'system_prompt'
-                    ? variants.filter((v) => v.text.trim().length > 0).length
+                    ? validVariantCount
                     : selectedModels.length
                 }
                 isGenerating={isGenerating}
@@ -1196,6 +1224,7 @@ export default function CreateCampaign() {
                 budgetCapInput={budgetCapInput}
                 onBudgetCapInput={setBudgetCapInput}
                 budgetWarning={budgetWarning}
+                costEstimate={generationCostEstimate}
               />
             )}
 
@@ -2710,6 +2739,7 @@ function StepGenerate({
   budgetCapInput,
   onBudgetCapInput,
   budgetWarning,
+  costEstimate,
 }: {
   kind: ArenaKind;
   promptCount: number;
@@ -2730,6 +2760,7 @@ function StepGenerate({
   budgetCapInput: string;
   onBudgetCapInput: (v: string) => void;
   budgetWarning: BudgetExceededEvent | null;
+  costEstimate: { estimatedUsd: number; lowUsd: number; highUsd: number };
 }) {
   const total = promptCount * modelCount;
   const skippedForBudget = slotValues.filter(
@@ -2768,6 +2799,9 @@ function StepGenerate({
 
         {!isGenerating && slotsReceived === 0 ? (
           <div className="flex flex-col items-center gap-3">
+            {costEstimate.estimatedUsd > 0 && (
+              <GenerationCostPreview estimate={costEstimate} />
+            )}
             <div className="flex w-full max-w-xs flex-col gap-1.5">
               <Label
                 htmlFor="budget-cap"
@@ -2785,7 +2819,14 @@ function StepGenerate({
                   inputMode="decimal"
                   step="0.01"
                   min="0"
-                  placeholder="0.50"
+                  placeholder={
+                    costEstimate.estimatedUsd > 0
+                      ? // Suggest 2× the estimate as a sane default cap —
+                        // matches the Plan 06 P1-C ceiling heuristic. Still
+                        // shown as placeholder so the operator can override.
+                        defaultCostCeiling(costEstimate.estimatedUsd).toFixed(2)
+                      : '0.50'
+                  }
                   value={budgetCapInput}
                   onChange={(e) => onBudgetCapInput(e.target.value)}
                   className="h-9 font-mono tabular-nums"
@@ -2955,6 +2996,39 @@ function StepGenerate({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Pre-generation cost preview. Shown above the budget-cap input on
+ * Step 4 once the operator has selected contestants but before they
+ * hit "Start generation." The point estimate sits prominently; the
+ * low–high band sits below in muted type so the operator sees the
+ * width of the uncertainty without the headline number being noisy.
+ *
+ * Output cost varies more than judging cost (where the call shape is
+ * fixed), so the helper returns 0.5×–2× bands. Treat as an order-of-
+ * magnitude signal for picking a budget cap, not a precise prediction.
+ */
+function GenerationCostPreview({
+  estimate,
+}: {
+  estimate: { estimatedUsd: number; lowUsd: number; highUsd: number };
+}) {
+  const fmt = (usd: number): string =>
+    usd >= 0.1 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(4)}`;
+  return (
+    <div className="flex w-full max-w-xs flex-col items-center gap-0.5 rounded-md border border-border bg-card px-3 py-2">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        Estimated generation cost
+      </span>
+      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+        ~{fmt(estimate.estimatedUsd)}
+      </span>
+      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+        {fmt(estimate.lowUsd)} – {fmt(estimate.highUsd)} range
+      </span>
     </div>
   );
 }

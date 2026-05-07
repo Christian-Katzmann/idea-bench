@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Combobox } from '@base-ui/react/combobox';
-import { Check, ChevronDown, Plus, Search, Share2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, Plus, Search, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -51,6 +51,25 @@ export function Spotlight({
       setActiveId(leaderboards[0].id);
     }
   }, [leaderboards, activeId]);
+
+  // Per-campaign snapshot of the rank order the first time this session
+  // saw enough data to rank. Frozen — never updates after capture — so
+  // the deltas surface "what's moved since you opened this page."
+  // Cross-session "since last visit" semantics would require localStorage
+  // and unmount cleanup; the in-session signal is already meaningful for
+  // the operator watching live votes arrive without bleeding state across
+  // sessions.
+  const initialRanksRef = useRef<Map<string, Map<string, number>>>(new Map());
+  for (const campaign of leaderboards) {
+    if (campaign.ratings.length === 0) continue;
+    if (!initialRanksRef.current.has(campaign.id)) {
+      const ranks = new Map<string, number>();
+      campaign.ratings.forEach((row, idx) => {
+        ranks.set(row.campaignModelId, idx + 1);
+      });
+      initialRanksRef.current.set(campaign.id, ranks);
+    }
+  }
 
   // Track row updates across polls for the leaderboard flash highlight.
   const previousRef = useRef<Map<string, { rating: number; gameCount: number }>>(
@@ -103,6 +122,27 @@ export function Spotlight({
   const modelLabelById = new Map<string, DashboardLeaderboardRow>(
     activeCampaign.ratings.map((row) => [row.campaignModelId, row]),
   );
+
+  // Top movers vs. the frozen initial-rank snapshot for this campaign.
+  // Sorted by absolute delta so the most dramatic shifts surface first;
+  // capped at 3 to keep the strip a single quiet line rather than a
+  // status panel. Skips models whose initial rank was unknown (added
+  // to the leaderboard mid-session) — they'd produce a rank "from ∞"
+  // which is more noise than signal.
+  const rankShifts = useMemo(() => {
+    const initial = initialRanksRef.current.get(activeCampaign.id);
+    if (!initial || activeCampaign.ratings.length === 0) return [];
+    const shifts: Array<{ row: DashboardLeaderboardRow; delta: number }> = [];
+    activeCampaign.ratings.forEach((row, idx) => {
+      const previousRank = initial.get(row.campaignModelId);
+      if (previousRank == null) return;
+      const currentRank = idx + 1;
+      const delta = previousRank - currentRank;
+      if (delta !== 0) shifts.push({ row, delta });
+    });
+    shifts.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    return shifts.slice(0, 3);
+  }, [activeCampaign]);
 
   return (
     <section aria-label="Campaign spotlight" className="flex flex-col">
@@ -157,12 +197,17 @@ export function Spotlight({
         (activeCampaign.ratings.length === 0 ? (
           <LeaderboardCampaignEmpty campaign={activeCampaign} />
         ) : (
-          <LeaderboardTable
-            campaign={activeCampaign}
-            updatedRowIds={
-              updatedByCampaign.get(activeCampaign.id) ?? EMPTY_SET
-            }
-          />
+          <>
+            {rankShifts.length > 0 && (
+              <RankShiftsStrip shifts={rankShifts} />
+            )}
+            <LeaderboardTable
+              campaign={activeCampaign}
+              updatedRowIds={
+                updatedByCampaign.get(activeCampaign.id) ?? EMPTY_SET
+              }
+            />
+          </>
         ))}
 
       {activeTab === 'matchups' && (
@@ -185,6 +230,54 @@ export function Spotlight({
 }
 
 const EMPTY_SET: Set<string> = new Set();
+
+/**
+ * Single-line strip of "what's moved since you opened this page,"
+ * rendered above the leaderboard table. The flash highlight on the
+ * row tells the operator "this just changed"; this strip tells them
+ * "this has shifted N places relative to where you started watching."
+ *
+ * Capped at three movers so the strip never exceeds one line at the
+ * common viewport widths. Each mover renders as `↑ Model (+N)` with
+ * up/down chevrons in success/destructive tones to match the Pulse
+ * tab's vote-arrival semantics. Hidden when there are no shifts —
+ * the parent already gates on `rankShifts.length > 0`.
+ */
+function RankShiftsStrip({
+  shifts,
+}: {
+  shifts: Array<{ row: DashboardLeaderboardRow; delta: number }>;
+}) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+      <span className="font-medium uppercase tracking-wide text-muted-foreground">
+        Since open
+      </span>
+      {shifts.map(({ row, delta }) => {
+        const up = delta > 0;
+        return (
+          <span
+            key={row.campaignModelId}
+            className="flex items-center gap-1 font-mono tabular-nums"
+            title={`${row.displayName}: ${
+              up ? `up ${delta}` : `down ${Math.abs(delta)}`
+            } place${Math.abs(delta) === 1 ? '' : 's'} since you opened this page`}
+          >
+            {up ? (
+              <ArrowUp className="size-3 text-success" />
+            ) : (
+              <ArrowDown className="size-3 text-destructive" />
+            )}
+            <span className="text-foreground">{row.displayName}</span>
+            <span className={cn(up ? 'text-success' : 'text-destructive')}>
+              {up ? `+${delta}` : delta}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Combobox-backed picker for the spotlight. Shows the selected campaign's

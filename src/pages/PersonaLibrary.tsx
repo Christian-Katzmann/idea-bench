@@ -33,7 +33,6 @@ import {
 import { AppShell } from '../components/layout/app-shell';
 import { PageHeader } from '../components/ui/page-header';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
@@ -219,31 +218,69 @@ function PersonaCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const visiblePriorities = persona.priorities.slice(0, 4);
+  const visibleAntiPatterns = persona.antiPatterns.slice(0, 4);
+  const hiddenSpineCount =
+    Math.max(0, persona.priorities.length - visiblePriorities.length) +
+    Math.max(0, persona.antiPatterns.length - visibleAntiPatterns.length);
+  const hasSpine =
+    persona.priorities.length > 0 || persona.antiPatterns.length > 0;
+  const kickerTags = persona.tags.slice(0, 3);
+  const extraTagCount = Math.max(0, persona.tags.length - kickerTags.length);
+  const hasKicker =
+    kickerTags.length > 0 || extraTagCount > 0 || persona.isStarter;
+
   return (
-    <li className="flex flex-col rounded-xl border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold">{persona.name}</h3>
-            {persona.isStarter ? (
-              <Badge variant="secondary" className="text-[10px]">
-                Starter
-              </Badge>
-            ) : null}
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-            {persona.description}
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={onEdit} title="Edit">
+    <li className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/20 dark:hover:border-foreground/30">
+      {hasKicker ? (
+        <p className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
+          {persona.isStarter ? (
+            <span className="lowercase italic tracking-normal text-foreground/60">
+              starter
+              {kickerTags.length > 0 || extraTagCount > 0 ? (
+                <span className="not-italic tracking-[0.14em] text-muted-foreground/70">
+                  {' '}·{' '}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+          {kickerTags.map((t, idx) => (
+            <span key={t}>
+              {idx > 0 ? ' · ' : ''}
+              {t}
+            </span>
+          ))}
+          {extraTagCount > 0 ? (
+            <span className="text-muted-foreground/50">
+              {kickerTags.length > 0 ? ' · ' : ''}+{extraTagCount}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+
+      <div
+        className={cn(
+          'flex items-start justify-between gap-3',
+          hasKicker && 'mt-1',
+        )}
+      >
+        <h3 className="min-w-0 flex-1 break-words text-base font-semibold leading-snug tracking-[-0.015em] text-foreground">
+          {persona.name}
+        </h3>
+        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onEdit}
+            aria-label="Edit persona"
+          >
             <Pencil className="size-3" />
           </Button>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={onDuplicate}
-            title="Duplicate + edit"
+            aria-label="Duplicate persona"
           >
             <Copy className="size-3" />
           </Button>
@@ -252,57 +289,64 @@ function PersonaCard({
               variant="ghost"
               size="icon-xs"
               onClick={onDelete}
-              title="Delete"
+              aria-label="Delete persona"
             >
               <Trash2 className="size-3" />
             </Button>
           ) : null}
         </div>
       </div>
-      {persona.tags.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {persona.tags.map((t) => (
-            <span
-              key={t}
-              className="rounded-full border border-border bg-surface-highlight px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+
+      <p
+        className={cn(
+          'mt-1.5 text-xs leading-relaxed text-muted-foreground',
+          hasSpine ? 'line-clamp-2' : 'line-clamp-3',
+        )}
+      >
+        {persona.description}
+      </p>
+
+      {hasSpine ? (
+        <div className="mt-4 border-t border-border/60 pt-3">
+          {visiblePriorities.length > 0 ? (
+            <ul className="space-y-1.5">
+              {visiblePriorities.map((p, i) => (
+                <SpineRow key={`p-${i}`} mark="+" text={p} />
+              ))}
+            </ul>
+          ) : null}
+          {visibleAntiPatterns.length > 0 ? (
+            <ul
+              className={cn(
+                'space-y-1.5',
+                visiblePriorities.length > 0 && 'mt-2',
+              )}
             >
-              {t}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {persona.priorities.length > 0 || persona.antiPatterns.length > 0 ? (
-        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
-          {persona.priorities.length > 0 ? (
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Priorities
-              </p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs">
-                {persona.priorities.slice(0, 3).map((s) => (
-                  <li key={s} className="line-clamp-1">
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
+              {visibleAntiPatterns.map((a, i) => (
+                <SpineRow key={`a-${i}`} mark="−" text={a} />
+              ))}
+            </ul>
           ) : null}
-          {persona.antiPatterns.length > 0 ? (
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Dislikes
-              </p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs">
-                {persona.antiPatterns.slice(0, 3).map((s) => (
-                  <li key={s} className="line-clamp-1">
-                    {s}
-                  </li>
-                ))}
-              </ul>
+          {hiddenSpineCount > 0 ? (
+            <div className="mt-1.5 pl-4 font-mono text-[11px] text-muted-foreground/60">
+              +{hiddenSpineCount} more
             </div>
           ) : null}
         </div>
       ) : null}
+    </li>
+  );
+}
+
+function SpineRow({ mark, text }: { mark: string; text: string }) {
+  return (
+    <li className="grid grid-cols-[1rem_1fr] items-baseline gap-x-1">
+      <span className="font-mono text-[12.5px] font-medium leading-[1.5] tabular-nums text-muted-foreground/60">
+        {mark}
+      </span>
+      <span className="font-mono text-[12.5px] leading-[1.5] text-foreground">
+        {text}
+      </span>
     </li>
   );
 }

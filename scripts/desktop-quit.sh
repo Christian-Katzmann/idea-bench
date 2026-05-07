@@ -47,8 +47,8 @@ fi
 
 kill_tree() {
     local pid=$1
-    [ -z "$pid" ] && return
-    kill -0 "$pid" 2>/dev/null || return
+    [ -z "$pid" ] && return 0
+    kill -0 "$pid" 2>/dev/null || return 0
     for child in $(pgrep -P "$pid" 2>/dev/null); do
         kill_tree "$child"
     done

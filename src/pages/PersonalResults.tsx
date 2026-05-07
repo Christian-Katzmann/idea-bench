@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { ParticipantShell } from '../components/layout/participant-shell';
 import { Button } from '../components/ui/button';
-import { EntityIcon } from '../components/ui/entity-icon';
+import { ModelLogo } from '../components/ui/model-logo';
 import { StatusBadge } from '../components/ui/status-badge';
 import { toast } from '../components/ui/toast';
 import { apiFetch, type PersonalResults, type PromptMode } from '../lib/api';
@@ -327,18 +327,10 @@ export default function PersonalResultsPage() {
             Group alignment
           </h3>
           {groupAgreement.fraction != null ? (
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              You aligned with the majority on{' '}
-              <span className="font-mono text-foreground">
-                {Math.round(groupAgreement.fraction * 100)}%
-              </span>{' '}
-              of the{' '}
-              <span className="font-mono text-foreground">
-                {groupAgreement.samples}
-              </span>{' '}
-              pair{groupAgreement.samples === 1 ? '' : 's'} where enough other
-              voters had weighed in.
-            </p>
+            <GroupAlignmentBody
+              fraction={groupAgreement.fraction}
+              samples={groupAgreement.samples}
+            />
           ) : (
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Not enough other votes on your pairs yet to compute agreement.
@@ -372,6 +364,92 @@ export default function PersonalResultsPage() {
   );
 }
 
+/**
+ * Body of the "Group alignment" card. The raw fraction by itself
+ * (e.g. "62% on 18 pairs") is correct but flat — operators and
+ * participants both struggle to interpret it without an anchor.
+ *
+ * Tiers:
+ *   ≥ 70% → "Strong" (you mostly tracked the consensus)
+ *   45–70% → "Mixed" (your taste partly diverges from the cohort)
+ *   < 45% → "Distinct" (your preferences are notably different)
+ *
+ * Thresholds are picked for readability, not statistical significance.
+ * The directional honesty banner above already covers small-sample
+ * uncertainty; this section's job is to give the participant a one-
+ * sentence take on what their alignment number *means*.
+ *
+ * A thin bar visualises position along the 0–100% spectrum so the
+ * reader can see headroom in either direction at a glance.
+ */
+function GroupAlignmentBody({
+  fraction,
+  samples,
+}: {
+  fraction: number;
+  samples: number;
+}) {
+  const pct = Math.round(fraction * 100);
+  const tier =
+    fraction >= 0.7 ? 'strong' : fraction >= 0.45 ? 'mixed' : 'distinct';
+  const tierLabel =
+    tier === 'strong' ? 'Strong alignment'
+    : tier === 'mixed' ? 'Mixed alignment'
+    : 'Distinct preferences';
+  const tierTone =
+    tier === 'strong'
+      ? 'border-success/25 bg-success/10 text-success'
+      : tier === 'mixed'
+        ? 'border-border bg-surface-highlight text-foreground'
+        : 'border-warning/25 bg-warning/10 text-warning';
+  const interpretation =
+    tier === 'strong'
+      ? 'You mostly tracked the cohort’s preferences — your top picks line up with how the group voted overall.'
+      : tier === 'mixed'
+        ? 'Your taste partly tracks the cohort and partly diverges — strong agreement on some pairs, distinct preferences on others.'
+        : 'Your preferences differ notably from the cohort. The group leaned the other way on most of the pairs you voted on.';
+  const barTone =
+    tier === 'strong'
+      ? 'bg-success'
+      : tier === 'mixed'
+        ? 'bg-foreground'
+        : 'bg-warning';
+  return (
+    <div className="mt-2 flex flex-col gap-3">
+      <div className="flex items-baseline gap-2.5">
+        <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+          {pct}%
+        </span>
+        <span
+          className={cn(
+            'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+            tierTone,
+          )}
+        >
+          {tierLabel}
+        </span>
+      </div>
+      <div
+        className="h-1 overflow-hidden rounded-full bg-border"
+        aria-hidden="true"
+      >
+        <div
+          className={cn('h-full transition-all duration-500', barTone)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {interpretation}
+      </p>
+      <p className="text-[11px] text-muted-foreground/80">
+        Computed across the{' '}
+        <span className="font-mono text-foreground">{samples}</span> pair
+        {samples === 1 ? '' : 's'} where enough other voters had weighed in.
+      </p>
+    </div>
+  );
+}
+
 function PersonalRatingRow({
   rank,
   row,
@@ -399,7 +477,11 @@ function PersonalRatingRow({
           {rank.toString().padStart(2, '0')}
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <EntityIcon name={row.displayName} size="sm" />
+          <ModelLogo
+            providerModelId={row.providerModelId}
+            name={row.displayName}
+            size="sm"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="truncate font-medium text-foreground">

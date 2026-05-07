@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from '@/lib/relative-time';
@@ -6,6 +7,7 @@ import {
   Boxes,
   ChevronRight,
   ExternalLink,
+  HelpCircle,
   Plus,
 } from 'lucide-react';
 import { AppShell } from '../components/layout/app-shell';
@@ -16,6 +18,10 @@ import { EmptyState } from '../components/ui/empty-state';
 import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { StatusBadge } from '../components/ui/status-badge';
+import {
+  OperatorOnboarding,
+  OPERATOR_ONBOARDING_STORAGE_KEY,
+} from '../components/onboarding/operator-onboarding';
 import {
   ApiError,
   apiFetch,
@@ -45,16 +51,72 @@ export default function OperatorHome() {
   const isFetchError =
     error && !(error instanceof ApiError && error.status === 401);
 
+  // First-run onboarding: auto-open once per browser when the operator
+  // arrives with no campaigns yet. The Help button in the page header
+  // is the always-available re-entry. Dismissal sets the localStorage
+  // key so subsequent visits skip the auto-open. Mirrors the pattern
+  // already used for arena onboarding on the campaign dashboard.
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
+  const autoOpenConsideredRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isLoading) return;
+    if (autoOpenConsideredRef.current) return;
+    autoOpenConsideredRef.current = true;
+    try {
+      const dismissed = window.localStorage.getItem(
+        OPERATOR_ONBOARDING_STORAGE_KEY,
+      );
+      // Only auto-open when there are no campaigns yet — operators with
+      // existing work don't need the welcome cards on every fresh
+      // browser session. They can still re-open via the Help button.
+      if (!dismissed && campaigns.length === 0) {
+        setIsOnboardingOpen(true);
+      }
+    } catch {
+      // localStorage can throw in private windows / strict cookie modes —
+      // silently no-op auto-open. Help button still works as the manual
+      // entry point.
+    }
+  }, [isLoading, campaigns.length]);
+
+  const handleOnboardingDismiss = () => {
+    setIsOnboardingOpen(false);
+    try {
+      window.localStorage.setItem(
+        OPERATOR_ONBOARDING_STORAGE_KEY,
+        new Date().toISOString(),
+      );
+    } catch {
+      // Same rationale as the auto-open effect: silently no-op when
+      // localStorage is unavailable.
+    }
+  };
+
   return (
     <AppShell breadcrumb={[{ label: 'Campaigns' }]}>
       <PageHeader
         title="Campaigns"
         description="Run blind pairwise evaluations across models."
         action={
-          <Button onClick={() => navigate('/campaign/new')}>
-            <Plus className="size-4" />
-            New campaign
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              ref={helpButtonRef}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOnboardingOpen(true)}
+              aria-label="Show ModelArena onboarding"
+              title="How ModelArena works"
+            >
+              <HelpCircle className="size-3.5" />
+              <span className="hidden sm:inline">How it works</span>
+            </Button>
+            <Button onClick={() => navigate('/campaign/new')}>
+              <Plus className="size-4" />
+              New campaign
+            </Button>
+          </div>
         }
       />
 
@@ -94,6 +156,12 @@ export default function OperatorHome() {
           </div>
         )}
       </div>
+
+      <OperatorOnboarding
+        open={isOnboardingOpen}
+        triggerRef={helpButtonRef}
+        onDismiss={handleOnboardingDismiss}
+      />
     </AppShell>
   );
 }

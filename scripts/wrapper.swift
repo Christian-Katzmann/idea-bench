@@ -6,7 +6,13 @@
 //   url               — http(s) URL to load (typically http://localhost:PORT)
 //   app-name          — window title and Dock badge (e.g. "Momó Studio")
 //   port              — optional, used by Cmd+Q to sweep stragglers off the dev port
-//   pid-file          — optional, path to the daemonized server's pid file
+//   pid-file          — optional, path to the daemonized server's pid file.
+//                       killServer() ALSO looks for `backend.pid` and
+//                       `backend.port` as siblings in the same directory and
+//                       cleans them up too — that's how A3.2 multi-server
+//                       Cmd+Q tears down the backend without extra argv.
+//                       Single-server projects don't have those files; the
+//                       sibling pass is a no-op for them.
 //   polyfill-js-path  — optional, absolute path to a JS file injected at
 //                       document_start. Used to polyfill browser APIs that
 //                       WebKit doesn't implement (e.g. File System Access).
@@ -243,24 +249,54 @@ final class AppDelegate: NSObject,
     }
 
     private func killServer() {
-        if let pidPath = pidFilePath,
-            let raw = try? String(contentsOfFile: pidPath, encoding: .utf8),
+        // Frontend (or single-server) — recorded PID + argv port.
+        terminatePid(fromFile: pidFilePath, removeFile: true)
+        if let p = port {
+            sweepPort(p)
+        }
+
+        // Multi-server sibling discovery. The multiserver run-template only
+        // passes `server.pid` and the FE port to wrapper, so without this
+        // pass the backend leaks past Cmd+Q. Look in the same directory as
+        // pidFilePath for `backend.pid` / `backend.port` and clean them up.
+        // Backward-compatible: single-server projects won't have these files.
+        guard let pidPath = pidFilePath else { return }
+        let logDir = (pidPath as NSString).deletingLastPathComponent
+        let backendPidPath = (logDir as NSString).appendingPathComponent("backend.pid")
+        let backendPortPath = (logDir as NSString).appendingPathComponent("backend.port")
+        terminatePid(fromFile: backendPidPath, removeFile: true)
+        if let raw = try? String(contentsOfFile: backendPortPath, encoding: .utf8),
+            let bport = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+            bport > 0
+        {
+            sweepPort(bport)
+            // Don't remove backend.port — symmetric with how the existing
+            // FE branch leaves server.port intact. desktop-quit.sh and the
+            // launcher's stale-state cleanup handle port-file lifecycle.
+        }
+    }
+
+    private func terminatePid(fromFile path: String?, removeFile: Bool) {
+        guard let path = path,
+            let raw = try? String(contentsOfFile: path, encoding: .utf8),
             let pid = Int32(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
             pid > 1
-        {
-            kill(pid, SIGTERM)
-            try? FileManager.default.removeItem(atPath: pidPath)
+        else { return }
+        kill(pid, SIGTERM)
+        if removeFile {
+            try? FileManager.default.removeItem(atPath: path)
         }
-        if let p = port {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/bin/sh")
-            task.arguments = [
-                "-c",
-                "for q in $(/usr/sbin/lsof -ti tcp:\(p) 2>/dev/null); do /bin/kill -TERM $q 2>/dev/null; done",
-            ]
-            try? task.run()
-            task.waitUntilExit()
-        }
+    }
+
+    private func sweepPort(_ p: Int) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = [
+            "-c",
+            "for q in $(/usr/sbin/lsof -ti tcp:\(p) 2>/dev/null); do /bin/kill -TERM $q 2>/dev/null; done",
+        ]
+        try? task.run()
+        task.waitUntilExit()
     }
 }
 

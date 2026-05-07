@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "name": "ModelArena",
+      "slug": "modelarena",
+      "port": 3000,
+      "start_command": "npx vite --port \\$PORT --host 0.0.0.0",
+      "bundle_id": "com.user.modelarena",
+      "version": "0.1.0",
+      "polyfill_path": ""
+    }
+  ]
+}

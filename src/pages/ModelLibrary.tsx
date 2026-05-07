@@ -11,7 +11,7 @@ import { AppShell } from '../components/layout/app-shell';
 import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { EmptyState } from '../components/ui/empty-state';
-import { EntityIcon } from '../components/ui/entity-icon';
+import { ModelLogo } from '../components/ui/model-logo';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Input } from '../components/ui/input';
 import { toast } from '../components/ui/toast';
@@ -336,7 +336,11 @@ function ModelRow({
   return (
     <div className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-surface-highlight/40">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <EntityIcon name={row.displayName} size="md" />
+        <ModelLogo
+          providerModelId={row.providerModelId}
+          name={row.displayName}
+          size="md"
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-foreground">

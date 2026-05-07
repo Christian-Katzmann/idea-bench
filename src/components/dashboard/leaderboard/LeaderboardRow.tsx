@@ -1,4 +1,4 @@
-import { EntityIcon } from '@/components/ui/entity-icon';
+import { ModelLogo } from '@/components/ui/model-logo';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { DashboardLeaderboardRow } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -64,7 +64,11 @@ export function LeaderboardRow({
       </div>
 
       <div className="flex min-w-0 items-center gap-2.5">
-        <EntityIcon name={row.displayName} size="sm" />
+        <ModelLogo
+          providerModelId={row.providerModelId}
+          name={row.displayName}
+          size="sm"
+        />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-foreground">
             {row.displayName}

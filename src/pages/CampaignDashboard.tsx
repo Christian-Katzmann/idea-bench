@@ -31,6 +31,7 @@ import {
 } from '../components/heatmap/HeatmapLeaderboard';
 import { Button } from '../components/ui/button';
 import { EntityIcon } from '../components/ui/entity-icon';
+import { ModelLogo } from '../components/ui/model-logo';
 import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { StatusBadge, type StatusState } from '../components/ui/status-badge';
@@ -1579,12 +1580,19 @@ function RatingRow({
       <div className="font-mono text-xs text-muted-foreground">
         {rank.toString().padStart(2, '0')}
       </div>
-      <div className="min-w-0">
-        <div className="truncate font-medium text-foreground">
-          {rating.displayName}
-        </div>
-        <div className="truncate font-mono text-[11px] text-muted-foreground">
-          {rating.providerModelId}
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ModelLogo
+          providerModelId={rating.providerModelId}
+          name={rating.displayName}
+          size="sm"
+        />
+        <div className="min-w-0">
+          <div className="truncate font-medium text-foreground">
+            {rating.displayName}
+          </div>
+          <div className="truncate font-mono text-[11px] text-muted-foreground">
+            {rating.providerModelId}
+          </div>
         </div>
       </div>
       <div className="flex items-baseline gap-1.5 font-mono">
@@ -1645,6 +1653,11 @@ function RatingRowMobile({
         <span className="shrink-0 font-mono text-xs text-muted-foreground">
           {rank.toString().padStart(2, '0')}
         </span>
+        <ModelLogo
+          providerModelId={rating.providerModelId}
+          name={rating.displayName}
+          size="sm"
+        />
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
           {rating.displayName}
         </span>
@@ -1652,7 +1665,7 @@ function RatingRowMobile({
           <StabilityChip tier={rating.stability} />
         </span>
       </div>
-      <div className="truncate pl-7 font-mono text-[11px] text-muted-foreground">
+      <div className="truncate pl-[3.25rem] font-mono text-[11px] text-muted-foreground">
         {rating.providerModelId}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pl-7 font-mono text-[12px] text-muted-foreground">

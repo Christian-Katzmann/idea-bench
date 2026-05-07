@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import { EntityIcon } from '../ui/entity-icon';
+import { ModelLogo } from '../ui/model-logo';
 import { StatusBadge, type StatusState } from '../ui/status-badge';
 import type { ModelLibraryRow } from '../../lib/api';
 
@@ -50,7 +50,11 @@ export default function ModelDetailPanel({
               <>
                 <DialogHeader>
                   <div className="flex items-start gap-3">
-                    <EntityIcon name={row.displayName} size="lg" />
+                    <ModelLogo
+                      providerModelId={row.providerModelId}
+                      name={row.displayName}
+                      size="lg"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <DialogTitle className="truncate">

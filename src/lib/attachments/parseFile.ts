@@ -107,7 +107,6 @@ async function parsePdf(file: File): Promise<string> {
   // import; pdfjs spawns it lazily on `getDocument`.
   const [pdfjs, workerUrlMod] = await Promise.all([
     import('pdfjs-dist'),
-    // @ts-expect-error — Vite resolves `?url` at build time; no .d.ts.
     import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
   ]);
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrlMod.default;

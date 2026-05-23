@@ -33,6 +33,75 @@ const EVENT_META: Record<
   ratings_recomputed: { label: 'Ratings recomputed', icon: RefreshCw },
 };
 
+/**
+ * A row in the rendered timeline. Either a single event, or a run of
+ * consecutive same-kind same-campaign events collapsed into one summary.
+ * Only `ratings_recomputed` is grouped — every other kind represents a
+ * distinct human action and stays one-row-per-event.
+ */
+type TimelineItem =
+  | { type: 'single'; event: ActivityEvent }
+  | {
+      type: 'group';
+      kind: ActivityEvent['kind'];
+      campaignId?: string;
+      count: number;
+      earliest: string;
+      latest: string;
+      events: ActivityEvent[];
+    };
+
+function groupConsecutiveEvents(events: ActivityEvent[]): TimelineItem[] {
+  const items: TimelineItem[] = [];
+  let i = 0;
+  while (i < events.length) {
+    const event = events[i];
+    if (event.kind !== 'ratings_recomputed') {
+      items.push({ type: 'single', event });
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    while (
+      j < events.length &&
+      events[j].kind === event.kind &&
+      events[j].campaignId === event.campaignId
+    ) {
+      j += 1;
+    }
+    const run = events.slice(i, j);
+    if (run.length === 1) {
+      items.push({ type: 'single', event });
+    } else {
+      // Events come pre-sorted newest-first, so index 0 is latest.
+      items.push({
+        type: 'group',
+        kind: event.kind,
+        campaignId: event.campaignId,
+        count: run.length,
+        latest: run[0].at,
+        earliest: run[run.length - 1].at,
+        events: run,
+      });
+    }
+    i = j;
+  }
+  return items;
+}
+
+function formatRunDuration(earliestIso: string, latestIso: string): string {
+  const ms =
+    new Date(latestIso).getTime() - new Date(earliestIso).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return 'in under a minute';
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return 'in under a minute';
+  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `in ${days} day${days === 1 ? '' : 's'}`;
+}
+
 function campaignStatusToState(status: string): StatusState {
   if (status === 'active' || status === 'draft' || status === 'completed') {
     return status;
@@ -110,20 +179,37 @@ export default function TeamActivity() {
                   className="m-5 border-dashed"
                 />
               ) : (
-                <ol className="relative flex flex-col px-5 py-5">
-                  {/* Vertical rail */}
-                  <span
-                    aria-hidden
-                    className="absolute left-[29px] top-6 bottom-6 w-px bg-border"
-                  />
-                  {data.events.map((event, idx) => (
-                    <TimelineRow
-                      key={event.id}
-                      event={event}
-                      last={idx === data.events.length - 1}
-                    />
-                  ))}
-                </ol>
+                (() => {
+                  const items = groupConsecutiveEvents(data.events);
+                  return (
+                    <ol className="relative flex flex-col px-5 py-5">
+                      {/* Vertical rail */}
+                      <span
+                        aria-hidden
+                        className="absolute left-[29px] top-6 bottom-6 w-px bg-border"
+                      />
+                      {items.map((item, idx) => {
+                        const last = idx === items.length - 1;
+                        if (item.type === 'single') {
+                          return (
+                            <TimelineRow
+                              key={item.event.id}
+                              event={item.event}
+                              last={last}
+                            />
+                          );
+                        }
+                        return (
+                          <TimelineGroupRow
+                            key={`group:${item.kind}:${item.campaignId ?? 'none'}:${item.earliest}`}
+                            item={item}
+                            last={last}
+                          />
+                        );
+                      })}
+                    </ol>
+                  );
+                })()
               )}
             </section>
 
@@ -215,6 +301,61 @@ function TimelineRow({
     <li className="relative">
       {event.campaignId ? (
         <Link to={`/campaign/${event.campaignId}`} className={className}>
+          {body}
+        </Link>
+      ) : (
+        <div className={className}>{body}</div>
+      )}
+    </li>
+  );
+}
+
+function TimelineGroupRow({
+  item,
+  last,
+}: {
+  item: Extract<TimelineItem, { type: 'group' }>;
+  last: boolean;
+}) {
+  const meta = EVENT_META[item.kind];
+  const Icon = meta.icon;
+  const duration = formatRunDuration(item.earliest, item.latest);
+
+  const body = (
+    <div className="flex items-start gap-4">
+      <span
+        className={cn(
+          'relative z-[1] mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground',
+          'group-hover:text-foreground',
+        )}
+      >
+        <Icon className="size-3.5" />
+      </span>
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-3 pb-4">
+        <div className="min-w-0">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {meta.label}
+          </div>
+          <div className="mt-0.5 truncate text-sm text-foreground">
+            {item.count} times {duration}
+          </div>
+        </div>
+        <div className="shrink-0 text-[11px] text-muted-foreground">
+          {formatDistanceToNow(new Date(item.latest), { addSuffix: true })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const className = cn(
+    'group block rounded-md transition-colors',
+    !last && 'border-b border-transparent',
+  );
+
+  return (
+    <li className="relative">
+      {item.campaignId ? (
+        <Link to={`/campaign/${item.campaignId}`} className={className}>
           {body}
         </Link>
       ) : (

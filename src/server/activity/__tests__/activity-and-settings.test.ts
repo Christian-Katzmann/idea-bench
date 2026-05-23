@@ -30,6 +30,33 @@ describe('activity and api settings helpers', () => {
     });
 
     expect(feed.events[0]).toHaveProperty('kind');
+
+    const participantEvent = feed.events.find(
+      (event) => event.kind === 'participant_finished',
+    );
+    expect(participantEvent?.label).toBe(
+      'Campaign 1 — a participant finished voting',
+    );
+  });
+
+  it('falls back to a generic label when the campaign name is unknown', async () => {
+    const feed = await buildActivityFeed({
+      campaigns: [],
+      participants: [
+        {
+          id: 'participant-orphan',
+          campaignId: 'missing-campaign',
+          finishedAt: new Date('2026-04-16T11:00:00.000Z'),
+        },
+      ],
+      ratings: [],
+      votes: [],
+    });
+
+    const participantEvent = feed.events.find(
+      (event) => event.kind === 'participant_finished',
+    );
+    expect(participantEvent?.label).toBe('A participant finished voting');
   });
 
   it('reports configuration presence without exposing secret values', () => {

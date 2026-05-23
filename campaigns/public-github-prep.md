@@ -32,7 +32,7 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 
 ### Phase 1 — Lock positioning & repo identity
 
-- [ ] Step 1.1 — Grill the public-face decisions
+- [x] Step 1.1 — Grill the public-face decisions
 
 ### Phase 2 — Fix the audit majors
 

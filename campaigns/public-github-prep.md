@@ -36,7 +36,7 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 
 ### Phase 2 — Fix the audit majors
 
-- [ ] Step 2.1 — Participant routing dead-end + invalid-slug copy (F-001 + F-004)
+- [x] Step 2.1 — Participant routing dead-end + invalid-slug copy (F-001 + F-004)
 - [ ] Step 2.2 — Invalid campaign UUID 500/infinite-loading (F-002)
 - [ ] Step 2.3 — Wizard demo-mode keyboard trap + duplicate detection (F-003 + F-011)
 - [ ] Step 2.4 — Team activity feed grouping (F-008)

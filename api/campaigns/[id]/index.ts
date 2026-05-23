@@ -24,9 +24,19 @@ export default toVercelHandler(
     const id = extractId(new URL(request.url));
     if (!id) return json({ error: 'missing id' }, 400);
 
+    // The DB column is `uuid`. Passing a non-UUID string (e.g.
+    // `/api/campaigns/not-a-real-campaign` from a stale link) makes
+    // Postgres throw a syntax error that surfaces as a 500 — and React
+    // Query's default retry policy then hammers the route. Catching it
+    // here means a bogus URL is indistinguishable from a deleted one:
+    // a single, fast 404 for the client to render an empty state from.
+    if (!isLikelyUuid(id)) {
+      return json({ error: 'campaign_not_found' }, 404);
+    }
+
     if (request.method === 'GET') {
       const detail = await buildCampaignDetail(getDb(), id);
-      if (!detail) return json({ error: 'campaign not found' }, 404);
+      if (!detail) return json({ error: 'campaign_not_found' }, 404);
       return json(
         {
           campaign: detail.campaign,
@@ -67,7 +77,7 @@ export default toVercelHandler(
         .where(eq(schema.campaigns.id, id))
         .limit(1);
       if (!existing || existing.deletedAt) {
-        return json({ error: 'campaign not found' }, 404);
+        return json({ error: 'campaign_not_found' }, 404);
       }
 
       const now = new Date();
@@ -109,7 +119,7 @@ export default toVercelHandler(
         .where(eq(schema.campaigns.id, id))
         .limit(1);
       if (!existing) {
-        return json({ error: 'campaign not found' }, 404);
+        return json({ error: 'campaign_not_found' }, 404);
       }
       if (existing.deletedAt) {
         // Idempotent: already soft-deleted, return the existing tombstone.
@@ -219,6 +229,16 @@ function parseEditPayload(
   }
 
   return { patch };
+}
+
+// Standard RFC 4122 UUID shape — 8-4-4-4-12 hex with version/variant
+// nibbles in positions 13 and 17. We accept any version because the
+// schema generated v4 ids but old data could exist from any flavor.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isLikelyUuid(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
 function extractId(url: URL): string | null {

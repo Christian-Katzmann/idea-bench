@@ -50,7 +50,7 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 
 - [x] Step 4.1 — Add LICENSE + CONTRIBUTING + SECURITY + CODE_OF_CONDUCT
 - [x] Step 4.2 — GitHub Actions CI (lint + test + build on PR)
-- [ ] Step 4.3 — Rewrite README for strangers + docs triage + screenshots
+- [x] Step 4.3 — Rewrite README for strangers + docs triage + screenshots
 
 ### Phase 5 — Pre-publish safety & flip
 

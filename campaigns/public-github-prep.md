@@ -43,7 +43,7 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 
 ### Phase 3 — Polish the audit minors
 
-- [ ] Step 3.1 — Operator surface polish batch (F-007 + F-009 + F-010 + F-012)
+- [x] Step 3.1 — Operator surface polish batch (F-007 + F-009 + F-010 + F-012)
 - [ ] Step 3.2 — Participant results polish (F-005 + F-006)
 
 ### Phase 4 — Welcome mat & continuous checks

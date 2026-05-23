@@ -1,0 +1,15 @@
+{
+  "$schema_note": "Per-run AI spend ledger. Only created when ai_mode='api-ai'. The skill reads this file BEFORE every AI feature invocation and writes to it AFTER. When spent_usd >= cap_usd, halted is flipped to true and AI feature testing stops for the rest of the run.",
+  "run_id": "2026-05-23T18-00-00Z",
+  "product": "ModelArena",
+  "cap_usd": 0.50,
+  "spent_usd": 0.0,
+  "halted": false,
+  "providers_detected": [
+    {
+      "provider": "openrouter",
+      "evidence": "src/server/openrouter.ts (OPENROUTER_BASE=https://openrouter.ai/api/v1, reads OPENROUTER_API_KEY)"
+    }
+  ],
+  "ledger": []
+}

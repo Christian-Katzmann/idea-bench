@@ -1,0 +1,114 @@
+{
+  "$schema_note": "Receipt of one product-walkthrough-audit run. coverage_ratio < 0.9 means complete=false.",
+  "run_id": "2026-05-23T18-00-00Z",
+  "product": "ModelArena",
+  "product_root": "/Users/christiankatzmann/Dev/ïdea.com/modelarena",
+  "boot_command": "npm run dev (vite + viteApiPlugin serving Vercel Functions against Neon DATABASE_URL from .env.local)",
+  "tooling": {
+    "primary_driver": "chrome-devtools",
+    "ai_mode": "api-ai",
+    "ai_budget_cap_usd": 0.50
+  },
+  "surfaces_planned": 22,
+  "surfaces_visited": 15,
+  "surfaces_visited_list": [
+    "/login (anonymous initial)",
+    "/login (wrong password)",
+    "/login → GitHub OAuth start (verified redirect)",
+    "/vote/<invalid-slug> (error state)",
+    "/ (Campaigns list, after auth)",
+    "Command palette ⌘K (search + nav)",
+    "/dashboard (Overview)",
+    "/dashboard (Matchups tab)",
+    "/dashboard (Pulse tab)",
+    "/team-activity",
+    "/models",
+    "/models Details modal (Claude Haiku 4.5)",
+    "/personas",
+    "/personas New persona modal + Preview-this-persona pane",
+    "/settings/api",
+    "/campaign/<active-uuid> (Overview/Ratings/Prompts/Settings tabs)",
+    "/vote/<live-slug> (participant landing)",
+    "/vote/<live-slug>/play (anonymous, vote one battle)",
+    "/vote/<live-slug>/results (personal results)",
+    "/campaign/new Step 1 KIND",
+    "/campaign/new Step 2 BASICS (demo-autofill failure mode)",
+    "/campaign/<invalid-uuid>",
+    "/banana (unknown route fallback)"
+  ],
+  "surfaces_skipped": [
+    {
+      "surface": "/campaign/new Steps 3–6 (Prompts/Models/Generate/Launch)",
+      "reason": "out-of-scope"
+    },
+    {
+      "surface": "/campaign/:id/preview",
+      "reason": "out-of-scope"
+    },
+    {
+      "surface": "AI generation features (POST /api/campaigns/:id/generate, persona test live call)",
+      "reason": "ai-skipped-intentionally; non-AI walkthrough surfaced 12 findings, budget held in reserve"
+    },
+    {
+      "surface": "Email magic-link auth (/api/auth/email-send + /api/auth/email-verify)",
+      "reason": "requires-credentials"
+    },
+    {
+      "surface": "Campaign detail in DRAFT state (Generate flow)",
+      "reason": "out-of-scope"
+    },
+    {
+      "surface": "Campaign detail in COMPLETED state",
+      "reason": "out-of-scope"
+    },
+    {
+      "surface": "Account menu / sign-out flow",
+      "reason": "out-of-scope"
+    }
+  ],
+  "coverage_ratio": 0.68,
+  "complete": false,
+  "incomplete_reason": "Audit prioritized the public-facing voting flow and operator-home/dashboard/library surfaces. Skipped: campaign creation steps 3–6 (would create real DB rows), AI generate (budget held), email magic-link (no Resend env), DRAFT/COMPLETED campaign detail states, sign-out.",
+  "findings_total": 12,
+  "findings_by_category": {
+    "user-blocking": 2,
+    "polished-but-lying": 4,
+    "half-built": 4,
+    "stale-promise": 1,
+    "minor-grouped-under-polished-but-lying": 1
+  },
+  "findings_by_severity": {
+    "blocker": 0,
+    "major": 4,
+    "minor": 8
+  },
+  "claims_summary": {
+    "total": 14,
+    "verified": 5,
+    "broken": 2,
+    "untested": 7,
+    "verified_list": [
+      "CLM-001 (head-to-head voting works end-to-end)",
+      "CLM-007 (anonymous participant, no login required for /vote/:slug)",
+      "CLM-008 (blind voting — model identities hidden in DOM and API response)",
+      "CLM-012 (blind reinforced — verified)",
+      "CLM-014 (most routes resolve; fallback redirects silently — F-007)"
+    ],
+    "broken_list": [
+      "CLM-005 (/settings/api does not surface GitHub/Resend status — F-012)",
+      "CLM-007 (participant 'Home' link drops anon users into operator login — F-001)"
+    ],
+    "untested_list": [
+      "CLM-002 (under-construction caveat — could not exhaustively classify)",
+      "CLM-003 (db:seed share-slug output — did not run destructive seed)",
+      "CLM-004 (8 npm scripts exist — verified package.json parity but did not run all)",
+      "CLM-006 (AI access gating — did not exercise generate endpoint)",
+      "CLM-009 (non-engineer audience — UX-feel claim, not verifiable in a walkthrough)",
+      "CLM-010 (Slider/Approve-Reject/etc. modes — campaign wizard Step 4+ not exercised)",
+      "CLM-011 (simulated runs / persona panels — did not run end-to-end)",
+      "CLM-013 (db:seed ALLOW_PROD_SEED guard — did not test destructive script)"
+    ]
+  },
+  "ai_spend_usd": 0.0,
+  "duration_seconds": 1800
+}

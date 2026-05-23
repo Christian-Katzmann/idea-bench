@@ -4,7 +4,7 @@
  */
 
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './components/ThemeProvider';
 import { Toaster } from './components/ui/toast';
 
@@ -21,6 +21,7 @@ const CampaignPreview = lazy(() => import('./pages/CampaignPreview'));
 const ParticipantLanding = lazy(() => import('./pages/ParticipantLanding'));
 const VotingInterface = lazy(() => import('./pages/VotingInterface'));
 const PersonalResults = lazy(() => import('./pages/PersonalResults'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 export default function App() {
   return (
@@ -49,7 +50,7 @@ export default function App() {
             <Route path="/vote/:slug/play" element={<VotingInterface />} />
             <Route path="/vote/:slug/results" element={<PersonalResults />} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { Activity, Boxes, Key, LayoutDashboard, Plus, Search, Users } from "lucide-react"
+import { Activity, Boxes, Key, LayoutDashboard, Plus, Search, Sparkles, Users } from "lucide-react"
 import { apiFetch } from "@/lib/api"
 import type { CampaignSummary } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -91,6 +91,7 @@ export function CommandPalette({
       { id: "nav-campaigns", group: "Navigation", label: "Go to Campaigns", icon: Boxes, run: go("/") },
       { id: "nav-activity", group: "Navigation", label: "Go to Team Activity", icon: Activity, run: go("/team-activity") },
       { id: "nav-models", group: "Navigation", label: "Go to Models", icon: Users, run: go("/models") },
+      { id: "nav-personas", group: "Navigation", label: "Go to Personas", icon: Sparkles, run: go("/personas") },
       { id: "nav-settings", group: "Navigation", label: "Go to API Settings", icon: Key, run: go("/settings/api") },
     ]
     const actionItems: PaletteItem[] = [

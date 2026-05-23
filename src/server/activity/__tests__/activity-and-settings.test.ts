@@ -69,5 +69,39 @@ describe('activity and api settings helpers', () => {
 
     expect(summary.secrets.openrouter.configured).toBe(true);
     expect(summary.secrets.openrouter.value).toBeUndefined();
+    expect(summary.secrets.openrouter.state).toBe('configured');
+  });
+
+  it('surfaces GitHub OAuth and Resend status alongside the core secrets', () => {
+    const summary = buildApiSettingsSummary({});
+    expect(summary.secrets.github.state).toBe('missing');
+    expect(summary.secrets.resend.state).toBe('missing');
+    expect(summary.configurationHealth.githubConfigured).toBe(false);
+    expect(summary.configurationHealth.resendConfigured).toBe(false);
+  });
+
+  it('flags GitHub OAuth as partial when only some env vars are set', () => {
+    const summary = buildApiSettingsSummary({
+      GITHUB_OAUTH_CLIENT_ID: 'id',
+      GITHUB_OAUTH_CLIENT_SECRET: 'secret',
+      // OPERATOR_GITHUB_LOGINS intentionally missing.
+    });
+    expect(summary.secrets.github.state).toBe('partial');
+    expect(summary.secrets.github.configured).toBe(false);
+    expect(summary.secrets.github.label).toContain('OPERATOR_GITHUB_LOGINS');
+  });
+
+  it('marks GitHub OAuth and Resend as configured when full env set is present', () => {
+    const summary = buildApiSettingsSummary({
+      GITHUB_OAUTH_CLIENT_ID: 'id',
+      GITHUB_OAUTH_CLIENT_SECRET: 'secret',
+      OPERATOR_GITHUB_LOGINS: 'octocat',
+      RESEND_API_KEY: 'rk',
+      OPERATOR_EMAILS: 'alice@example.com',
+    });
+    expect(summary.secrets.github.state).toBe('configured');
+    expect(summary.secrets.resend.state).toBe('configured');
+    expect(summary.configurationHealth.githubConfigured).toBe(true);
+    expect(summary.configurationHealth.resendConfigured).toBe(true);
   });
 });

@@ -843,18 +843,30 @@ export interface ActivityFeed {
   }>;
 }
 
+export type SecretState = 'configured' | 'missing' | 'partial';
+
+export interface SecretStatus {
+  configured: boolean;
+  state: SecretState;
+  label: string;
+}
+
 export interface ApiSettingsSummary {
   configurationHealth: {
     databaseConfigured: boolean;
     authConfigured: boolean;
     operatorConfigured: boolean;
     openrouterConfigured: boolean;
+    githubConfigured: boolean;
+    resendConfigured: boolean;
   };
   secrets: {
-    database: { configured: boolean; label: string };
-    auth: { configured: boolean; label: string };
-    operator: { configured: boolean; label: string };
-    openrouter: { configured: boolean; label: string };
+    database: SecretStatus;
+    auth: SecretStatus;
+    operator: SecretStatus;
+    openrouter: SecretStatus;
+    github: SecretStatus;
+    resend: SecretStatus;
   };
   notes: string[];
 }

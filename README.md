@@ -1,37 +1,67 @@
 # ModelArena
 
-An organizational tool for evaluating AI models through head-to-head voting
-campaigns.
+**ModelArena** is a self-hosted tool for running blind head-to-head evaluations of LLM output. Build a campaign, paste in a prompt and a couple of contestants (models, system prompts, or prompt variants), share a link, and let real people — or simulated personas — vote on which response is better without seeing which model produced it. The result is a Bradley-Terry rating you can actually defend in a meeting. Works with any model via OpenRouter.
 
-## Status
+![Blind voting interface — two model generations side by side, no model names visible](./screenshots/hero-blind-vote.png)
 
-Under construction. See the Phase 1 PR description for scope — this branch
-adds the persistence layer; route handlers land in Phase 2.
+## What it does
 
-## Local setup
+- **Blind A/B voting.** Voters compare two generations side by side. The model name, system prompt, and any contestant metadata are hidden until the campaign closes — there is no path to leak identity through the DOM or the API.
+- **Three kinds of contestants in one engine.** Compare models against each other, compare system prompts on a fixed model, or compare prompt variants. Same blind-voting UI, same rating math.
+- **Bradley-Terry ratings + group alignment.** Pairwise votes feed a Bradley-Terry maximum-likelihood model. The campaign view shows ratings, confidence intervals, and how each voter group aligned with the overall result.
 
-**Prerequisites**
+![Campaign detail with the leaderboard tab — Bradley-Terry ratings, multiple models, group-alignment column](./screenshots/hero-leaderboard.png)
 
-- Node.js 20+ (24 LTS is the current default on Vercel)
-- A Postgres database — provisioned via the Vercel Marketplace → Neon
-  integration in CI/production, or a local container for offline work
-- (Phase 2) An OpenRouter API key
-
-**Steps**
+## Quickstart
 
 ```bash
+git clone <this repo>
+cd modelarena
 npm install
 cp .env.example .env.local
 # Fill in DATABASE_URL, OPERATOR_PASSWORD, AUTH_SECRET.
-# Generate a secret: openssl rand -hex 32
+# Generate AUTH_SECRET with:  openssl rand -hex 32
 
 npm run db:migrate     # apply schema
 npm run db:seed        # load demo campaigns (destructive; dev DB only)
 npm run dev            # http://localhost:3000
 ```
 
-The seed script prints the share slugs it created so you can jump straight
-into the participant flow at `http://localhost:3000/vote/<slug>`.
+`db:seed` prints the share slugs it created — jump straight into the participant flow at `http://localhost:3000/vote/<slug>`.
+
+**Database.** Any Postgres works. ModelArena uses the `@neondatabase/serverless` driver, which speaks plain Postgres over HTTPS; [Neon](https://neon.tech) is one option (and the Vercel Marketplace path), but a local container, Supabase, or any managed Postgres with a `postgres://` URL is fine.
+
+**Models.** [OpenRouter](https://openrouter.ai) is the default provider — one API key, any model. $5 of credit goes a long way for evaluation work.
+
+**Prerequisites.** Node.js 20+ (24 LTS recommended), Postgres, OpenRouter API key (for AI features).
+
+## Operator auth
+
+Three sign-in methods, all issuing the same `operator_session` cookie (HMAC-signed, 30-day expiry). Enable the ones you want by populating the relevant env vars; anything unset stays hidden in the UI.
+
+| Method | Env vars | Notes |
+|---|---|---|
+| Password | `OPERATOR_PASSWORD` | Always available. Constant-time compare + 400ms delay on mismatch. |
+| GitHub OAuth | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OPERATOR_GITHUB_LOGINS` | Register an OAuth App at `github.com/settings/developers` with callback `${origin}/api/auth/github-callback`. The allowlist matches either the GitHub login or any verified email on the account. |
+| Email magic link | `OPERATOR_EMAILS`, `RESEND_API_KEY`, optional `RESEND_SENDER_ADDRESS` | Resend-backed. 15-min single-use tokens; only `sha256(token)` is stored. Sender defaults to the Resend sandbox; set `RESEND_SENDER_ADDRESS=auth@your-domain` once your domain is verified in Resend. |
+
+Per-IP rate limiting (5 attempts / 15 min) guards the OAuth callback and the magic-link send/verify endpoints. Rotating `AUTH_SECRET` invalidates every outstanding cookie.
+
+### AI spend gate
+
+Login and AI spend are two separate allowlists:
+
+- `OPERATOR_*` decides **who can sign in**.
+- `AI_ALLOWED_IDENTITIES` decides **which of those signed-in operators can trigger OpenRouter calls** (`generate`, `simulated-runs/run`, `personas/test`).
+
+Comma-separated, matched case-insensitively against the session's `identity` field. Empty or unset fails closed — AI endpoints return `503 ai_not_configured` instead of opening up. Password sessions have identity `'operator'` (a shared literal, not a person), so password logins are implicitly blocked from AI; sign in with GitHub or email when you need to spend.
+
+## Architecture
+
+- **Frontend.** Vite SPA in `src/` (React + TypeScript). Tailwind + a small in-repo design system; see `docs/design-system/DESIGN-SYSTEM.md`.
+- **API.** Vercel Functions in `api/`, deployable as Fluid Compute. Most routes flow through a single dispatcher.
+- **Database.** Postgres via `@neondatabase/serverless` + Drizzle ORM. Schema in `src/server/db/schema.ts`, migrations in `drizzle/`.
+- **Server boundary.** Domain logic, auth, OpenRouter integration, and rating math all live in `src/server/` — strictly server-only. Client code must not import from `src/server/**`. See [`src/server/README.md`](./src/server/README.md) for the contract.
 
 ## Scripts
 
@@ -40,60 +70,24 @@ into the participant flow at `http://localhost:3000/vote/<slug>`.
 | `npm run dev` | Start Vite dev server. |
 | `npm run build` | Production build. |
 | `npm run lint` | `tsc --noEmit`. |
-| `npm run db:generate` | Diff schema → new SQL migration in `drizzle/`. Commit the output. |
+| `npm run test:run` | Run the Vitest suite once. |
+| `npm run db:generate` | Diff schema → new SQL migration in `drizzle/`. |
 | `npm run db:migrate` | Apply pending migrations to `DATABASE_URL`. |
 | `npm run db:push` | Push schema directly to `DATABASE_URL` (dev only — skips migration history). |
-| `npm run db:studio` | Launch Drizzle Studio against `DATABASE_URL`. |
-| `npm run db:seed` | Wipe and re-seed the demo data. **Refuses to run in `NODE_ENV=production`** unless `ALLOW_PROD_SEED=1`. |
-| `npm run db:seed-starter-personas` | Idempotently seed the curated starter persona library from `data/starter-personas.json` into the `personas` table. Skips rows whose `name` already exists. Safe to re-run; same `ALLOW_PROD_SEED=1` guardrail as `db:seed`. Required for the system-prompt-arena persona suggestion card to surface its pre-filtered list to first-time operators (Plan 06 P0-A drift remediation — edit the data file to curate the library). |
+| `npm run db:studio` | Launch Drizzle Studio. |
+| `npm run db:seed` | Wipe and re-seed demo data. **Refuses to run with `NODE_ENV=production`** unless `ALLOW_PROD_SEED=1`. |
+| `npm run db:seed-starter-personas` | Idempotently seed the curated starter persona library from `data/starter-personas.json`. |
 
-## Operator auth
+## Roadmap
 
-Three sign-in methods, all issuing the same `operator_session` cookie
-(HMAC-signed, 30-day expiry). Enable the ones you want by populating the
-relevant env vars; anything unset stays hidden/disabled in the UI.
+Where ModelArena is going next: **[docs/roadmap/](./docs/roadmap/)**.
 
-| Method | Env vars | Notes |
-|---|---|---|
-| Password | `OPERATOR_PASSWORD` | Always available. Constant-time compare + 400ms delay on mismatch. |
-| GitHub OAuth | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OPERATOR_GITHUB_LOGINS` | Register an OAuth App at `github.com/settings/developers` with callback `${origin}/api/auth/github-callback`. The allowlist matches either the GitHub login OR any verified email on the account. |
-| Email magic link | `OPERATOR_EMAILS`, `RESEND_API_KEY`, optional `RESEND_SENDER_ADDRESS` | Resend-backed. 15-min single-use tokens; `sha256(token)` stored server-side. Sender defaults to the Resend sandbox (delivers only to the account's verified email); set `RESEND_SENDER_ADDRESS=auth@your-domain` once your domain is verified in Resend. |
+## Optional
 
-Cookie payload: `{ kind: 'op', method, identity, iat, exp }`. `method` is
-one of `password | github | email`; `identity` is the user's email
-(GitHub/magic link) or literal `'operator'` (password). Handlers receive
-this via `withOperator`'s context. Rotating `AUTH_SECRET` invalidates every
-outstanding cookie — acceptable because there's exactly one operator.
+- **Mac Dock launcher.** [`docs/desktop-launcher.md`](./docs/desktop-launcher.md) — wrap the dev server as a clickable `.app`.
 
-Per-IP rate limiting (5 attempts / 15 min) guards the GitHub callback, email
-send, and email verify endpoints. In-memory sliding window — acceptable
-given magic links are single-use and short-lived.
+## Contributing & license
 
-### AI spend gate
-
-Login access and AI access are two separate allowlists:
-
-- `OPERATOR_*` (above) decides **who can sign in**.
-- `AI_ALLOWED_IDENTITIES` decides **which of those signed-in operators
-  can trigger OpenRouter calls** (`POST /api/campaigns/:id/generate`,
-  `POST /api/simulated-runs/:id/run`, `POST /api/personas/test`).
-
-Comma-separated, matched case-insensitively against the session's
-`identity` field, enforced by `withAIOperator`. An empty/unset value
-fails closed — AI endpoints return `503 ai_not_configured` instead of
-opening up. A signed-in operator outside the list gets `403 ai_forbidden`.
-
-Password sessions have identity `'operator'` (shared literal, not a
-person), so password logins are implicitly blocked from AI; sign in with
-GitHub or the email magic link when you need to spend.
-
-## Architecture
-
-- Vite SPA frontend (`src/`).
-- Vercel Functions for the API (`api/`).
-- Neon Postgres via `@neondatabase/serverless` + Drizzle ORM.
-- Operator auth: password / GitHub OAuth / email magic link — see above.
-- Participant auth: anonymous, HMAC-signed cookie for vote dedup.
-
-See `src/server/` for DB and auth primitives. Client-safe utilities live
-in `src/lib/`.
+- See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the dev loop, lint/test expectations, and branch hygiene.
+- Security reports go to the address in [`SECURITY.md`](./SECURITY.md).
+- Licensed under the terms in [`LICENSE`](./LICENSE).

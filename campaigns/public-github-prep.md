@@ -44,11 +44,11 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 ### Phase 3 — Polish the audit minors
 
 - [x] Step 3.1 — Operator surface polish batch (F-007 + F-009 + F-010 + F-012)
-- [ ] Step 3.2 — Participant results polish (F-005 + F-006)
+- [x] Step 3.2 — Participant results polish (F-005 + F-006)
 
 ### Phase 4 — Welcome mat & continuous checks
 
-- [ ] Step 4.1 — Add LICENSE + CONTRIBUTING + SECURITY + CODE_OF_CONDUCT
+- [x] Step 4.1 — Add LICENSE + CONTRIBUTING + SECURITY + CODE_OF_CONDUCT
 - [ ] Step 4.2 — GitHub Actions CI (lint + test + build on PR)
 - [ ] Step 4.3 — Rewrite README for strangers + docs triage + screenshots
 

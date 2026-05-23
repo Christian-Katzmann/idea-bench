@@ -152,14 +152,18 @@ export default function CampaignDashboard() {
     'rollup' | 'heatmap'
   >('rollup');
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['campaign', id],
     queryFn: () => apiFetch<CampaignDetail>(`/api/campaigns/${id}`),
     enabled: !!id,
     // Mirror OperatorDashboard's polling so single-campaign ratings tick in
     // place as votes arrive. Background tabs pause; mutations
     // (recompute/close) still invalidate immediately via onSuccess.
-    refetchInterval: 5_000,
+    // Polling pauses while the query is in an error state — otherwise a
+    // bogus/deleted campaign id keeps the request log noisy with retries
+    // the operator can't see.
+    refetchInterval: (query) =>
+      query.state.status === 'error' ? false : 5_000,
     refetchIntervalInBackground: false,
   });
 
@@ -514,6 +518,19 @@ export default function CampaignDashboard() {
     );
   };
 
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <AppShell
+        breadcrumb={[
+          { label: 'Campaigns', to: '/' },
+          { label: 'Not found' },
+        ]}
+      >
+        <CampaignNotFound />
+      </AppShell>
+    );
+  }
+
   if (isLoading) {
     return (
       <AppShell
@@ -529,17 +546,10 @@ export default function CampaignDashboard() {
       <AppShell
         breadcrumb={[{ label: 'Campaigns', to: '/' }, { label: 'Error' }]}
       >
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <div>
-            <div className="font-medium text-foreground">
-              Failed to load campaign
-            </div>
-            <div className="mt-0.5 text-xs">
-              {error instanceof Error ? error.message : String(error)}
-            </div>
-          </div>
-        </div>
+        <CampaignLoadError
+          message={error instanceof Error ? error.message : String(error)}
+          onRetry={() => refetch()}
+        />
       </AppShell>
     );
   }
@@ -1303,6 +1313,70 @@ export default function CampaignDashboard() {
 // ────────────────────────────────────────────────────────────────────────────
 // Local primitives
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Empty state for a campaign id that doesn't resolve — bogus URL, stale
+ * bookmark, or a campaign the operator just deleted in another tab. We
+ * deliberately don't echo the id back: the breadcrumb already disambiguates,
+ * and the URL bar is right there if the operator wants to double-check.
+ */
+function CampaignNotFound() {
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-start gap-3 rounded-xl border border-border bg-card p-6 text-sm shadow-sm">
+      <h1 className="font-heading text-lg font-semibold text-foreground">
+        Campaign not found
+      </h1>
+      <p className="text-muted-foreground">
+        This campaign may have been deleted, or the URL is wrong.
+      </p>
+      <Button
+        variant="default"
+        size="sm"
+        onClick={() => navigate('/')}
+        className="mt-1"
+      >
+        Back to campaigns
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Error state for genuine load failures (5xx, network). Keeps the technical
+ * message in the body so the operator can copy it into a bug report, but
+ * surfaces an explicit Retry so they don't have to refresh the page.
+ */
+function CampaignLoadError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+        <div className="flex flex-col gap-1">
+          <div className="font-medium text-foreground">
+            Failed to load campaign
+          </div>
+          <div className="text-xs">{message}</div>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        className="self-start"
+      >
+        <RefreshCw className="size-3.5" />
+        Retry
+      </Button>
+    </div>
+  );
+}
 
 function CampaignDashboardSkeleton() {
   return (

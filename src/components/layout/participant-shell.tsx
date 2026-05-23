@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom"
 import { BrandMark } from "@/components/ui/brand-mark"
 import { useTheme } from "@/components/ThemeProvider"
 import { Moon, Sun } from "lucide-react"
@@ -8,8 +7,10 @@ import { cn } from "@/lib/utils"
  * Minimal shell for public `/vote/*` routes.
  *
  * No sidebar, no command palette, no operator menu — participants are
- * anonymous and must not be led toward operator surfaces. The topbar
- * keeps just the `/` brand mark, an optional page label (usually the
+ * anonymous and must not be led toward operator surfaces. The brand
+ * mark is intentionally non-interactive: a "Home" link would dead-end
+ * an anonymous voter at the operator login screen (audit F-001). The
+ * topbar keeps just the `/` mark, an optional page label (usually the
  * campaign name or a static phrase like "Results"), and the theme
  * toggle for accessibility.
  *
@@ -36,9 +37,7 @@ export function ParticipantShell({
     <div className="flex min-h-dvh flex-col bg-background text-foreground font-sans">
       <header className="sticky top-0 z-30 flex h-[calc(3rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md md:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Link to="/" aria-label="Home" className="flex items-center">
-            <BrandMark size="sm" />
-          </Link>
+          <BrandMark size="sm" />
           {label && (
             <>
               <span aria-hidden className="text-border">/</span>

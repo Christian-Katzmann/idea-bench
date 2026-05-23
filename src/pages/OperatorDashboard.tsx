@@ -56,6 +56,15 @@ export default function OperatorDashboard() {
     // "as fast as the server has new numbers." 5 s is the leaderboard's
     // perceptual "live" floor — closer to vote-arrival latency than the
     // earlier 20 s. Background tabs pause to avoid wasted serverless calls.
+    //
+    // Why a fresh page load can fire 2-3 GETs in dev (F-009):
+    //   1. React StrictMode mounts the component twice in development,
+    //      which fires the initial query twice (deduped server-side via
+    //      Runtime Cache, so it's cheap; not present in prod builds).
+    //   2. After 5 s the `refetchInterval` tick fires the third call.
+    // In production: one initial fetch, then one every 5 s while the tab
+    // is foregrounded. No accidental over-fetch — the cadence is the
+    // feature.
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
   });

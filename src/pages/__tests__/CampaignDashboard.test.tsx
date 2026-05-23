@@ -475,6 +475,72 @@ describe('CampaignDashboard', () => {
     });
   });
 
+  // F-002: invalid / deleted campaign id used to surface as an infinite
+  // "Loading…" because the server crashed on the non-UUID. With the fixed
+  // handler the client gets a single 404 and the dashboard renders a
+  // dedicated empty state — no spinner, no retry storm, and an obvious
+  // way back.
+  it('renders a "Campaign not found" empty state when the API returns 404', async () => {
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        status: 404,
+        body: { error: 'campaign_not_found' },
+      },
+    ]);
+
+    renderCampaignDashboard();
+
+    expect(
+      await screen.findByRole('heading', { name: /campaign not found/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/may have been deleted, or the URL is wrong/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /back to campaigns/i }),
+    ).toBeInTheDocument();
+    // The skeleton must NOT also be on screen — the empty state is the
+    // whole UI, not a layer on top of the loading shell.
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+  });
+
+  // F-002 sister-case: a genuine 5xx should still render an error state,
+  // but with a Retry button instead of silently hammering the API.
+  it('renders an error state with a Retry button on 5xx', async () => {
+    const user = userEvent.setup();
+    let attempts = 0;
+    installMockFetch([
+      {
+        url: '/api/campaigns/campaign-1',
+        body: () => {
+          attempts += 1;
+          if (attempts === 1) return { error: 'internal_error' };
+          return createCampaignDetail('active');
+        },
+        status: 500,
+        // Flip to success after the first attempt by overriding status via
+        // a second route definition is awkward in this mock; instead we
+        // just verify the Retry button is wired and re-issues the GET.
+      },
+    ]);
+
+    renderCampaignDashboard();
+
+    expect(
+      await screen.findByText(/failed to load campaign/i),
+    ).toBeInTheDocument();
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+    expect(retryButton).toBeInTheDocument();
+
+    await user.click(retryButton);
+
+    // Clicking Retry fires another fetch — assert via the attempt counter.
+    await waitFor(() => {
+      expect(attempts).toBeGreaterThan(1);
+    });
+  });
+
   it('closes an active campaign from the operator page', async () => {
     const user = userEvent.setup();
     let isClosed = false;

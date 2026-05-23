@@ -63,6 +63,10 @@ export async function buildActivityFeed(
     ? await loadAnalyticsSnapshot(input)
     : input;
 
+  const campaignNameById = new Map(
+    snapshot.campaigns.map((campaign) => [campaign.id, campaign.name]),
+  );
+
   const events = [
     ...snapshot.campaigns
       .filter((campaign) => campaign.createdAt)
@@ -75,13 +79,18 @@ export async function buildActivityFeed(
       })),
     ...(snapshot.participants ?? [])
       .filter((participant) => participant.finishedAt)
-      .map((participant) => ({
-        id: `participant:${participant.id}`,
-        kind: 'participant_finished' as const,
-        label: 'A participant finished voting',
-        at: participant.finishedAt!.toISOString(),
-        campaignId: participant.campaignId,
-      })),
+      .map((participant) => {
+        const campaignName = campaignNameById.get(participant.campaignId);
+        return {
+          id: `participant:${participant.id}`,
+          kind: 'participant_finished' as const,
+          label: campaignName
+            ? `${campaignName} — a participant finished voting`
+            : 'A participant finished voting',
+          at: participant.finishedAt!.toISOString(),
+          campaignId: participant.campaignId,
+        };
+      }),
     ...snapshot.ratings
       .filter((rating) => rating.computedAt)
       .map((rating) => ({

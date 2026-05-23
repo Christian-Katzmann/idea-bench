@@ -424,6 +424,45 @@ export default function CreateCampaign() {
       apiFetch<ModelLibraryData>('/api/operator/models?status=enabled&sort=name'),
   });
 
+  // Existing-campaign names — used to soft-warn when the operator
+  // types a name that already exists (F-011 in the public-prep audit:
+  // two identical "Sprogmodeller i sagsbehandling" drafts in the seed
+  // were the visible failure mode of the demo-autofill keyboard trap).
+  // Gated on Step 1 so Step 0 doesn't pay for a fetch that's only read
+  // by Basics. Shares the same query key as the list page so the result
+  // is hot from the cache after the operator navigates Campaigns → New.
+  const {
+    data: campaignsListData,
+  } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: () =>
+      apiFetch<{ campaigns: { id: string; name: string }[] }>('/api/campaigns'),
+    enabled: step === 1,
+  });
+  const existingCampaignNames = useMemo(() => {
+    return (campaignsListData?.campaigns ?? []).map((c) => c.name);
+  }, [campaignsListData]);
+  // Two pieces of warning state, kept in the parent so they survive
+  // re-renders and step-flips: whether the name input has been blurred
+  // at least once (don't show a warning while the operator is still
+  // typing the first keystroke), and which lowercased-trimmed name the
+  // operator has explicitly chosen to keep anyway.
+  const [nameBlurredOnce, setNameBlurredOnce] = useState(false);
+  const [suppressedDuplicateNameLower, setSuppressedDuplicateNameLower] =
+    useState<string | null>(null);
+  const duplicateNameMatch = useMemo(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const lower = trimmed.toLowerCase();
+    if (suppressedDuplicateNameLower === lower) return null;
+    const hit = existingCampaignNames.find(
+      (existing) => existing.trim().toLowerCase() === lower,
+    );
+    return hit ?? null;
+  }, [name, existingCampaignNames, suppressedDuplicateNameLower]);
+  const showDuplicateWarning =
+    step === 1 && nameBlurredOnce && duplicateNameMatch !== null;
+
   // Persona library — fetched once when the operator reaches the
   // launch step on a system-prompt arena. The whole library is small
   // (10–100 personas in a real org) so we filter + rank client-side
@@ -773,8 +812,13 @@ export default function CreateCampaign() {
   // ───────────────────────────────────────────────────────────────────
   // DEMO AUTOFILL — temporary, remove after demo.
   // Toggle via the small "demo" button in the lower-right of the page,
-  // or deep-link with `?demo=1`. With nothing focused, press → to fill
-  // the current step with demo data and advance.
+  // or deep-link with `?demo=1`. Press Shift+→ (or click the visible
+  // "Autofill this step" button) to fill the current step with demo
+  // data. The shortcut requires Shift so it never collides with normal
+  // cursor movement inside an auto-focused input — the bare-→ binding
+  // silently no-op'd on Step 2 because the campaign-name input ate the
+  // keypress as cursor movement, which produced the duplicate-draft
+  // seed observed in the public-prep walkthrough audit (F-003).
   // To remove: delete this block, the <DemoToggle> JSX near the
   // AppShell render, and the four entries appended to SUGGESTED_TAGS.
   // Nothing else depends on it.
@@ -811,27 +855,10 @@ export default function CreateCampaign() {
     generationDone,
     handleGenerate,
   };
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handler = (ev: KeyboardEvent) => {
-      if (ev.key !== 'ArrowRight') return;
-      if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
-      if (!demoLatestRef.current.demoMode) {
-        console.debug('[demo] ArrowRight ignored — demo mode is OFF');
-        return;
-      }
-      const el = document.activeElement as HTMLElement | null;
-      const tag = el?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) {
-        console.debug(
-          `[demo] ArrowRight ignored — focus is on <${tag?.toLowerCase()}> (click on the page background, then try again)`,
-        );
-        return;
-      }
-      console.debug(`[demo] ArrowRight → autofilling step ${demoLatestRef.current.step}`);
-      ev.preventDefault();
-
+  // Per-step autofill, hoisted out of the keyboard handler so the
+  // visible "Autofill this step" button can call it too. No-op on
+  // steps without seed data (Kind picker, Generate, Launch).
+  const runDemoAutofill = useCallback(() => {
       const latest = demoLatestRef.current;
       if (latest.step === 0) {
         // Nothing to autofill — kind is already 'model' by default.
@@ -988,11 +1015,29 @@ export default function CreateCampaign() {
       }
       // step 4 (Generate) and step 5 (Launch) have no fields to fill —
       // operator clicks the action buttons themselves.
+  }, []);
+
+  // Keyboard shortcut. Requires Shift+→ (or Cmd+→ on Mac / Ctrl+→
+  // elsewhere) — the bare ArrowRight binding collided with cursor
+  // movement inside auto-focused inputs (F-003 / F-011 in the
+  // public-prep audit). A modifier-gated key is safe to fire even when
+  // an input is focused, so we override `preventDefault` and let the
+  // autofill run regardless of focus.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handler = (ev: KeyboardEvent) => {
+      if (ev.key !== 'ArrowRight') return;
+      const hasShortcutModifier = ev.shiftKey || ev.metaKey || ev.ctrlKey;
+      if (!hasShortcutModifier || ev.altKey) return;
+      if (!demoLatestRef.current.demoMode) return;
+      ev.preventDefault();
+      runDemoAutofill();
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [runDemoAutofill]);
 
   const slotValues: SlotEvent[] = Object.values(slots);
   const slotsReceived = slotValues.length;
@@ -1157,6 +1202,14 @@ export default function CreateCampaign() {
                 onName={setName}
                 onDescription={setDescription}
                 onToggleCategory={toggleCategory}
+                onNameBlur={() => setNameBlurredOnce(true)}
+                duplicateNameMatch={
+                  showDuplicateWarning ? duplicateNameMatch : null
+                }
+                onContinueWithDuplicate={() => {
+                  const lower = name.trim().toLowerCase();
+                  if (lower) setSuppressedDuplicateNameLower(lower);
+                }}
               />
             )}
 
@@ -1269,6 +1322,22 @@ export default function CreateCampaign() {
               <ArrowLeft className="size-3.5" />
               Back
             </Button>
+            {/* DEMO AUTOFILL — visible button. Remove with the rest of
+                the demo block. Pre-F-003 the only way to trigger autofill
+                was a keyboard shortcut, which silently no-op'd when an
+                input was focused; the button gives operators a path that
+                doesn't depend on focus. */}
+            {demoMode && step >= 1 && step <= 3 && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => runDemoAutofill()}
+                title="Fill this step with demo data (same as Shift+→)"
+              >
+                Autofill this step
+              </Button>
+            )}
             {step < 5 ? (
               <Button
                 size="sm"
@@ -1317,8 +1386,8 @@ export default function CreateCampaign() {
         onClick={() => setDemoMode((v) => !v)}
         title={
           demoMode
-            ? 'Demo mode ON — press → to autofill each step. Click to disable.'
-            : 'Enable demo mode (autofill on →)'
+            ? 'Demo mode ON — press Shift+→ to autofill each step. Click to disable.'
+            : 'Enable demo mode (autofill on Shift+→)'
         }
         className={cn(
           'fixed bottom-4 right-4 z-50 rounded-full px-3 py-1 text-[10px] font-medium tracking-wide transition-colors',
@@ -1542,6 +1611,9 @@ function StepBasics({
   onName,
   onDescription,
   onToggleCategory,
+  onNameBlur,
+  duplicateNameMatch,
+  onContinueWithDuplicate,
 }: {
   name: string;
   description: string;
@@ -1549,7 +1621,13 @@ function StepBasics({
   onName: (v: string) => void;
   onDescription: (v: string) => void;
   onToggleCategory: (t: string) => void;
+  onNameBlur: () => void;
+  /** Existing campaign name that matches (case-insensitive, trimmed),
+   *  or null when there's no conflict or the operator has dismissed it. */
+  duplicateNameMatch: string | null;
+  onContinueWithDuplicate: () => void;
 }) {
+  const nameInputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="flex flex-col gap-6">
       <StepHeader
@@ -1562,11 +1640,54 @@ function StepBasics({
         </Label>
         <Input
           id="name"
+          ref={nameInputRef}
           value={name}
           onChange={(e) => onName(e.target.value)}
+          onBlur={onNameBlur}
           placeholder="e.g. Customer support response quality"
           autoFocus
+          aria-invalid={duplicateNameMatch !== null}
+          aria-describedby={
+            duplicateNameMatch !== null ? 'name-duplicate-warning' : undefined
+          }
         />
+        {duplicateNameMatch !== null && (
+          <div
+            id="name-duplicate-warning"
+            role="status"
+            className="mt-1 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50/60 px-3 py-2 text-[12px] leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <div className="flex flex-1 flex-col gap-2">
+              <span>
+                A campaign named{' '}
+                <span className="font-medium">“{duplicateNameMatch}”</span>{' '}
+                already exists — continue anyway or rename?
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  onClick={onContinueWithDuplicate}
+                >
+                  Continue anyway
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    nameInputRef.current?.focus();
+                    nameInputRef.current?.select();
+                  }}
+                >
+                  Rename
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="desc" className="text-[10px] uppercase tracking-wide">

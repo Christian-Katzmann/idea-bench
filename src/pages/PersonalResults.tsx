@@ -149,9 +149,13 @@ export default function PersonalResultsPage() {
                 </span>{' '}
                 battle{totals.battlesPlayed === 1 ? '' : 's'} across{' '}
                 <span className="font-mono text-foreground">
-                  {totals.tournamentsComplete}
+                  {totals.tournamentsStarted}
                 </span>{' '}
-                prompt{totals.tournamentsComplete === 1 ? '' : 's'}.
+                prompt{totals.tournamentsStarted === 1 ? '' : 's'}
+                {totals.tournamentsStarted > totals.tournamentsComplete && (
+                  <> (still in progress)</>
+                )}
+                .
               </>
             ) : hasNonTournamentActivity ? (
               <>
@@ -499,11 +503,28 @@ function PersonalRatingRow({
           </div>
         </div>
         <div className="flex shrink-0 items-baseline gap-1.5 font-mono sm:flex-none">
-          <span className="font-semibold text-foreground">{row.rating}</span>
-          {ciSpread != null && (
-            <span className="text-[11px] text-muted-foreground">
-              ±{ciSpread}
+          {/* When stability is 'directional' (gameCount < 50 per model)
+              the rating point estimate is noisier than the gap between
+              top and bottom — printing "1461 ± 2438" looks authoritative
+              but the CI spans values the rating system doesn't support.
+              Hide the number; the tier badge on the right already says
+              "Directional", and win-rate carries the comparable signal. */}
+          {row.stability === 'directional' ? (
+            <span
+              className="text-muted-foreground"
+              title="Not enough comparisons yet to estimate a reliable rating"
+            >
+              —
             </span>
+          ) : (
+            <>
+              <span className="font-semibold text-foreground">{row.rating}</span>
+              {ciSpread != null && (
+                <span className="text-[11px] text-muted-foreground">
+                  ±{ciSpread}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>

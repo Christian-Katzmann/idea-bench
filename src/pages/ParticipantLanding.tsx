@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { BrandMark } from '../components/ui/brand-mark';
-import { apiFetch, type VoteLanding } from '../lib/api';
+import { apiFetch, ApiError, type VoteLanding } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 // Permissive enough for hand-typed addresses (one `@`, a domain with at least
@@ -80,17 +80,27 @@ export default function ParticipantLanding() {
   }
 
   if (landing.error || !landing.data) {
+    // 404 is the common case — a participant followed a stale or
+    // mistyped link. Show human-voice copy with no implementation
+    // detail. Anything else (network, 5xx) keeps the technical
+    // fallback so we don't lie about what went wrong.
+    const isUnknownSlug =
+      landing.error instanceof ApiError && landing.error.status === 404;
     return (
       <ParticipantShell contentClassName="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
-          <ErrorCard
-            title="Can't load this campaign"
-            detail={
-              landing.error instanceof Error
-                ? landing.error.message
-                : 'Unknown error'
-            }
-          />
+          {isUnknownSlug ? (
+            <ErrorCard detail="This voting link isn't available anymore — ask whoever sent it to share a new one." />
+          ) : (
+            <ErrorCard
+              title="Can't load this campaign"
+              detail={
+                landing.error instanceof Error
+                  ? landing.error.message
+                  : 'Unknown error'
+              }
+            />
+          )}
         </div>
       </ParticipantShell>
     );

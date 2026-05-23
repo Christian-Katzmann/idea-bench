@@ -1,0 +1,35 @@
+{
+  "$note": "Surface inventory for ModelArena walkthrough. Derived from src/App.tsx routes + modals/empty/error states discovered while walking.",
+  "operator_routes": [
+    {"path": "/login", "name": "OperatorLogin", "auth": "public"},
+    {"path": "/", "name": "OperatorHome", "auth": "operator"},
+    {"path": "/dashboard", "name": "OperatorDashboard", "auth": "operator"},
+    {"path": "/team-activity", "name": "TeamActivity", "auth": "operator"},
+    {"path": "/models", "name": "ModelLibrary", "auth": "operator"},
+    {"path": "/personas", "name": "PersonaLibrary", "auth": "operator"},
+    {"path": "/settings/api", "name": "ApiSettings", "auth": "operator"},
+    {"path": "/campaign/new", "name": "CreateCampaign", "auth": "operator"},
+    {"path": "/campaign/:id", "name": "CampaignDashboard", "auth": "operator"},
+    {"path": "/campaign/:id/preview", "name": "CampaignPreview", "auth": "operator"}
+  ],
+  "participant_routes": [
+    {"path": "/vote/:slug", "name": "ParticipantLanding", "auth": "anon"},
+    {"path": "/vote/:slug/play", "name": "VotingInterface", "auth": "anon"},
+    {"path": "/vote/:slug/results", "name": "PersonalResults", "auth": "anon"}
+  ],
+  "implicit_surfaces": [
+    {"surface": "404 fallback (/* redirects to /)", "expected_behavior": "Unknown URL redirects to operator home (or login if anon)"},
+    {"surface": "/vote/INVALID_SLUG", "expected_behavior": "Anon user lands on participant flow with a clear 'unknown campaign' state"},
+    {"surface": "/campaign/INVALID_UUID", "expected_behavior": "Operator gets a 'campaign not found' state"},
+    {"surface": "OperatorHome empty state (no campaigns)", "expected_behavior": "First-run guide / CTA"},
+    {"surface": "ModelLibrary empty state", "expected_behavior": "Some default catalogue or 'add models' CTA"},
+    {"surface": "PersonaLibrary empty state", "expected_behavior": "Starter personas + 'create' CTA"},
+    {"surface": "TeamActivity empty state", "expected_behavior": "Recent activity feed; empty if none"},
+    {"surface": "ApiSettings (status of OPENROUTER_API_KEY)", "expected_behavior": "Shows which integrations are configured"}
+  ],
+  "auth_modes_to_test": [
+    "password",
+    "github (only if configured)",
+    "email magic link (only if configured)"
+  ]
+}

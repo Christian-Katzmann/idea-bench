@@ -19,6 +19,8 @@
  * run against `NODE_ENV=production` unless `ALLOW_PROD_SEED=1`.
  *
  * Usage: `npm run db:seed`
+ *
+ * Personal/Danish demo data lives in `scripts/seed.personal.ts` (gitignored).
  */
 import { config as loadDotenv } from 'dotenv';
 loadDotenv({ path: '.env.local' });
@@ -75,15 +77,15 @@ async function main() {
   );
 
   console.log('Inserting campaigns...');
-  const [danish, codeReview, meeting] = await db
+  const [email, codeReview, meeting] = await db
     .insert(schema.campaigns)
     .values([
       {
         shareSlug: generateShareSlug(),
-        name: 'Danish citizen-letter drafting',
+        name: 'Email writing',
         description:
-          'Evaluate models on drafting official letters to citizens in Danish, focusing on tone and clarity.',
-        categories: ['translation', 'creative writing'],
+          'Which model writes the clearest, most professional emails for everyday business situations?',
+        categories: ['creative writing', 'communication'],
         status: 'active',
       },
       {
@@ -111,18 +113,18 @@ async function main() {
     .insert(schema.prompts)
     .values([
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         orderIndex: 0,
-        text: 'Draft a letter to a citizen informing them that their application for a building permit has been approved, but they must start construction within 12 months.',
+        text: 'Write a polite email declining a meeting invitation because you have a scheduling conflict, while suggesting two alternative times next week.',
         categoryTags: ['creative writing'],
       },
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         orderIndex: 1,
-        text: 'Translate this technical policy update into plain Danish suitable for a general audience.',
+        text: 'Draft an email to a customer apologizing for a shipping delay, explaining what happened in one sentence, and offering a 15% discount on their next order.',
         context:
-          'Policy update: The municipal waste management directive 2024/B requires all households to separate organic waste into the new green bins starting October 1st. Failure to comply may result in a fine of 500 DKK.',
-        categoryTags: ['translation'],
+          'The order was delayed three days because of a warehouse system outage. The customer ordered three items totalling $84. They have not asked for a refund yet, but you want to get ahead of it.',
+        categoryTags: ['communication'],
       },
     ])
     .returning();
@@ -132,22 +134,22 @@ async function main() {
     .insert(schema.campaignModels)
     .values([
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         providerModelId: 'anthropic/claude-opus-4-6',
         displayName: 'Claude Opus 4.6',
       },
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         providerModelId: 'anthropic/claude-sonnet-4-6',
         displayName: 'Claude Sonnet 4.6',
       },
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         providerModelId: 'openai/gpt-5',
         displayName: 'GPT-5',
       },
       {
-        campaignId: danish.id,
+        campaignId: email.id,
         providerModelId: 'google/gemini-2.5-pro',
         displayName: 'Gemini 2.5 Pro',
       },
@@ -157,86 +159,86 @@ async function main() {
   console.log('Inserting generations...');
   const now = new Date();
   await db.insert(schema.generations).values([
-    // prompt 1
+    // prompt 1 — declining a meeting
     {
       promptId: prompt1.id,
       campaignModelId: opus.id,
       output:
-        'Kære Borger,\n\nVi har den glæde at meddele dig, at din ansøgning om byggetilladelse er blevet godkendt. Du kan nu påbegynde dit byggeprojekt.\n\nVær venligst opmærksom på, at byggeriet skal påbegyndes inden for 12 måneder fra dags dato. Hvis dette ikke overholdes, vil tilladelsen bortfalde.\n\nMed venlig hilsen,\nKommunen',
-      tokensIn: 120,
-      tokensOut: 65,
-      latencyMs: 1200,
+        "Hi Sam,\n\nThank you for the invite — I'd love to join, but I have a hard conflict at that time. Would either Tuesday at 10am or Thursday at 2pm next week work for you? Happy to send a calendar hold once you confirm.\n\nBest,\nAlex",
+      tokensIn: 95,
+      tokensOut: 68,
+      latencyMs: 1180,
       completedAt: now,
     },
     {
       promptId: prompt1.id,
       campaignModelId: sonnet.id,
       output:
-        'Kære modtager,\n\nDin ansøgning om byggetilladelse er godkendt. Bemærk at byggeriet skal igangsættes inden 12 måneder, ellers bortfalder tilladelsen.\n\nVenlig hilsen,\nByggesagsafdelingen',
-      tokensIn: 120,
-      tokensOut: 45,
-      latencyMs: 900,
-      completedAt: now,
-    },
-    {
-      promptId: prompt1.id,
-      campaignModelId: gpt5.id,
-      output:
-        'Til rette vedkommende.\n\nDin byggetilladelse er godkendt. Byggeriet skal starte inden 12 måneder, ellers udløber tilladelsen.\n\nVenlig hilsen,\nByggeafdelingen',
-      tokensIn: 120,
-      tokensOut: 40,
-      latencyMs: 800,
-      completedAt: now,
-    },
-    {
-      promptId: prompt1.id,
-      campaignModelId: gemini.id,
-      output:
-        'Kære ansøger,\n\nVi skriver for at informere dig om, at din byggetilladelse er godkendt. Husk at byggeriet skal sættes i gang senest 12 måneder fra i dag.\n\nVenlig hilsen,\nBorgerservice',
-      tokensIn: 120,
-      tokensOut: 50,
-      latencyMs: 950,
-      completedAt: now,
-    },
-    // prompt 2
-    {
-      promptId: prompt2.id,
-      campaignModelId: opus.id,
-      output:
-        'Vigtig information om affaldssortering.\n\nFra den 1. oktober skal alle husstande sortere deres madaffald i de nye grønne spande. Det er vigtigt at overholde dette, da manglende sortering kan medføre et gebyr på 500 kr.',
-      tokensIn: 180,
-      tokensOut: 55,
-      latencyMs: 1100,
-      completedAt: now,
-    },
-    {
-      promptId: prompt2.id,
-      campaignModelId: sonnet.id,
-      output:
-        'Kære beboer,\n\nFra 1. oktober starter en ny ordning for affaldssortering: madaffald skal i de grønne spande. Manglende sortering kan udløse et gebyr på 500 kr.',
-      tokensIn: 180,
-      tokensOut: 40,
+        "Hi Sam,\n\nI can't make the meeting on Friday — I'm already booked at that time. Could we move it to Tuesday at 10am or Thursday at 2pm next week instead? Either works on my end.\n\nThanks,\nAlex",
+      tokensIn: 95,
+      tokensOut: 58,
       latencyMs: 880,
       completedAt: now,
     },
     {
+      promptId: prompt1.id,
+      campaignModelId: gpt5.id,
+      output:
+        "Hi Sam,\n\nUnfortunately I have a conflict at the proposed time and won't be able to attend. Two alternatives that work for me next week: Tuesday 10am or Thursday 2pm. Let me know which you prefer.\n\nThanks,\nAlex",
+      tokensIn: 95,
+      tokensOut: 62,
+      latencyMs: 820,
+      completedAt: now,
+    },
+    {
+      promptId: prompt1.id,
+      campaignModelId: gemini.id,
+      output:
+        "Hi Sam,\n\nThanks for including me. I have to bow out of that slot due to another commitment, but I'd like to find a time that works. Could you do Tuesday morning at 10 or Thursday afternoon at 2 next week?\n\nBest,\nAlex",
+      tokensIn: 95,
+      tokensOut: 70,
+      latencyMs: 960,
+      completedAt: now,
+    },
+    // prompt 2 — shipping-delay apology
+    {
+      promptId: prompt2.id,
+      campaignModelId: opus.id,
+      output:
+        "Hi Jordan,\n\nI wanted to reach out personally about your recent order — it shipped three days late because of a warehouse system outage on our end, and that's on us. To make it right, please use code THANKS15 for 15% off your next order. Your package is now on the way and you should have it within two business days.\n\nThanks for your patience,\nMaria",
+      tokensIn: 155,
+      tokensOut: 88,
+      latencyMs: 1240,
+      completedAt: now,
+    },
+    {
+      promptId: prompt2.id,
+      campaignModelId: sonnet.id,
+      output:
+        "Hi Jordan,\n\nQuick note to apologize for the three-day delay on your order — a warehouse system outage put us behind, and that's on us. As a thank-you for your patience, here's 15% off your next order with code THANKS15.\n\nBest,\nMaria",
+      tokensIn: 155,
+      tokensOut: 65,
+      latencyMs: 920,
+      completedAt: now,
+    },
+    {
       promptId: prompt2.id,
       campaignModelId: gpt5.id,
       output:
-        'Nye regler for affald.\n\nAlle skal bruge de grønne spande til organisk affald fra 1. oktober. Bøde på 500 kr. hvis det ikke overholdes.',
-      tokensIn: 180,
-      tokensOut: 35,
-      latencyMs: 750,
+        "Hi Jordan,\n\nApologies for the delayed shipment — a warehouse system outage pushed your order back three days. To make up for it, please use THANKS15 at checkout next time for 15% off.\n\nThanks,\nMaria",
+      tokensIn: 155,
+      tokensOut: 55,
+      latencyMs: 780,
       completedAt: now,
     },
     {
       promptId: prompt2.id,
       campaignModelId: gemini.id,
       output:
-        'Kære borger,\n\nFra 1. oktober indfører vi nye regler for affaldssortering. Det betyder, at du skal sortere dit madaffald i den nye grønne spand. Bemærk venligst, at det kan koste en afgift på 500 kr., hvis affaldet ikke sorteres korrekt.',
-      tokensIn: 180,
-      tokensOut: 60,
-      latencyMs: 1050,
+        "Hi Jordan,\n\nI'm sorry your order arrived late — a warehouse system outage delayed it by three days, and we should have given you a heads-up sooner. As a small thank-you for sticking with us, here's 15% off your next order: code THANKS15.\n\nWe appreciate you,\nMaria",
+      tokensIn: 155,
+      tokensOut: 80,
+      latencyMs: 1080,
       completedAt: now,
     },
   ]);
@@ -247,7 +249,7 @@ async function main() {
   // the vote log.
   await db.insert(schema.ratings).values([
     {
-      campaignId: danish.id,
+      campaignId: email.id,
       campaignModelId: opus.id,
       category: 'overall',
       rating: 1247,
@@ -256,7 +258,7 @@ async function main() {
       gameCount: 45,
     },
     {
-      campaignId: danish.id,
+      campaignId: email.id,
       campaignModelId: sonnet.id,
       category: 'overall',
       rating: 1195,
@@ -265,7 +267,7 @@ async function main() {
       gameCount: 43,
     },
     {
-      campaignId: danish.id,
+      campaignId: email.id,
       campaignModelId: gemini.id,
       category: 'overall',
       rating: 1180,
@@ -274,7 +276,7 @@ async function main() {
       gameCount: 42,
     },
     {
-      campaignId: danish.id,
+      campaignId: email.id,
       campaignModelId: gpt5.id,
       category: 'overall',
       rating: 1050,
@@ -285,7 +287,7 @@ async function main() {
   ]);
 
   console.log(`\nSeeded 3 campaigns:`);
-  console.log(`  Active:    /vote/${danish.shareSlug}`);
+  console.log(`  Active:    /vote/${email.shareSlug}`);
   console.log(`  Completed: /vote/${codeReview.shareSlug}`);
   console.log(`  Draft:     /vote/${meeting.shareSlug}`);
 }

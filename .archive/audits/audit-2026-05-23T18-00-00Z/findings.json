@@ -1,0 +1,227 @@
+{
+  "$note": "Schema-validated findings array. Each entry conforms to schemas/finding.schema.json. Required fields populated; consumed by punch-list.md.",
+  "findings": [
+    {
+      "id": "participant-home-link-deadends-at-login-3d4e5f",
+      "surface": "/vote/:slug header + /vote/:slug landing",
+      "category": "user-blocking",
+      "severity": "major",
+      "claim_ref": "CLM-007",
+      "user_expectation": "A participant who clicks the header 'Home' link from a voting page expects to return to the campaign landing or product page, not be redirected into an operator login screen they have no credentials for.",
+      "reality": "The header 'Home' link points to '/', which on the operator side is /, but for an unauthenticated participant it redirects to /login (operator sign-in). Anonymous participants get dumped into a credential gate that does not apply to them.",
+      "repro_steps": [
+        "Open http://localhost:3000/vote/this-slug-does-not-exist as an anonymous browser",
+        "Observe the 'Can't load this campaign · 404 campaign not found' state",
+        "Click the 'Home' link in the header",
+        "Observe immediate redirect to /login"
+      ],
+      "evidence_path": "evidence/participant-home-dead-ends-at-login-3d4e5f.png",
+      "console_errors": [],
+      "fix_hypothesis": "Remove the header 'Home' link from participant routes entirely, or point it to a participant-friendly destination like /vote/:slug (the landing) or a public 'About ModelArena' page that doesn't require auth."
+    },
+    {
+      "id": "campaign-detail-500-retry-storm-a0b1c2",
+      "surface": "/campaign/:invalid-uuid",
+      "category": "user-blocking",
+      "severity": "major",
+      "claim_ref": "undocumented",
+      "user_expectation": "An operator who follows a stale link or mistypes a campaign ID expects an immediate, clear 'campaign not found' error — not an infinite loading spinner.",
+      "reality": "The page sits on 'Loading…' indefinitely. GET /api/campaigns/<bogus> returns HTTP 500 (not 404) and React Query's default behavior fires 7 retries against the same 500, all of which are silently swallowed by the UI. No error state ever renders.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Navigate to http://localhost:3000/campaign/not-a-real-campaign",
+        "Observe 'Loading…' breadcrumb",
+        "Wait 10+ seconds; UI does not transition",
+        "Open DevTools Network panel; observe 7 × GET /api/campaigns/not-a-real-campaign → 500"
+      ],
+      "evidence_path": "evidence/campaign-invalid-uuid-stuck-loading-a0b1c2.png",
+      "console_errors": [],
+      "network_failures": [
+        {"url": "/api/campaigns/not-a-real-campaign", "status": 500, "method": "GET"}
+      ],
+      "fix_hypothesis": "Two-part fix. (1) Server: in the campaign-by-id handler, distinguish 'not found' (return 404) from genuine 500s. Bogus UUIDs should be a clean 404. (2) Client: in the campaign-detail query, disable retry on 4xx and render a 'Campaign not found' empty state on 404; render an error state with a 'Retry' button on 5xx."
+    },
+    {
+      "id": "wizard-demo-shortcut-conflicts-with-input-focus-f9a0b1",
+      "surface": "/campaign/new (Step 2: Basics)",
+      "category": "polished-but-lying",
+      "severity": "major",
+      "claim_ref": "undocumented",
+      "user_expectation": "When the operator clicks the 'DEMO ●' button, the tooltip 'Press → to autofill each step' should actually do that — and on the very next step.",
+      "reality": "On Step 2 (Basics), the campaign-name textbox is auto-focused on render. ArrowRight is captured by the input field as a cursor-movement key, so the autofill shortcut silently no-ops. The user has to click outside the input first — a non-obvious workaround. The two duplicate 'Sprogmodeller i sagsbehandling' draft campaigns visible in the seed data appear to be exactly this trap: someone enabled demo mode, pressed → expecting autofill, got cursor movement, and ended up creating empty drafts.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Click 'New campaign'",
+        "On Step 1 (Kind), click 'DEMO ●' to enable demo mode",
+        "Click 'Next' to advance to Step 2 (Basics)",
+        "Observe campaign-name input is auto-focused",
+        "Press →; nothing happens (cursor moves inside empty input)",
+        "Blur the input (click elsewhere) and press → again; the form now autofills"
+      ],
+      "evidence_path": "evidence/campaign-new-demo-mode-e8f9a0.png",
+      "console_errors": [],
+      "fix_hypothesis": "Either (a) bind the demo shortcut to a non-cursor key (e.g. Shift+→, Cmd+→, or Tab+→), or (b) intercept ArrowRight at the document level only when no input is focused, or (c) add a visible 'Autofill this step' button that appears in demo mode so the shortcut is no longer the only path."
+    },
+    {
+      "id": "team-activity-recompute-spam-7b8c9d",
+      "surface": "/team-activity",
+      "category": "half-built",
+      "severity": "major",
+      "claim_ref": "undocumented",
+      "user_expectation": "A 'Team Activity' feed should let an operator scan recent meaningful movement at a glance — who voted, what got recomputed, what got launched. System events should not crowd out human events.",
+      "reality": "The feed is dominated by 25+ identical-looking 'RATINGS RECOMPUTED' entries in a row from a single campaign (c4d0e8e9-d652-4bfb-998e-976615d492c1). Operator-meaningful events (campaign created, participant finished) are buried below the noise. There is no grouping, collapsing, or filtering. Additionally, 'PARTICIPANT FINISHED' rows show only 'A participant finished voting' with no inline campaign name — the operator has to click through to know which campaign moved.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Navigate to /team-activity",
+        "Scroll the timeline",
+        "Count consecutive 'RATINGS RECOMPUTED' entries for one campaign before another event type appears"
+      ],
+      "evidence_path": "evidence/team-activity-recompute-spam-7b8c9d.png",
+      "console_errors": [],
+      "fix_hypothesis": "Collapse consecutive same-type events from the same campaign into a single row ('Ratings recomputed 12 times in 20 minutes'), and either down-rank system events vs human events or add a filter toggle. Inline campaign name in PARTICIPANT FINISHED rows."
+    },
+    {
+      "id": "dashboard-triple-fetch-strictmode-d1e2f3",
+      "surface": "/dashboard",
+      "category": "half-built",
+      "severity": "minor",
+      "claim_ref": "undocumented",
+      "user_expectation": "Loading the dashboard should fire one network request for its data, not three.",
+      "reality": "Loading /dashboard fires GET /api/operator/dashboard three times. Two are likely from React StrictMode's intentional double-mount in dev; the third suggests a real over-fetch (e.g. an effect that re-runs unnecessarily, or two components subscribing without sharing a query).",
+      "repro_steps": [
+        "Sign in as operator",
+        "Navigate to /dashboard (cold)",
+        "Open DevTools → Network",
+        "Filter to /api/operator/dashboard",
+        "Observe three GETs on a single page load"
+      ],
+      "evidence_path": "evidence/dashboard-pulse-tab-6a7b8c.png",
+      "console_errors": [],
+      "fix_hypothesis": "Audit useEffect/useQuery hooks on OperatorDashboard. Confirm whether the third fetch is a legitimate refetch or a duplicate subscription; if duplicate, hoist into a single shared useQuery or memoize the hook's enabled flag."
+    },
+    {
+      "id": "command-palette-missing-personas-cdef01",
+      "surface": "Command palette (⌘K)",
+      "category": "half-built",
+      "severity": "minor",
+      "claim_ref": "CLM-014",
+      "user_expectation": "The command palette should be able to jump to every section visible in the sidebar — including Personas.",
+      "reality": "The sidebar lists 6 nav items (Dashboard, Campaigns, Team Activity, Models, Personas, API Settings). The ⌘K command palette's NAVIGATION section lists only 5: Dashboard, Campaigns, Team Activity, Models, API Settings. Personas is missing.",
+      "repro_steps": [
+        "Sign in as operator",
+        "From any page, press ⌘K (or click 'Search... ⌘K')",
+        "Observe the NAVIGATION section",
+        "Count the items and compare to the sidebar"
+      ],
+      "evidence_path": "evidence/operator-home-baseline-4e5f6a.png",
+      "console_errors": [],
+      "fix_hypothesis": "Add 'Go to Personas' to the command palette's navigation list. The list is almost certainly a hardcoded array next to where the other 5 are defined."
+    },
+    {
+      "id": "vote-invalid-slug-raw-status-leak-2c3d4e",
+      "surface": "/vote/<invalid-slug>",
+      "category": "polished-but-lying",
+      "severity": "minor",
+      "claim_ref": "CLM-007",
+      "user_expectation": "When a participant follows an expired or typo'd voting link, they expect a human-voice 'this campaign isn't available, ask the sender for a new link' message — not a raw HTTP status code.",
+      "reality": "The error state reads 'Can't load this campaign · 404 campaign not found'. Mixing a human sentence with a literal '404' leaks implementation detail and reads like a developer error page. There is also no 'go back' or 'contact sender' CTA — only a header link that drops the participant into the operator login (separate finding F-001).",
+      "repro_steps": [
+        "Open http://localhost:3000/vote/this-slug-does-not-exist as anonymous",
+        "Observe the error message wording"
+      ],
+      "evidence_path": "evidence/vote-invalid-slug-404-2c3d4e.png",
+      "console_errors": [],
+      "fix_hypothesis": "Rewrite to 'This voting link isn't available anymore — ask whoever sent it to share a new one.' Drop the literal '404'. Add a single 'Get a new link from the sender' line as the action."
+    },
+    {
+      "id": "api-settings-missing-github-resend-status-bfc0d1",
+      "surface": "/settings/api",
+      "category": "stale-promise",
+      "severity": "minor",
+      "claim_ref": "CLM-005",
+      "user_expectation": "The page promises 'Read-only configuration health for the services this app depends on' — so a first-time deployer expects to see whether GitHub OAuth and Resend (email magic link) are wired, since the README presents them as first-class auth methods.",
+      "reality": "The page surfaces 4 secrets: Database, Auth, Operator, OpenRouter. GitHub OAuth (GITHUB_OAUTH_CLIENT_ID/SECRET/OPERATOR_GITHUB_LOGINS) and Resend (RESEND_API_KEY/OPERATOR_EMAILS) are not represented at all. A deployer who configured GitHub OAuth has no way to verify it from this page — they must trial-click the button on /login.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Navigate to /settings/api",
+        "Read the Secret status list",
+        "Notice GitHub OAuth and Resend / email-link rows are absent"
+      ],
+      "evidence_path": "evidence/api-settings-bfc0d1.png",
+      "console_errors": [],
+      "fix_hypothesis": "Extend the secret-status response to include GitHub OAuth (configured if all three env vars present) and Resend (configured if RESEND_API_KEY + OPERATOR_EMAILS present). Each surfaces as a row with status CONFIGURED / NOT CONFIGURED / PARTIAL."
+    },
+    {
+      "id": "personal-results-zero-prompt-grammar-c6d7e8",
+      "surface": "/vote/:slug/results (after quitting early)",
+      "category": "polished-but-lying",
+      "severity": "minor",
+      "claim_ref": "undocumented",
+      "user_expectation": "After completing 1 battle inside 1 prompt's tournament, the summary should say something like 'Based on your 1 battle in 1 prompt (in progress)' — not 'across 0 prompts'.",
+      "reality": "The page reads 'Based on your 1 battle across 0 prompts.' which is grammatically wrong and confusing — the participant DID engage with a prompt; they just didn't finish it. The current logic appears to count only prompts where the tournament was fully played.",
+      "repro_steps": [
+        "Open http://localhost:3000/vote/P42Skm4IQyIVEq7q as anonymous",
+        "Click 'Vote as anonymous'",
+        "Vote on the first battle",
+        "Click 'Quit early'",
+        "Read the opening sentence of the results page"
+      ],
+      "evidence_path": "evidence/vote-personal-results-c6d7e8.png",
+      "console_errors": [],
+      "fix_hypothesis": "Count prompts touched (≥1 battle voted), not prompts completed. Or render different copy when count=0: 'Based on your 1 battle in 1 prompt (still in progress).'"
+    },
+    {
+      "id": "personal-results-meaningless-rating-with-huge-ci-c6d7e8b",
+      "surface": "/vote/:slug/results",
+      "category": "polished-but-lying",
+      "severity": "minor",
+      "claim_ref": "undocumented",
+      "user_expectation": "A statistically-savvy reader expects that when a confidence interval is larger than the rating itself (1461 ± 2438), the rating is not shown at face value — because numerically it spans negative values that the rating system doesn't support.",
+      "reality": "The personal results page shows Claude Opus 4.6 with rating '1461 ± 2438', Claude Sonnet 4.6 with '539 ± 2438' — CIs nearly 2× the rating values. The 'Your sample is small' disclaimer above is good, but the actual numbers are still printed prominently in monospace as if meaningful.",
+      "repro_steps": [
+        "Open http://localhost:3000/vote/P42Skm4IQyIVEq7q as anonymous",
+        "Vote on exactly one battle then click 'Quit early'",
+        "Observe the rating table on /results"
+      ],
+      "evidence_path": "evidence/vote-personal-results-c6d7e8.png",
+      "console_errors": [],
+      "fix_hypothesis": "When fewer than N votes (e.g. 5), hide the numeric rating column entirely and show only win-rate + 'tier' (DIRECTIONAL). This already exists as a tier label; just drop the misleading numbers below threshold."
+    },
+    {
+      "id": "campaign-card-duplicates-from-demo-mode-baseline-4e5f6a",
+      "surface": "/ (Campaigns list)",
+      "category": "half-built",
+      "severity": "minor",
+      "claim_ref": "undocumented",
+      "user_expectation": "If a new operator creates a fresh campaign with default values, they expect either a duplicate-detection prompt ('A campaign with this name already exists — duplicate?') or a clear visual difference in the list.",
+      "reality": "The campaign list shows two side-by-side rows with identical name, description, category, and status ('Sprogmodeller i sagsbehandling — Q2 evaluering' × 2; 'Phase 2 smoke' × 2). The only differentiator is a UUID hidden in the link href. Almost certainly the byproduct of the demo-autofill race condition (F-003); but the list-side has no defense.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Open /",
+        "Scroll the campaign list",
+        "Count identical-looking entries"
+      ],
+      "evidence_path": "evidence/operator-home-baseline-4e5f6a.png",
+      "console_errors": [],
+      "fix_hypothesis": "Light fix: when creating a campaign, if a campaign with the exact same name already exists, ask 'duplicate or rename?' in the wizard's final step. Or just label demo-mode-created drafts with a small 'demo' badge."
+    },
+    {
+      "id": "unknown-route-silent-redirect-banana-baseline-4e5f6a",
+      "surface": "/* fallback",
+      "category": "polished-but-lying",
+      "severity": "minor",
+      "claim_ref": "CLM-014",
+      "user_expectation": "Visiting an unknown URL should either render a small '404 — page not found' state or, if redirecting to home, surface a quick toast like 'We didn't find that page.'",
+      "reality": "Visiting /banana silently redirects to / with no acknowledgment. The operator may not even notice the URL was bogus, which makes typo'd internal links hard to diagnose.",
+      "repro_steps": [
+        "Sign in as operator",
+        "Navigate to http://localhost:3000/banana",
+        "Observe URL bar instantly changes to /",
+        "Observe no toast, no banner, no breadcrumb hint that the original URL was invalid"
+      ],
+      "evidence_path": "evidence/operator-home-baseline-4e5f6a.png",
+      "console_errors": [],
+      "fix_hypothesis": "Replace the catch-all <Navigate to='/' /> with a dedicated <NotFound /> route that renders 'We couldn't find <pathname>' and a button 'Go to campaigns'. Or keep the redirect but fire a toast on the destination page."
+    }
+  ]
+}

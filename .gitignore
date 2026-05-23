@@ -12,3 +12,6 @@ coverage/
 # appify build artifacts
 desktop/
 assets/icons/
+
+# Personal/local-only seeds (Danish municipal demos, etc.)
+scripts/*.personal.ts

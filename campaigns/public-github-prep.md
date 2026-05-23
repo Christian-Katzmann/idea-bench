@@ -54,7 +54,7 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 
 ### Phase 5 — Pre-publish safety & flip
 
-- [ ] Step 5.1 — Secret-history audit, key rotation, demo-data cleanup
+- [x] Step 5.1 — Secret-history audit, key rotation, demo-data cleanup
 - [ ] Step 5.2 — Repo rename, settings, branch protection, flip public
 - [ ] Final review
 

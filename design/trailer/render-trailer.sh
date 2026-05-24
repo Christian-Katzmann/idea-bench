@@ -5,6 +5,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_DIR="$ROOT/design/trailer"
 FRAME_DIR="$OUT_DIR/frames"
 
+missing=()
+for tool in magick ffmpeg ffprobe; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    missing+=("$tool")
+  fi
+done
+
+if ((${#missing[@]})); then
+  echo "Missing required command(s): ${missing[*]}" >&2
+  echo "Install ImageMagick and ffmpeg, then rerun this script." >&2
+  exit 127
+fi
+
 mkdir -p "$FRAME_DIR"
 
 ink="#1F1B16"

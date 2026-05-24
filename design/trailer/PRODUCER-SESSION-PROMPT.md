@@ -2,11 +2,11 @@
 
 Produce a 30-second polished trailer for the repository using local rendering only.
 
-Project root: `/Users/christiankatzmann/Dev/ïdea.com/modelarena`
+Project root: this repository root.
 
-Read first: `/Users/christiankatzmann/Dev/ïdea.com/modelarena/design/trailer/BRIEF.md`
+Read first: `design/trailer/BRIEF.md`
 
-Output target: `/Users/christiankatzmann/Dev/ïdea.com/modelarena/design/trailer/trailer.mp4`
+Output target: `design/trailer/trailer.mp4`
 
 Constraints:
 

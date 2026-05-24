@@ -6,11 +6,11 @@ Click an icon in `~/Desktop/MyApps/` (or its Dock Stack) to launch.
 
 1. Right-click the app icon and choose **Open**, then click **Open** in the dialog. macOS remembers and skips this on subsequent launches (Gatekeeper, unsigned bundle).
 2. The first cold start takes 5–15 s while Vite compiles.
-3. If a "couldn't be opened" alert appears citing the dev server, open `~/Library/Logs/ModelArena/server.log`. The alert quotes the tail; the full log usually shows the cause.
+3. If a "couldn't be opened" alert appears citing the dev server, open `~/Library/Logs/ïdea Bench/server.log`. The alert quotes the tail; the full log usually shows the cause.
 
 ## App
 
-- **ModelArena** (`ModelArena.app`) — Vite + React dev server. Preferred port `:3000`; falls back to the first free port in `[3000–3050]` when sibling apps occupy `:3000`.
+- **ïdea Bench** (`ïdea Bench.app`) — Vite + React dev server. Preferred port `:3000`; falls back to the first free port in `[3000–3050]` when sibling apps occupy `:3000`.
 
 The `.app` runs as a real macOS app with its own Dock icon and its own window — **not** a Chrome `--app` window. It embeds a small Swift WebKit shell so the Dock icon stays ours and macOS handles single-instance activation natively.
 
@@ -22,7 +22,7 @@ The launcher is **persistent** — designed for daily use, not single-shot demos
 - **Closing the window with the red X does NOT kill the dev server.** It stays warm. Click the icon again and the window opens within ~250 ms.
 - **Cmd+Q (or right-click → Quit in the Dock) DOES kill the server.** Full-shutdown path — use when you actually want everything to stop.
 - **Re-clicking the icon while the window is open** brings the existing window forward. No second window.
-- **Sibling appified apps coexist.** Ten of your appified apps configure `:3000` as their preferred port. This launcher scans upward and picks the first free port at click time. The actual runtime port is recorded at `~/Library/Logs/ModelArena/server.port`.
+- **Sibling appified apps coexist.** Ten of your appified apps configure `:3000` as their preferred port. This launcher scans upward and picks the first free port at click time. The actual runtime port is recorded at `~/Library/Logs/ïdea Bench/server.port`.
 
 To stop the persistent dev server from the terminal:
 
@@ -59,7 +59,7 @@ If the Dock briefly shows a stale thumbnail after a reboot, drag the Stack out a
 
 ## Logs & runtime files
 
-Under `~/Library/Logs/ModelArena/`:
+Under `~/Library/Logs/ïdea Bench/`:
 - `server.log` — Vite output. If startup fails, an alert quotes the tail.
 - `server.port` — the actual runtime port (may differ from `3000` if collision-fallback kicked in).
 - `server.pid` — supervisor PID. The launcher's reattach gate walks this PID's descendant tree, so warm re-launch works.
@@ -67,9 +67,9 @@ Under `~/Library/Logs/ModelArena/`:
 ## Architecture
 
 ```
-desktop/ModelArena.app/
+desktop/ïdea Bench.app/
   Contents/
-    Info.plist                       # CFBundleIdentifier = com.user.modelarena
+    Info.plist                       # CFBundleIdentifier = com.user.idea-bench
     MacOS/
       run                            # bash launcher (vite boot + exec)
       wrapper                        # compiled Swift WKWebView shell (universal)
@@ -86,5 +86,5 @@ The dev-server invocation (`scripts/appify.config.json`) is `npx vite --port "$P
 - **Unsigned bundle.** First launch triggers Gatekeeper. Right-click → Open once and macOS remembers.
 - **Repo path is baked in.** Moving the repo means re-running `npm run desktop:build && npm run desktop:install`.
 - **Persistent server.** Closing the window leaves Vite running. That's intentional — it's why the second launch is fast — but it means `lsof -i :3000-3050` keeps showing the binding until you Cmd+Q the app, run `npm run desktop:quit`, or reboot.
-- **WebKit, not Chromium.** If you need Chrome devtools, point a regular browser tab at the runtime URL (read it from `~/Library/Logs/ModelArena/server.port`).
+- **WebKit, not Chromium.** If you need Chrome devtools, point a regular browser tab at the runtime URL (read it from `~/Library/Logs/ïdea Bench/server.port`).
 - **Distribution to other users not supported.** Unsigned, no notarization, no auto-update. Your other Mac counts (universal arm64+x86_64 binary).

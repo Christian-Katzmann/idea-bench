@@ -1,11 +1,11 @@
 {
   "apps": [
     {
-      "name": "ModelArena",
-      "slug": "modelarena",
+      "name": "ïdea Bench",
+      "slug": "idea-bench",
       "port": 3000,
       "start_command": "npx vite --port \\$PORT --host 0.0.0.0",
-      "bundle_id": "com.user.modelarena",
+      "bundle_id": "com.user.idea-bench",
       "version": "0.1.0",
       "polyfill_path": ""
     }

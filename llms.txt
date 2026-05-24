@@ -1,0 +1,24 @@
+# ModelArena
+
+ModelArena is a self-hosted single-operator tool for blind head-to-head evaluation of LLM outputs with real voters or simulated personas. It lets an operator create a campaign, compare models, system prompts, or prompt variants, collect blind pairwise votes, and compute Bradley-Terry ratings that can be defended in product or content decisions.
+
+Status: usable public alpha. The single-operator campaign loop, blind voting surface, simulated persona flow, OpenRouter generation path, and Bradley-Terry result view are real. Hosted SaaS operations, billing, workspaces, and multi-tenant RBAC are intentionally out of scope.
+
+## Key Links
+
+- README: `README.md`
+- Agent guide: `AGENTS.md`
+- Server boundary: `src/server/README.md`
+- Design system: `docs/design-system/DESIGN-SYSTEM.md`
+- Roadmap: `docs/roadmap/README.md`
+- Risk register: `.adx/risks.json`
+- Command registry: `.adx/commands.json`
+- Verification matrix: `.adx/verification.json`
+
+## Operational Notes
+
+- Use `npm`, not pnpm or yarn.
+- Use `npm run verify` for full local verification.
+- Do not import runtime server code from `src/server/**` into client code.
+- Do not run database seed, migration, deploy, or production-adjacent commands without confirming the target environment.
+- AI spend is gated separately from login through `AI_ALLOWED_IDENTITIES`.

@@ -66,7 +66,7 @@ export function ViewSwitcher({ className }: { className?: string }) {
         <BrandMark size="md" className="mr-3" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-foreground">
-            ModelArena
+            ïdea Bench
           </div>
           <div className="truncate text-[10px] text-muted-foreground">
             {activeLabel}

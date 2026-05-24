@@ -1,6 +1,6 @@
-# Where ModelArena is going
+# Where ïdea Bench is going
 
-A short public-facing view of the directions we're investing in next. Not a commitment, not a schedule — just enough context to decide whether to use ModelArena today.
+A short public-facing view of the directions we're investing in next. Not a commitment, not a schedule — just enough context to decide whether to use ïdea Bench today.
 
 ## Three directions
 
@@ -12,12 +12,12 @@ A short public-facing view of the directions we're investing in next. Not a comm
 
 ## What's already in
 
-Today ModelArena ships with three campaign kinds in one engine: **model arenas** (compare models head-to-head), **system-prompt arenas** (compare system prompts on a fixed model), and **prompt arenas** (compare prompt variants on a fixed model). Same blind-voting UI, same Bradley-Terry rating math across all three.
+Today ïdea Bench ships with three campaign kinds in one engine: **model arenas** (compare models head-to-head), **system-prompt arenas** (compare system prompts on a fixed model), and **prompt arenas** (compare prompt variants on a fixed model). Same blind-voting UI, same Bradley-Terry rating math across all three.
 
 ## Not on the roadmap
 
-Things we considered and consciously left out, so you know what ModelArena is *not* trying to become:
+Things we considered and consciously left out, so you know what ïdea Bench is *not* trying to become:
 
 - A production LLM router or traffic-hosting layer.
 - An LLM-as-judge auto-grader (judges are humans or human-shaped panels, by design).
-- A multi-tenant SaaS — ModelArena is self-hosted single-operator first. A team mode is plausible later; we'll know when we get there.
+- A multi-tenant SaaS — ïdea Bench is self-hosted single-operator first. A team mode is plausible later; we'll know when we get there.

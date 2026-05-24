@@ -1,6 +1,6 @@
 // Vendored from /Users/christiankatzmann/Dev/reuse-kit/ready/modal-focus-trap/src/useFocusTrap.ts
 //
-// Note: ModelArena's shared `Dialog` component (src/components/ui/dialog.tsx)
+// Note: ïdea Bench's shared `Dialog` component (src/components/ui/dialog.tsx)
 // is built on Base UI's DialogPrimitive, which handles focus trapping +
 // ESC-to-close + focus restoration natively. Use this hook only for
 // custom overlays that do NOT wrap Dialog (e.g. bespoke popover-style

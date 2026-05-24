@@ -87,12 +87,12 @@ describe('AppShell', () => {
     );
   });
 
-  it('renders the modelarena breadcrumb root linking to /', () => {
+  it('renders the idea-bench breadcrumb root linking to /', () => {
     renderShell('/dashboard');
 
     // Breadcrumb root is inside the <nav aria-label="Breadcrumb"> region.
     const breadcrumb = within(screen.getByRole('navigation', { name: /breadcrumb/i }));
-    expect(breadcrumb.getByRole('link', { name: /modelarena/i })).toHaveAttribute(
+    expect(breadcrumb.getByRole('link', { name: /idea-bench/i })).toHaveAttribute(
       'href',
       '/',
     );

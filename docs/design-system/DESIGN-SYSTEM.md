@@ -1,6 +1,6 @@
-# ModelArena — Design System
+# ïdea Bench — Design System
 
-A complete specification for the visual, typographic, interaction, and UX language of ModelArena. Hand this to a designer or engineer and they should be able to produce work that feels indistinguishable from the rest of the product.
+A complete specification for the visual, typographic, interaction, and UX language of ïdea Bench. Hand this to a designer or engineer and they should be able to produce work that feels indistinguishable from the rest of the product.
 
 ---
 
@@ -294,7 +294,7 @@ Shadows are tiny and warm-neutral. No colored shadows, no glows (except the dark
 
 - Sticky, `z-30`.
 - `bg-background/80 backdrop-blur-md`, bottom border.
-- Breadcrumb = `modelarena / Section / Detail`. Leading root links to `/`. Separator is a muted `/` glyph (`text-border`). Final segment is `font-medium text-foreground`; earlier segments are hover-underlined muted links.
+- Breadcrumb = `idea-bench / Section / Detail`. Leading root links to `/`. Separator is a muted `/` glyph (`text-border`). Final segment is `font-medium text-foreground`; earlier segments are hover-underlined muted links.
 - Search trigger is a 32px-tall bordered pill with `Search` icon + "Search..." text + `⌘K` right-aligned mono hint. Hidden below `md`.
 - Avatar menu: circular `size-8` tile of `bg-surface-highlight`, single-letter "O" (Operator). Ring grows on hover.
 
@@ -389,7 +389,7 @@ Icons inside badges: `size-3` (12px), optionally `animate-spin` for "Building" s
 
 ### 5.6 StatusBadge — semantic wrapper
 
-Maps ModelArena's state machines to chip variants:
+Maps ïdea Bench's state machines to chip variants:
 
 | State | Variant | Icon | Label |
 |---|---|---|---|
@@ -556,7 +556,7 @@ Three-up on `sm:grid-cols-3` for overview dashboards.
 
 The top-left sidebar control. Combines brand + product name + view-mode dropdown.
 
-- Resting state: `h-14`, `px-4`, BrandMark md + "ModelArena" (medium sm) + subtitle ("Operator" or "Participant" — the *current* view).
+- Resting state: `h-14`, `px-4`, BrandMark md + "ïdea Bench" (medium sm) + subtitle ("Operator" or "Participant" — the *current* view).
 - On click: dropdown below with `rounded-lg border border-border bg-card shadow-xl`, a 10px uppercase "View mode" label, and menu items.
 - Active item: `bg-surface-highlight` with a right-aligned `Check` icon.
 - Disabled item ("Participant preview" when not on a campaign): `cursor-not-allowed text-muted-foreground/70` with a hint ("Open a campaign").
@@ -709,7 +709,7 @@ AppShell(breadcrumb=[...])
     └── sub-cards (actions, settings)
 ```
 
-**Breadcrumbs are required** on operator pages. There is no default — every page passes its trail. The root "modelarena" segment is rendered automatically.
+**Breadcrumbs are required** on operator pages. There is no default — every page passes its trail. The root "idea-bench" segment is rendered automatically.
 
 ### 9.2 List-in-card (signature pattern)
 
@@ -895,8 +895,8 @@ Mobile-specific patterns:
 
 ## 13. Content & copy conventions
 
-1. **Product name:** "ModelArena" in UI strings, `modelarena` in breadcrumb root. Title-case in human-facing copy.
-2. **Document title:** `{section} · ModelArena` (middle-dot separator).
+1. **Product name:** "ïdea Bench" in UI strings, `idea-bench` in breadcrumb root. Title-case in human-facing copy.
+2. **Document title:** `{section} · ïdea Bench` (middle-dot separator).
 3. **Uppercase labels** use **short noun phrases**: "SHARE LINK", "TOTAL VOTES", "WIN RATE", not sentences.
 4. **Buttons are verbs:** "Sign in", "Create campaign", "Copy share link" — not "Submit" or "Go."
 5. **Empty states are helpful, not cute.** Example: "No campaigns yet / Create a campaign to start evaluating models pairwise."
@@ -1059,6 +1059,6 @@ src/
 
 ## 17. Version
 
-This document reflects the system as implemented in the `modelarena` codebase as of **2026-04-19**. When tokens, primitives, or conventions change, update both the code and this document in the same PR.
+This document reflects the system as implemented in the `idea-bench` codebase as of **2026-04-19**. When tokens, primitives, or conventions change, update both the code and this document in the same PR.
 
 If you're introducing something this document doesn't cover, the test is: **does it feel like it could sit beside every other surface in the product without explanation?** If not, push back on the scope or extend the system here first.

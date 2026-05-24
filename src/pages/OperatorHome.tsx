@@ -106,8 +106,8 @@ export default function OperatorHome() {
               variant="ghost"
               size="sm"
               onClick={() => setIsOnboardingOpen(true)}
-              aria-label="Show ModelArena onboarding"
-              title="How ModelArena works"
+              aria-label="Show ïdea Bench onboarding"
+              title="How ïdea Bench works"
             >
               <HelpCircle className="size-3.5" />
               <span className="hidden sm:inline">How it works</span>

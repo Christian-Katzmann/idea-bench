@@ -595,7 +595,7 @@ describe('CampaignDashboard', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
     });
-    expect(document.title).toBe('Support QA · ModelArena');
+    expect(document.title).toBe('Support QA · ïdea Bench');
   });
 
   it('renders prompt text + tags + collapsible context on the Prompts tab', async () => {
@@ -767,7 +767,7 @@ describe('CampaignDashboard', () => {
       '_blank',
       'noopener',
     );
-    expect(document.title).toBe('Support QA · ModelArena');
+    expect(document.title).toBe('Support QA · ïdea Bench');
   });
 
   it('opens the participants csv endpoint from the operator page', async () => {

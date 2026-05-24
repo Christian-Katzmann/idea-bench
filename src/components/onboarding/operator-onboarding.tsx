@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
  * with no campaigns yet. Mirrors the visual language of arena-onboarding
  * (one declarative line + a concrete subline per card, quiet numerals,
  * 6 cards) but covers the operator's *first* journey through the
- * product — what ModelArena is, what a campaign is, and how the loop
+ * product — what ïdea Bench is, what a campaign is, and how the loop
  * runs end-to-end.
  *
  * Why a sibling component instead of extending arena-onboarding: the
@@ -46,7 +46,7 @@ interface OnboardingStep {
 
 const STEPS: OnboardingStep[] = [
   {
-    line: 'Welcome to ModelArena.',
+    line: 'Welcome to ïdea Bench.',
     detail:
       'A blind evaluation platform for AI models, prompts, and system prompts. Pick what to test; let real voters decide what wins.',
   },
@@ -63,7 +63,7 @@ const STEPS: OnboardingStep[] = [
   {
     line: 'Generate before you launch.',
     detail:
-      'ModelArena pre-generates every contestant’s answer for every prompt. Voting is fast and fair because outputs are cached.',
+      'ïdea Bench pre-generates every contestant’s answer for every prompt. Voting is fast and fair because outputs are cached.',
   },
   {
     line: 'Share a link. Watch the leaderboard.',
@@ -184,7 +184,7 @@ export function OperatorOnboarding({
         }}
       >
         <DialogTitle className="sr-only">
-          How ModelArena works
+          How ïdea Bench works
         </DialogTitle>
 
         <div aria-live="polite" className="flex flex-col gap-3 sm:gap-4">

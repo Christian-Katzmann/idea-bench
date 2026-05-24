@@ -1,12 +1,12 @@
 /**
- * ModelArena's standard handler wrapper. Every web handler composed via
+ * ïdea Bench's standard handler wrapper. Every web handler composed via
  * `toVercelHandler` in vercel-adapter.ts passes through this first, so
  * every response carries `X-Request-Id`, every thrown error becomes a
  * normalized JSON response, and every request logs one structured line
  * to stderr with status + latency.
  *
  * Vendored primitive at `./api-errors/`. The wiring here is the only
- * ModelArena-specific bit: a console-backed logger emitting JSON and a
+ * ïdea Bench-specific bit: a console-backed logger emitting JSON and a
  * sensible default for `includeStack` (dev only).
  */
 

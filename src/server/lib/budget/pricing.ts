@@ -1,6 +1,6 @@
 // Vendored from /Users/christiankatzmann/Dev/reuse-kit/ready/ai-budget-accounting/src/pricing.ts
 //
-// Note: ModelArena relies on OpenRouter's response `usage.cost` field for
+// Note: ïdea Bench relies on OpenRouter's response `usage.cost` field for
 // authoritative costs at commit time. This pricing table is only used for
 // *preflight estimates* — we'd rather over-estimate than under-commit.
 // The FALLBACK is intentionally conservative (high-end of typical rates).

@@ -1,6 +1,6 @@
-# ModelArena
+# ïdea Bench
 
-**ModelArena** is a self-hosted tool for running blind head-to-head evaluations of LLM output with real voters or simulated personas. Build a campaign, compare models, system prompts, or prompt variants, and turn the votes into Bradley-Terry ratings you can defend in a meeting. Works with any OpenRouter-backed model.
+**ïdea Bench** is a self-hosted tool for running blind head-to-head evaluations of LLM output with real voters or simulated personas. Build a campaign, compare models, system prompts, or prompt variants, and turn the votes into Bradley-Terry ratings you can defend in a meeting. Works with any OpenRouter-backed model.
 
 Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
 
@@ -47,7 +47,7 @@ flowchart LR
 
 ```bash
 git clone <this repo>
-cd modelarena
+cd idea-bench
 npm install
 cp .env.example .env.local
 # Fill in DATABASE_URL, OPERATOR_PASSWORD, AUTH_SECRET.
@@ -112,7 +112,7 @@ Comma-separated, matched case-insensitively against the session's `identity` fie
 
 ## Roadmap
 
-Where ModelArena is going next: **[docs/roadmap/](./docs/roadmap/)**.
+Where ïdea Bench is going next: **[docs/roadmap/](./docs/roadmap/)**.
 
 ## Optional
 

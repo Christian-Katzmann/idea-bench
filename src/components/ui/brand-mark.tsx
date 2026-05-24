@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 /**
  * The `/` mark, rendered as text in a rounded dark tile.
  *
- * Ported from GitSlip. Kept per Q1 — ModelArena adopts the visual but
+ * Ported from GitSlip. Kept per Q1 — ïdea Bench adopts the visual but
  * uses its own breadcrumb root, not the GitSlip wordmark.
  *
  * Sizes calibrated so the `sm` variant works in list-row context (inline

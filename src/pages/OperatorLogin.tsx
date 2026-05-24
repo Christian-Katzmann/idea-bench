@@ -113,7 +113,7 @@ export default function OperatorLogin() {
           <BrandMark size="xl" />
           <div>
             <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
-              ModelArena
+              ïdea Bench
             </h1>
             <p className="text-sm text-muted-foreground">
               Operator sign in

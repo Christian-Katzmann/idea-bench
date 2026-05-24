@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
  * Destructive-action confirmation modal.
  *
  * Ported in spirit from gitslip/frontend/components/modals/DeleteConfirmation.tsx,
- * but following the ModelArena brand rule (Q4): dark pill confirm + typed-name
+ * but following the ïdea Bench brand rule (Q4): dark pill confirm + typed-name
  * guard, no red buttons. Red is reserved for inline validation and error
  * surfaces only. The subdued warning chip beside the title carries the
  * "this is permanent" cue without escalating to alarm.

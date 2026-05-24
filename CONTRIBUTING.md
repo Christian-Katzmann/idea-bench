@@ -1,12 +1,12 @@
-# Contributing to ModelArena
+# Contributing to ïdea Bench
 
-Thanks for taking a look. ModelArena is a small, opinionated project; the
+Thanks for taking a look. ïdea Bench is a small, opinionated project; the
 guidelines below exist so contributions land smoothly without surprising
 either of us.
 
 ## Project scope
 
-ModelArena is a **single-operator self-hostable** evaluation tool. One
+ïdea Bench is a **single-operator self-hostable** evaluation tool. One
 person (or one small team sharing credentials) deploys it, runs campaigns,
 and shares participant links. Multi-tenant SaaS — separate accounts,
 billing, team workspaces, org-level RBAC — is **explicitly out of scope**.

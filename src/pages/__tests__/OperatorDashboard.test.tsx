@@ -97,6 +97,6 @@ describe('OperatorDashboard', () => {
     ).not.toHaveLength(0);
     expect(screen.getByText('1188')).toBeInTheDocument();
     expect(screen.getByText(/needs attention/i)).toBeInTheDocument();
-    expect(document.title).toBe('Dashboard · ModelArena');
+    expect(document.title).toBe('Dashboard · ïdea Bench');
   });
 });

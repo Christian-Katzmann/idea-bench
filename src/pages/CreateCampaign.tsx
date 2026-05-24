@@ -1514,7 +1514,7 @@ const KIND_OPTIONS: ReadonlyArray<{
     kind: 'model',
     title: 'Model arena',
     description:
-      'Compare different models on a fixed set of prompts. The original ModelArena experience.',
+      'Compare different models on a fixed set of prompts. The original ïdea Bench experience.',
     comingSoon: false,
   },
   {

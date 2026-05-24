@@ -1,5 +1,5 @@
 /**
- * Fixed catalog of models available in this ModelArena instance.
+ * Fixed catalog of models available in this ïdea Bench instance.
  *
  * Rationale: there is no global models table in the DB — per-campaign
  * model rows store `provider_model_id` as a string. Cross-campaign

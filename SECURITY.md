@@ -8,14 +8,14 @@ issue.
 Preferred channel:
 
 - **GitHub Security Advisories** — use the
-  [Report a vulnerability](https://github.com/Christian-Katzmann/modelarena/security/advisories/new)
+  [Report a vulnerability](https://github.com/Christian-Katzmann/idea-bench/security/advisories/new)
   button on the repo's Security tab. This creates a private thread visible
   only to maintainers.
 
 Fallback:
 
 - **Email** — `christian@katzmann.dk` with subject line starting
-  `[modelarena security]`. Plaintext is fine; if you want encryption, ask
+  `[idea-bench security]`. Plaintext is fine; if you want encryption, ask
   for a PGP key in the first message.
 
 Please include:
@@ -25,13 +25,13 @@ Please include:
 - Affected version or commit SHA if you can pin it down.
 - Whether the issue has been disclosed anywhere else.
 
-You'll get an acknowledgement within a few days. ModelArena is maintained
+You'll get an acknowledgement within a few days. ïdea Bench is maintained
 in spare time, so timelines are best-effort rather than SLA-bound — but
 real vulnerabilities are taken seriously and not ignored.
 
 ## In scope
 
-The following surfaces of a deployed ModelArena instance:
+The following surfaces of a deployed ïdea Bench instance:
 
 - The operator authentication flow (password, GitHub OAuth, email magic
   link, the `operator_session` HMAC cookie).

@@ -4,7 +4,7 @@ import { ViewSwitcher } from "./view-switcher"
 import { cn } from "@/lib/utils"
 
 /**
- * Sidebar nav sections for ModelArena.
+ * Sidebar nav sections for ïdea Bench.
  *
  * Organization follows GitSlip's convention (uppercase section labels,
  * icon + label rows, active state is "on surface" rather than "accented"):

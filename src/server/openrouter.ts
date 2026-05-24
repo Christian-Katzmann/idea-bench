@@ -191,7 +191,7 @@ export async function callOpenRouter(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getApiKey()}`,
           'HTTP-Referer': getReferer(),
-          'X-Title': 'ModelArena',
+          'X-Title': 'ïdea Bench',
         },
         body: JSON.stringify(body),
       });

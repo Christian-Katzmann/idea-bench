@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
  * Top-right avatar + dropdown menu.
  *
  * Surfaces: account header, theme toggle, API settings link, sign out.
- * Avatar is a circular letter tile (first letter of "Operator") — ModelArena
+ * Avatar is a circular letter tile (first letter of "Operator") — ïdea Bench
  * has no per-user profile, so we use a neutral placeholder that still reads
  * as "a user is signed in" without implying per-account state we don't have.
  */

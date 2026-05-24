@@ -4,7 +4,7 @@ Output: `social-preview.png` at 2560x1280, the 2x form of GitHub's 1280x640 soci
 
 ## Composition
 
-- Wordmark: green slash mark plus `ModelArena`, set large on a dark panel.
+- Wordmark: green slash mark plus `ïdea Bench`, set large on a dark panel.
 - Positioning sentence: `Blind LLM evaluations you can defend.`
 - Product proof: real blind-vote screenshot from `design/screenshots/hero-blind-vote.png`.
 

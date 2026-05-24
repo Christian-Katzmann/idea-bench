@@ -2,7 +2,7 @@
 
 ## Start Here
 
-- What this repo is: ModelArena, the app behind idea.com, for running blind AI model evaluation campaigns.
+- What this repo is: ïdea Bench, the app behind idea.com, for running blind AI model evaluation campaigns.
 - Actual repo root: `modelarena/`.
 - Safest first command: `git status --short`.
 - ADX manifest: `.adx/adx.json`.

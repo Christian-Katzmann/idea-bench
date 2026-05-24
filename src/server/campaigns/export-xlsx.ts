@@ -94,8 +94,8 @@ export async function buildCampaignWorkbookBuffer(
 
   const wb = createWorkbook(
     ExcelJSLib,
-    `ModelArena — ${detail.campaign.name}`,
-    { creator: 'ModelArena' },
+    `ïdea Bench — ${detail.campaign.name}`,
+    { creator: 'ïdea Bench' },
   );
 
   addOverviewSheet(wb, detail);

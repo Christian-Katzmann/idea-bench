@@ -9,12 +9,12 @@ export type BreadcrumbItem = {
 }
 
 /**
- * Topbar breadcrumb: `modelarena / Section` or `modelarena / Section / Detail`.
+ * Topbar breadcrumb: `idea-bench / Section` or `idea-bench / Section / Detail`.
  *
- * The leading `modelarena` segment links to `/` (Campaigns home). The final
+ * The leading `idea-bench` segment links to `/` (Campaigns home). The final
  * segment is rendered as emphasized current-page text; middle segments link.
  *
- * Per Q1, the root label is "modelarena" (the product), not "gitslip".
+ * Per Q1, the root label is "idea-bench" (the product), not "gitslip".
  */
 export function Breadcrumb({
   items,
@@ -30,14 +30,14 @@ export function Breadcrumb({
     >
       {/* Root and intermediate segments never truncate; the last segment
           takes whatever space remains and truncates. This keeps
-          "modelarena / Campaigns" readable while preventing a long
+          "idea-bench / Campaigns" readable while preventing a long
           campaign name in the last slot from pushing the right-side
           topbar icons off-screen. */}
       <Link
         to="/"
         className="shrink-0 transition-colors hover:text-foreground"
       >
-        modelarena
+        idea-bench
       </Link>
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1

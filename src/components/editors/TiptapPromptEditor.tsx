@@ -1,7 +1,7 @@
 /**
  * Tiptap rich-text editor for structured prompt authoring. Adapted from
  * the reuse-kit's tiptap-shadcn-toolbar-kit (pattern-mode), re-skinned
- * to ModelArena's Base UI + design-system vocabulary.
+ * to ïdea Bench's Base UI + design-system vocabulary.
  *
  * ⚠ This module imports Tiptap which ships ~60KB+ gzipped. DO NOT
  * import directly — always load via `LazyTiptapPromptEditor` so the
@@ -10,7 +10,7 @@
  *
  * Scope: bold / italic / code / code-block / bullet list / ordered list
  * via StarterKit. Deliberately no dropdowns, popovers, colors, images,
- * or tables — ModelArena prompts don't need them, and each extension is
+ * or tables — ïdea Bench prompts don't need them, and each extension is
  * more dependencies to ship. If a prompt author needs headings, they
  * can switch to the plain textarea fallback.
  */
@@ -43,7 +43,7 @@ export interface TiptapPromptEditorProps {
  * Tiptap editor component. Consumed via LazyTiptapPromptEditor so
  * production bundles only load the Tiptap chunk on demand.
  *
- * We export plain text (not HTML) because ModelArena's prompt storage
+ * We export plain text (not HTML) because ïdea Bench's prompt storage
  * is plain-text — the text field is what the LLM sees. Formatting
  * helps the operator author, not the model. If prompts ever need to
  * preserve HTML/Markdown structure server-side, swap `editor.getText()`
@@ -107,7 +107,7 @@ export default function TiptapPromptEditor({
 
 /**
  * Compact toolbar rendered above the editor. Buttons are plain
- * <button type="button"> with ModelArena's ink-on-paper styling —
+ * <button type="button"> with ïdea Bench's ink-on-paper styling —
  * deliberately NOT using @/components/ui/button because its sizes
  * don't fit a toolbar and importing it would drag the full variant
  * system into the lazy chunk. Toolbar styling is intentionally

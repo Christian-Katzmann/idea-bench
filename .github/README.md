@@ -7,7 +7,7 @@
 Apply or re-apply it with:
 
 ```bash
-gh api -X POST /repos/Christian-Katzmann/modelarena/rulesets \
+gh api -X POST /repos/Christian-Katzmann/idea-bench/rulesets \
   -H "Accept: application/vnd.github+json" \
   --input .github/branch-protection-ruleset.json
 ```

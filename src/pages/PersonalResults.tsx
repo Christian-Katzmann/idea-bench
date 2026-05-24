@@ -111,7 +111,7 @@ export default function PersonalResultsPage() {
   const handleShare = () => {
     const line = top
       ? `My top pick for "${campaign.name}" is ${top.displayName}.`
-      : `I voted in "${campaign.name}" on ModelArena.`;
+      : `I voted in "${campaign.name}" on ïdea Bench.`;
     navigator.clipboard.writeText(line);
     toast.success('Summary copied to clipboard');
   };

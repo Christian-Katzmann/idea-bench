@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
  * from anywhere — a module-level store drives a single <Toaster />
  * mounted at the app root.
  *
- * Replaces ModelArena's ad-hoc red alert divs. Inline validation
+ * Replaces ïdea Bench's ad-hoc red alert divs. Inline validation
  * errors on individual form fields stay inline; transient feedback
  * (save succeeded, network failed, action applied) goes here.
  */

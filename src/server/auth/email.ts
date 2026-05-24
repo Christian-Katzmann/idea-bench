@@ -35,9 +35,9 @@ export async function sendMagicLink(
     );
   }
 
-  const subject = 'Your ModelArena sign-in link';
+  const subject = 'Your ïdea Bench sign-in link';
   const text = [
-    'Click to sign in to ModelArena:',
+    'Click to sign in to ïdea Bench:',
     '',
     link,
     '',
@@ -47,7 +47,7 @@ export async function sendMagicLink(
 <!doctype html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F7F6F3;color:#1F1B16;padding:24px">
   <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #E8E6E1;border-radius:12px;padding:32px">
-    <h1 style="font-size:18px;margin:0 0 16px">Sign in to ModelArena</h1>
+    <h1 style="font-size:18px;margin:0 0 16px">Sign in to ïdea Bench</h1>
     <p style="margin:0 0 24px;line-height:1.5;font-size:14px">Click the button below to sign in. This link expires in 15 minutes.</p>
     <p style="margin:0 0 24px"><a href="${link}" style="display:inline-block;background:#1F1B16;color:#F7F6F3;text-decoration:none;padding:10px 20px;border-radius:9999px;font-size:14px;font-weight:500">Sign in</a></p>
     <p style="margin:0;font-size:12px;color:#6E6A62">If the button doesn’t work, copy this URL:<br/><span style="word-break:break-all">${link}</span></p>

@@ -4,6 +4,8 @@
 
 Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
 
+https://github.com/user-attachments/assets/7d95630b-0afe-428d-b8cd-5db5b14a9bef
+
 ![Blind voting interface — two model generations side by side, no model names visible](./design/screenshots/hero-blind-vote.png)
 
 *The voting surface proves the central trust promise: voters can compare outputs without seeing the model, prompt, or contestant identity.*

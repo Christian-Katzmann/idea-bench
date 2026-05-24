@@ -1,8 +1,26 @@
 # ModelArena
 
-**ModelArena** is a self-hosted tool for running blind head-to-head evaluations of LLM output. Build a campaign, paste in a prompt and a couple of contestants (models, system prompts, or prompt variants), share a link, and let real people — or simulated personas — vote on which response is better without seeing which model produced it. The result is a Bradley-Terry rating you can actually defend in a meeting. Works with any model via OpenRouter.
+**ModelArena** is a self-hosted tool for running blind head-to-head evaluations of LLM output with real voters or simulated personas. Build a campaign, compare models, system prompts, or prompt variants, and turn the votes into Bradley-Terry ratings you can defend in a meeting. Works with any OpenRouter-backed model.
 
-![Blind voting interface — two model generations side by side, no model names visible](./screenshots/hero-blind-vote.png)
+Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
+
+https://github.com/user-attachments/assets/7d95630b-0afe-428d-b8cd-5db5b14a9bef
+
+![Blind voting interface — two model generations side by side, no model names visible](./design/screenshots/hero-blind-vote.png)
+
+*The voting surface proves the central trust promise: voters can compare outputs without seeing the model, prompt, or contestant identity.*
+
+## What this is not
+
+- Not a hosted evaluation SaaS or public benchmark leaderboard. You run it against your own Postgres database and model provider.
+- Not a replacement for human judgment. It gives you structured preference evidence; you still decide what the evidence means.
+- Not multi-tenant team software yet. One operator per deployment is the current product shape.
+
+## Choose your path
+
+- **Run a private model evaluation:** start with the quickstart and seed data.
+- **Check the trust model:** read the blind voting, operator auth, and AI spend sections.
+- **Work on the code:** read `AGENTS.md` and the command registry before changing server or database paths.
 
 ## What it does
 
@@ -10,7 +28,20 @@
 - **Three kinds of contestants in one engine.** Compare models against each other, compare system prompts on a fixed model, or compare prompt variants. Same blind-voting UI, same rating math.
 - **Bradley-Terry ratings + group alignment.** Pairwise votes feed a Bradley-Terry maximum-likelihood model. The campaign view shows ratings, confidence intervals, and how each voter group aligned with the overall result.
 
-![Campaign detail with the leaderboard tab — Bradley-Terry ratings, multiple models, group-alignment column](./screenshots/hero-leaderboard.png)
+![Campaign detail with the leaderboard tab — Bradley-Terry ratings, multiple models, group-alignment column](./design/screenshots/hero-leaderboard.png)
+
+*The campaign dashboard turns pairwise votes into ratings with confidence intervals and voter-group alignment, so the result can survive a real decision meeting.*
+
+## How the loop works
+
+```mermaid
+flowchart LR
+  A["Prompt + contestants"] --> B["Blind ballot"]
+  B --> C["Human or simulated votes"]
+  C --> D["Bradley-Terry rating"]
+  D --> E["Decision-ready evidence"]
+  E --> F["Reveal model identities"]
+```
 
 ## Quickstart
 
@@ -68,6 +99,7 @@ Comma-separated, matched case-insensitively against the session's `identity` fie
 | Script | Purpose |
 |---|---|
 | `npm run dev` | Start Vite dev server. |
+| `npm run verify` | Run typecheck, Vitest, and production build. |
 | `npm run build` | Production build. |
 | `npm run lint` | `tsc --noEmit`. |
 | `npm run test:run` | Run the Vitest suite once. |

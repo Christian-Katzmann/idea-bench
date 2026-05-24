@@ -90,6 +90,17 @@
       "recovery_hint": "dist/ is generated and ignored. Fix build errors at their source rather than editing dist/."
     },
     {
+      "id": "verify",
+      "intent": "run full local verification",
+      "command": ["npm", "run", "verify"],
+      "cwd": ".",
+      "safety": "local_mutation",
+      "timeout_seconds": 360,
+      "when_to_run": "Before publishing, before broad refactors, or after changes that touch more than docs.",
+      "success_signal": "TypeScript, Vitest, and Vite build all exit 0.",
+      "recovery_hint": "If this fails, run lint, test-run, and build separately to isolate the failing layer."
+    },
+    {
       "id": "preview",
       "intent": "serve production build locally",
       "command": ["npm", "run", "preview"],

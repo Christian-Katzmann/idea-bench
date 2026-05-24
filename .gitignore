@@ -8,10 +8,12 @@ coverage/
 !.env.example
 .vercel/
 .claude/
+.archive/
 
 # appify build artifacts
 desktop/
 assets/icons/
+design/trailer/frames/
 
 # Personal/local-only seeds (Danish municipal demos, etc.)
 scripts/*.personal.ts

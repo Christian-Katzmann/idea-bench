@@ -8,6 +8,7 @@ coverage/
 !.env.example
 .vercel/
 .claude/
+.archive/
 
 # appify build artifacts
 desktop/

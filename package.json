@@ -7,6 +7,7 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "dev:api": "vercel dev",
     "build": "vite build",
+    "verify": "npm run lint && npm run test:run && npm run build",
     "deploy:check": "tsx scripts/preflight-db.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",

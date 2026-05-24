@@ -5,7 +5,7 @@
     "fast": ["git-status", "lint"],
     "test": ["git-status", "lint", "test-run"],
     "build": ["git-status", "lint", "build"],
-    "full": ["git-status", "lint", "test-run", "build"]
+    "full": ["git-status", "verify"]
   },
   "change_type_matrix": [
     {

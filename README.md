@@ -97,6 +97,7 @@ Comma-separated, matched case-insensitively against the session's `identity` fie
 | Script | Purpose |
 |---|---|
 | `npm run dev` | Start Vite dev server. |
+| `npm run verify` | Run typecheck, Vitest, and production build. |
 | `npm run build` | Production build. |
 | `npm run lint` | `tsc --noEmit`. |
 | `npm run test:run` | Run the Vitest suite once. |

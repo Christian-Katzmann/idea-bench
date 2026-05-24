@@ -2,17 +2,18 @@
 
 ## Branch protection on `main`
 
-`branch-protection-ruleset.json` is the prepared ruleset for `main`.
+`branch-protection-ruleset.json` is the source-of-truth ruleset for `main`.
 
-GitHub Free does not allow branch protection or rulesets on **private** repos,
-so this file cannot be applied until the repo is public (or the account
-upgrades to GitHub Pro). The moment visibility flips public, run:
+Apply or re-apply it with:
 
 ```bash
 gh api -X POST /repos/Christian-Katzmann/modelarena/rulesets \
   -H "Accept: application/vnd.github+json" \
   --input .github/branch-protection-ruleset.json
 ```
+
+GitHub Free allows this ruleset on public repositories. If the repo is ever
+made private again, GitHub may require Pro before the ruleset can stay active.
 
 The rule requires:
 

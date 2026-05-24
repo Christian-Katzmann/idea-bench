@@ -55,8 +55,8 @@ Each step activates a skill or runs a command and pastes a short prompt. The pro
 ### Phase 5 — Pre-publish safety & flip
 
 - [x] Step 5.1 — Secret-history audit, key rotation, demo-data cleanup
-- [ ] Step 5.2 — Repo rename, settings, branch protection, flip public
-- [ ] Final review
+- [x] Step 5.2 — Repo rename, settings, branch protection, flip public
+- [x] Final review
 
 Each step heading is followed by a `Model:` line (recommended agent + thinking effort) and a `Parallel:` line (which sibling steps can run alongside it).
 

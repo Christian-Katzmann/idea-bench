@@ -83,6 +83,13 @@ flag but which still touch real services and are therefore in scope:
 - No further `.gitignore` changes required — the existing rules covered
   every file that contained a real credential.
 
+## Final repair re-check
+
+After the final-review repair pass, `gitleaks detect --source . --no-banner
+--redact --log-opts="--all"` was rerun from `main` and reported no leaks
+across the scanned git history. The remaining tracked matches are documented
+placeholders in `.env.example` and safe test fixtures.
+
 ## Recommended cadence after flip
 
 - Re-run `gitleaks detect --log-opts="--all"` before each release.

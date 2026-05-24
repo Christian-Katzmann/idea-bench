@@ -24,9 +24,8 @@ import { config as loadDotenv } from 'dotenv';
 loadDotenv({ path: '.env.local' });
 loadDotenv({ path: '.env' });
 
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { createDbClient } from '../src/server/db/client';
 import * as schema from '../src/server/db/schema';
 
 /** Assigned "true" strength per OpenRouter id. Higher = stronger. */
@@ -60,7 +59,8 @@ async function main() {
     console.error('DATABASE_URL not set');
     process.exit(1);
   }
-  const db = drizzle(neon(url), { schema });
+  const { db, client } = createDbClient(url);
+  try {
 
   // Resolve campaign by UUID or share slug.
   const campaign = (
@@ -326,6 +326,9 @@ async function main() {
       `\nNext: POST /api/campaigns/${campaign.id}/recompute ` +
       `(or click Recompute on the dashboard).`,
   );
+  } finally {
+    await client.end();
+  }
 }
 
 main().catch((err) => {

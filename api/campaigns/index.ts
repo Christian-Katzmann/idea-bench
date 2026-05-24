@@ -98,12 +98,11 @@ const VARIANT_DISPLAY_NAME_MAX = 80;
  *   - 400 on validation (missing fields, unknown model id, <4 models,
  *     0 prompts, etc.)
  *
- * Note: this is NOT atomic across tables — the neon-http driver doesn't
- * support multi-statement transactions. We insert campaign, then prompts,
- * then models in sequence. If a later insert fails, the earlier rows
- * remain as orphaned-but-harmless data (the campaign stays in draft; the
- * operator can retry or delete it). Acceptable for Phase 2; Phase 4's
- * rating recompute will need a pool-based driver swap for real transactions.
+ * Note: this flow still inserts campaign, prompts, then models in
+ * sequence. If a later insert fails, the earlier rows remain as
+ * orphaned-but-harmless data (the campaign stays in draft; the operator
+ * can retry or delete it). A transaction wrapper would make this
+ * stricter, but the current behavior is intentionally preserved.
  */
 export default toVercelHandler(withOperator(async (request: Request) => {
   if (request.method === 'GET') {

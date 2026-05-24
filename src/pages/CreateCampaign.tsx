@@ -53,10 +53,10 @@ const SUGGESTED_TAGS = [
   'data extraction',
   'reasoning',
   'structured output',
-  'sagsnotat',
-  'myndighedssprog',
-  'borgerkommunikation',
-  'sagsopsummering',
+  'customer support',
+  'email',
+  'product',
+  'meeting notes',
 ];
 
 const MIN_MODELS = 4; // Tournament requires exactly 4 per bracket.
@@ -426,8 +426,8 @@ export default function CreateCampaign() {
 
   // Existing-campaign names — used to soft-warn when the operator
   // types a name that already exists (F-011 in the public-prep audit:
-  // two identical "Sprogmodeller i sagsbehandling" drafts in the seed
-  // were the visible failure mode of the demo-autofill keyboard trap).
+  // duplicate draft campaigns were the visible failure mode of the
+  // demo-autofill keyboard trap).
   // Gated on Step 1 so Step 0 doesn't pay for a fetch that's only read
   // by Basics. Shares the same query key as the list page so the result
   // is hot from the cache after the operator navigates Campaigns → New.
@@ -866,53 +866,53 @@ export default function CreateCampaign() {
       }
       if (latest.step === 1) {
         if (latest.kind === 'system_prompt') {
-          setName('Rapportskabelon-system-prompt — V2 evaluering');
+          setName('Support brief system prompt — tone evaluation');
           setDescription(
-            'Sammenligning af system-prompts der udfylder en HTML-rapportskabelon med information fra borgerens sagsnotater. Modellen og test-input holdes konstant; vi sammenligner, hvilken system-prompt der giver de mest skabelon-tro og fagligt korrekte rapporter.',
+            'Compare system prompts that turn messy support notes into a structured customer-ready brief. The model and test inputs stay fixed; only the system prompt changes.',
           );
-          setCategories(['myndighedssprog', 'sagsopsummering']);
+          setCategories(['customer support', 'structured output']);
           return;
         }
         if (latest.kind === 'prompt') {
-          setName('Opsummerings-prompt: hvilken formulering virker bedst?');
+          setName('Meeting-summary prompt wording');
           setDescription(
-            'Vi tester forskellige formuleringer af samme opgave — opsummering af sagsakter til en ny sagsbehandler. Modellen holdes konstant; vi sammenligner, hvilken instruktion der giver de mest brugbare opsummeringer.',
+            'Compare several prompt phrasings for the same meeting-summary task. The model stays fixed; the campaign finds which instruction produces the clearest action items.',
           );
-          setCategories(['sagsopsummering', 'sagsnotat']);
+          setCategories(['summarization', 'meeting notes']);
           return;
         }
         // model arena (default)
-        setName('Sprogmodeller i sagsbehandling — Q2 evaluering');
+        setName('Customer email writing — Q2 evaluation');
         setDescription(
-          'Sammenligning af kandidatmodeller på kerneopgaver i sagsbehandlingen: notater om borgerforløb, korrespondance med andre kommuner og opsummering af sagsakter. Målet er at vælge en standardmodel, der rammer en respektfuld, klar og myndig tone.',
+          'Compare candidate models on everyday business-writing tasks: customer apologies, meeting follow-ups, and concise internal updates. The goal is to pick a default model with clear, useful prose.',
         );
-        setCategories(['sagsnotat', 'myndighedssprog']);
+        setCategories(['email', 'customer support']);
         return;
       }
       if (latest.step === 2) {
         if (latest.kind === 'system_prompt') {
-          // Test prompts are complete HTML docs (template + Aktiviteter +
-          // journal notes). Slider eval, axis = template fidelity.
+          // Test prompts are complete HTML docs (template + source notes).
+          // Slider eval, axis = template fidelity.
           const sliderCfg = {
             min: 1,
             max: 10,
-            minLabel: 'Skabelon brudt',
-            maxLabel: 'Skabelon tro',
+            minLabel: 'Template broken',
+            maxLabel: 'Template faithful',
           };
           const t1 = emptyPrompt('slider');
           t1.sliderConfig = sliderCfg;
           t1.text =
-            '[INSTRUCTION] Fokusér på borgerens progression de seneste 6 måneder. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.</p>\n<p>Journalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.</p>\n<p>Journalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.</p>\n<p>Journalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.</p>\n<p>Journalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.</p>';
+            '<h1>Customer Brief</h1>\n<h2>Issue</h2>\n<p>[Summarize the customer problem in one sentence.]</p>\n<h2>Known Facts</h2>\n<ul><li>[List verified facts only.]</li></ul>\n<h2>Recommended Reply</h2>\n<p>[Draft a short customer-facing response.]</p>\n<p>Ticket: [[KEEP-1]]</p>\n\n<h1>Source Notes</h1>\n<p>Ticket opened Monday 09:14. Customer reports that invoice INV-2048 was charged twice after retrying checkout. Payment provider log shows one failed authorization followed by two captured charges. Support already refunded the duplicate charge at 11:32 and sent receipt REF-7781.</p>\n<p>Customer asks whether the subscription will renew again this week. Billing system shows next renewal on June 30, not this week. Account is in good standing.</p>';
 
           const t2 = emptyPrompt('slider');
           t2.sliderConfig = sliderCfg;
           t2.text =
-            '[INSTRUCTION] Skriv kort med fokus på rekonvalescensforløb og raskmelding. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 14. januar 2026 — Opfølgningssamtale sygedagpenge uge 8. Borger sygemeldt 17. november 2025 efter akut diskusprolaps i lænden, opereret 4. december. Forventet rekonvalescens 8–12 uger. Aftalt opfølgning om 4 uger.</p>\n<p>Journalnotat 11. februar 2026 — Telefonisk kontakt. Borger melder fortsatte smerter, men er begyndt på genoptræning hos kommunal fysioterapeut 2x/uge. Afventer kontrol hos kirurg 25. februar.</p>\n<p>Journalnotat 4. marts 2026 — Statusmøde. Kirurg melder god heling, men borger har fortsat smerter ved længerevarende stillesiddende arbejde (kontorjob). Aftalt delvis raskmelding 4 timer/dag fra 17. marts, ugentlig opfølgning.</p>\n<p>Journalnotat 8. april 2026 — Borger har genoptaget arbejdet 6 timer/dag siden 1. april. Smerter aftaget. Vurdering: fuld raskmelding indenfor 4 uger sandsynlig. Næste opfølgning 22. april.</p>';
+            '<h1>Customer Brief</h1>\n<h2>Issue</h2>\n<p>[Summarize the customer problem in one sentence.]</p>\n<h2>Known Facts</h2>\n<ul><li>[List verified facts only.]</li></ul>\n<h2>Recommended Reply</h2>\n<p>[Draft a short customer-facing response.]</p>\n<p>Ticket: [[KEEP-1]]</p>\n\n<h1>Source Notes</h1>\n<p>Beta user cannot find the new analytics export button announced in the release email. Feature flag log shows the workspace was excluded because it is still on the legacy billing plan. Product note says legacy customers can be enabled manually after account review.</p>\n<p>Customer is not angry; they mainly want to know whether the announcement was sent by mistake. Account owner is Dana Lee. Customer success can review the account by Friday.</p>';
 
           const t3 = emptyPrompt('slider');
           t3.sliderConfig = sliderCfg;
           t3.text =
-            '[INSTRUCTION] Skriv med fokus på borgerens initiativ og brancheskift. [/INSTRUCTION]\n\n<h1>Borgerstatus</h1>\n<h2>Helbredsmæssig situation</h2>\n<p>[Beskriv borgerens helbredsmæssige situation. Inkludér diagnoser og funktionsniveau.]</p>\n<h2>Hidtidige indsatser</h2>\n<p>[List relevante indsatser i kronologisk rækkefølge.]</p>\n<h2>Aktuel status og næste skridt</h2>\n<p>Sagsbehandler: <span data-protected="true">[Sagsbehandler navn]</span></p>\n<p>Sagsnummer: [[KEEP-1]]</p>\n<p>[Sammenfat aktuel status og aftalte næste skridt.]</p>\n\n<h1>Aktiviteter</h1>\n<p>Journalnotat 3. september 2025 — Opstartssamtale efter overgang fra dagpenge til kontanthjælp. Borger, 41 år, kvinde, uddannet pædagog, ledig siden marts 2024. Vurdering: jobparat. Aftalt: ugentlig jobsøgningssamtale, krav om mindst 4 ansøgninger/uge.</p>\n<p>Journalnotat 14. november 2025 — Status efter 10 ugers jobsøgning. 38 ansøgninger sendt, 5 samtaler, ingen tilbud. Borger udtrykker frustration over alderssegregering på arbejdsmarkedet. Drøftet brancheskift til SOSU-området.</p>\n<p>Journalnotat 12. januar 2026 — Borger har påbegyndt 6 ugers jobrettet uddannelse i SOSU-grundfag. Stabilt fremmøde. Aftalt: efter endt uddannelse opstart i virksomhedspraktik på lokalt plejecenter.</p>\n<p>Journalnotat 28. februar 2026 — Uddannelse afsluttet med tilfredsstillende resultat. Virksomhedspraktik 8 uger på Plejecenter Egeparken påbegyndt 24. februar. Foreløbig god feedback fra leder.</p>';
+            '<h1>Customer Brief</h1>\n<h2>Issue</h2>\n<p>[Summarize the customer problem in one sentence.]</p>\n<h2>Known Facts</h2>\n<ul><li>[List verified facts only.]</li></ul>\n<h2>Recommended Reply</h2>\n<p>[Draft a short customer-facing response.]</p>\n<p>Ticket: [[KEEP-1]]</p>\n\n<h1>Source Notes</h1>\n<p>Enterprise admin reports intermittent 502 errors when uploading CSV files larger than 20 MB. Logs show three failed uploads between 14:05 and 14:18 from the same workspace. Engineering linked it to a timeout in the import worker and deployed a fix at 15:02.</p>\n<p>Admin asks whether they need to re-upload the file. Import queue shows no successful import for the latest file. Recommended next step: ask them to retry once and reply if the failure returns.</p>';
 
           setPrompts([t1, t2, t3]);
           return;
@@ -921,15 +921,15 @@ export default function CreateCampaign() {
           // Inputs to substitute via {{input}} on each variant.
           const i1 = emptyPrompt('best_of_n');
           i1.text =
-            'Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.\n\nJournalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.\n\nJournalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.\n\nJournalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.\n\nJournalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.';
+            'Weekly product sync notes:\n- Growth team wants the onboarding checklist simplified from seven steps to four.\n- Support says users miss the import progress indicator and open duplicate tickets.\n- Engineering can ship checklist changes this sprint, but progress indicator needs design review.\n- Maya owns revised checklist copy by Thursday. Leo will size the progress indicator work by Friday.';
 
           const i2 = emptyPrompt('best_of_n');
           i2.text =
-            'Journalnotat 14. januar 2026 — Opfølgningssamtale sygedagpenge uge 8. Borger sygemeldt 17. november 2025 efter akut diskusprolaps i lænden, opereret 4. december. Forventet rekonvalescens 8–12 uger. Aftalt opfølgning om 4 uger.\n\nJournalnotat 11. februar 2026 — Telefonisk kontakt. Borger melder fortsatte smerter, men er begyndt på genoptræning hos kommunal fysioterapeut 2x/uge. Afventer kontrol hos kirurg 25. februar.\n\nJournalnotat 4. marts 2026 — Statusmøde. Kirurg melder god heling, men borger har fortsat smerter ved længerevarende stillesiddende arbejde (kontorjob). Aftalt delvis raskmelding 4 timer/dag fra 17. marts, ugentlig opfølgning.\n\nJournalnotat 8. april 2026 — Borger har genoptaget arbejdet 6 timer/dag siden 1. april. Smerter aftaget. Vurdering: fuld raskmelding indenfor 4 uger sandsynlig. Næste opfølgning 22. april.';
+            'Customer advisory call notes:\n- Three customers asked for CSV export scheduling instead of manual downloads.\n- One customer warned that too many admin emails feel noisy.\n- Team agreed to prototype scheduled exports for monthly reports only.\n- Priya will draft the opt-in email language. Omar will build a small feasibility spike next week.';
 
           const i3 = emptyPrompt('best_of_n');
           i3.text =
-            'Journalnotat 3. september 2025 — Opstartssamtale efter overgang fra dagpenge til kontanthjælp. Borger, 41 år, kvinde, uddannet pædagog, ledig siden marts 2024. Vurdering: jobparat. Aftalt: ugentlig jobsøgningssamtale, krav om mindst 4 ansøgninger/uge.\n\nJournalnotat 14. november 2025 — Status efter 10 ugers jobsøgning. 38 ansøgninger sendt, 5 samtaler, ingen tilbud. Borger udtrykker frustration over alderssegregering på arbejdsmarkedet. Drøftet brancheskift til SOSU-området.\n\nJournalnotat 12. januar 2026 — Borger har påbegyndt 6 ugers jobrettet uddannelse i SOSU-grundfag. Stabilt fremmøde. Aftalt: efter endt uddannelse opstart i virksomhedspraktik på lokalt plejecenter.\n\nJournalnotat 28. februar 2026 — Uddannelse afsluttet med tilfredsstillende resultat. Virksomhedspraktik 8 uger på Plejecenter Egeparken påbegyndt 24. februar. Foreløbig god feedback fra leder.';
+            'Launch retro notes:\n- The release landed on time and activation was 18% above forecast.\n- Docs were published late, which forced support to answer setup questions manually.\n- The incident-response checklist helped when the webhook queue backed up for 20 minutes.\n- Next launch: freeze docs 48 hours earlier and assign one engineer to webhook monitoring.';
 
           setPrompts([i1, i2, i3]);
           return;
@@ -937,21 +937,21 @@ export default function CreateCampaign() {
         // model arena (default) — 3 case prompts with their own contexts.
         const p1 = emptyPrompt('tournament');
         p1.text =
-          'Skriv et kort notat til ydelseskontoret på baggrund af konteksten nedenfor. Forklar baggrunden for indstillingen i et sagligt og myndigt sprog, og medtag en kort vurdering af borgerens progression. Marker personoplysninger med firkantede parenteser, fx [borgerens navn], [adresse] og [CPR-nummer].';
+          'Write a polite email declining a meeting invitation because you have a scheduling conflict, while suggesting two alternative times next week.';
         p1.context =
-          'Borger: 34 år, mand. På kontanthjælp siden marts 2024.\nForløb: 13 ugers virksomhedspraktik hos lokal købmand, afsluttet 22. april.\nPraktikvurdering fra arbejdsgiver: "Stabilt fremmøde alle 13 uger, god til kundekontakt, kan med fordel få mere oplæring i kassesystemet. Vi vil gerne tage ham som løntilskud."\nTidligere indsatser: FVU-dansk modul 2 (afsluttet 2025); jobsøgningsforløb hos ekstern leverandør første halvår 2025 uden ansættelse.\nHelbred: Ingen aktuelle skånehensyn.\nSagsbehandlers vurdering: Klar progression i mødestabilitet og selvstændighed. Indstilling: 6 måneders løntilskudsstilling med henblik på efterfølgende ordinær ansættelse.';
+          'You were invited to a project planning meeting on Friday at 2pm, but you are already booked with a customer call. You can do Tuesday at 10am or Thursday at 2pm next week.';
 
         const p2 = emptyPrompt('tournament');
         p2.text =
-          'Lav en opsummering på maks. 200 ord af journalnotaterne nedenfor. Den skal dække borgerens helbredsmæssige situation, hidtidige indsatser, samarbejdet med mentor og status på arbejdsevnen. Skriv neutralt og uden gentagelser, så en ny sagsbehandler hurtigt kan sætte sig ind i sagen. Marker personoplysninger med firkantede parenteser, fx [borgerens navn] og [mentors navn].';
+          'Draft an email to a customer apologizing for a shipping delay, explaining what happened in one sentence, and offering a 15% discount on their next order.';
         p2.context =
-          'Journalnotat 12. juni 2025 — Opstartssamtale ressourceforløb. Borger henvist fra rehabiliteringsteam efter længere sygemelding. Diagnoser: kronisk smertesyndrom efter trafikulykke 2022, lettere depressiv tilstand. Aftalt: opstart hos mentor, ugentlig kontakt, fokus på dagsstruktur.\n\nJournalnotat 28. august 2025 — Mentorsamarbejde forløber stabilt. Borger har genoptaget motion 2x/uge og deltager i kommunens smertehåndteringskursus. Stadig store udsving i smerteniveau. Ikke arbejdsmarkedsklar.\n\nJournalnotat 14. november 2025 — Afslutning af smertehåndteringskursus. Borger melder selv om bedre dage. Aftalt: forsigtig opstart i frivilligt arbejde 4 timer/uge på lokal genbrugsstation.\n\nJournalnotat 9. februar 2026 — Frivilligt arbejde går godt. Borger har mødt stabilt i 12 uger og udtrykker selv ønske om at prøve egentligt arbejde. Mentor bakker op. Drøftet kortere virksomhedspraktik som næste skridt.\n\nJournalnotat 4. april 2026 — Statusmøde. Aktuelt smerteniveau håndterbart med medicin og struktur. Vurdering: arbejdsevnen er fortsat begrænset til ca. 10–15 timer/uge, men der er klar progression. Næste skridt: 8 ugers virksomhedspraktik 12 timer/uge.';
+          'The order was delayed three days because of a warehouse system outage. The customer ordered three items totalling $84. They have not asked for a refund yet, but you want to get ahead of it. Discount code: THANKS15.';
 
         const p3 = emptyPrompt('tournament');
         p3.text =
-          'Skriv en mail til en sagsbehandler i tilflytningskommunen på baggrund af konteksten nedenfor. Forklar, hvor borgeren står i Min Plan, hvilke aftaler der er indgået, og hvad det næste skridt bør være. Hold sproget kollegialt og konkret, så modtageren kan overtage sagen uden at skulle bede om uddybning. Marker personoplysninger med firkantede parenteser, fx [borgerens navn], [tilflytningskommune] og [modtagers navn].';
+          'Summarize the meeting notes below into five bullets: decisions, owners, and next steps. Keep it concise enough to paste into Slack.';
         p3.context =
-          'Borger: Kvinde, 28 år. Flytter fra vores kommune til ny kommune pr. 1. juni 2026.\nYdelse: Dagpenge. Uddannelse: SOSU-assistent.\nStatus i Min Plan: Jobsøgningsforløb påbegyndt 15. januar 2026.\nIndgåede aftaler:\n- Ugentlig jobsøgningssamtale (senest afholdt 20. april).\n- CV-workshop hos ekstern leverandør, afsluttet 12. marts.\n- Mindst 4 ansøgninger pr. uge inden for sundhedssektoren.\n- Optaget på venteliste til 6 ugers jobrettet uddannelse i geriatri, forventet opstart august 2026.\nAktuel jobsøgning: 18 ansøgninger sendt siden januar, 2 samtaler, ingen tilbud.\nSagsbehandlers anbefaling: Fortsætte jobsøgningssporet med fokus på den jobrettede uddannelse til august.';
+          'Notes: Team agreed to launch the beta to 25 customers on June 12. Maya owns onboarding copy by June 3. Leo owns the import-progress bug fix by June 5. Support wants a one-page troubleshooting guide before launch. Decision: defer SSO improvements until after beta unless an enterprise customer blocks.';
 
         setPrompts([p1, p2, p3]);
         return;
@@ -959,47 +959,47 @@ export default function CreateCampaign() {
       if (latest.step === 3) {
         if (latest.kind === 'system_prompt') {
           // Three system-prompt versions for the same HTML-template-fill
-          // report-generation task. V2 is the production prompt verbatim.
+          // report-generation task.
           // Pinned model auto-seeds via the existing useEffect.
           setVariants([
             {
               displayName: 'Minimal',
               text:
-                'Du genererer professionelle rapporter på dansk ved at udfylde en HTML-skabelon med information fra borgerens sagsnotater.\n\nInputtet er ét HTML-dokument: alt før <h1>Aktiviteter</h1> er skabelonen, alt fra og med Aktiviteter-overskriften er kildenotater. Bevar alle HTML-tags i skabelonen uændret. Erstat hjælpetekst i firkantede parenteser med relevant information fra notaterne.\n\nGæt aldrig. Hvis information mangler, skriv [Information not available in case notes]. Bevar [[KEEP-N]]-tokens og <span data-protected="true">-elementer uændret. Skriv al ny tekst på dansk.',
+                'You turn support notes into a structured customer brief. Preserve the HTML template exactly. Replace bracketed placeholders with verified information from Source Notes. Never invent missing facts; write "Information not available" when needed. Keep [[KEEP-N]] tokens unchanged.',
             },
             {
-              displayName: 'Produktionsprompt',
+              displayName: 'Evidence-first',
               text:
-                '## Core Purpose\nGenerate professional reports by extracting and summarizing relevant information from source notes to fill the provided template structure, while **preserving every single HTML tag, attribute, and layout element that exists in the template portion** of the input.\n\n---\n\n## Input Format\n\nThe input may start with an instruction wrapper in this format: `[INSTRUCTION] ... [/INSTRUCTION]`, followed by a new line and then the HTML document.\nIf present, use the instruction as guidance only, then exclude the wrapper from output.\nSystem rules in this prompt always take priority over user-provided instruction. If there is any conflict, follow these rules.\n\nAfter handling the optional wrapper, the remaining input arrives as **one continuous HTML document.\nUse the following rule to split the document into "Template" and "Source Notes":\n\n• **Template** = Everything that appears **before** the first level‑1 heading whose inner text is exactly **"Aktiviteter"** (case‑sensitive, Danish spelling).\n• **Source Notes** = The `<h1 …>Aktiviteter</h1>` heading **itself** **plus** everything that follows it to the end of the document.\n – The `<h1>` tag can contain any `id`, `class`, or other attributes (e.g. `<h1 id="mcetoc_1iq8fv06i0">Aktiviteter</h1>`).\n – The `<h1>` tag is normally of the format `<h1 id="mcetoc_1iq8fXXXXX">Aktiviteter</h1>`) where the last five Xs can be a number or a letter.\n – If multiple "Aktiviteter" headings exist, the first one marks the split point.\n\nExample structure\n`[HTML … template …]`\n`<h1>Aktiviteter</h1>`\n`[HTML … source notes …]`\n\n---\n\n## Core Principles\n\n1. **Maintain exact headings, formatting, and HTML tags** found in the template section.\n2. **Extract information systematically**: for each template section, thoroughly scan the entire source notes section for relevant content.\n3. **Summarize effectively**: condense lengthy notes into concise, professional points that address each section\'s focus.\n4. Do not alter or remove any token matching `[[KEEP-<number>]]`; output each token verbatim.\n5. Keep every <span> element that carries a data-protected or data-anonymized attribute completely unchanged (opening tag, attributes, inner text, and closing tag). You may read its text for context, but must not edit it.\n6. **Remove instructional text**: any help/placeholder text present in the template must be deleted in the final output. Do not remove immutable `[[KEEP-<number>]]` tokens.\n7. **Mark genuinely missing information**: keep the heading but write `[Information not available in case notes]` when, after thorough search, data is absent.\n8. **Prioritize accuracy over completeness**: never guess or invent details.\n9. **HTML handling**\n   - Ignore HTML tags in the source notes while extracting information.\n   - Preserve every HTML tag (e.g., `div`, `span`, `table`, `tr`, `td`, attributes, inline styles) that appears in the template.\n   - Do not add, remove, or rearrange template tags.\n\n---\n\n## Information Extraction Process\n\nFor each section/heading in the template:\n\n1. Understand the section\'s purpose.\n2. Search all source notes for all data points relevant to that purpose.\n3. Extract key facts, observations, dates, measurements, and direct statements.\n4. Synthesize them into short, formal sentences or bullet points (as appropriate).\n5. Eliminate any duplicate or irrelevant content.\n6. Leave template help placeholders only if information is truly unavailable, using the missing‑information marker from Core Principle 5.\n7. Write the synthesized text inside the original template tags without altering the HTML structure.\n\n---\n\n## Information Synthesis Guidelines\n\n• Combine multiple occurrences of the same topic into one coherent summary.\n• Include quantifiable data (dates, numbers, frequencies) whenever they appear.\n• Highlight cause‑effect relationships explicitly stated in the notes.\n• Maintain chronological order when that makes the summary clearer or when the template asks for it.\n• Convert informal language into objective, professional wording.\n• Avoid redundancy.\n\n---\n\n## Output Quality Standards\n\n• Formal, objective tone.\n• Specific examples where available.\n• No speculative statements.\n• No repetition.\n• Consistent perspective and tense across the report.\n• All original template HTML must remain unchanged except where you insert extracted text.\n• All newly generated text (i.e., all content you add yourself) must be written in Danish.\n\n---\n\n## Important Reminders\n\n• Never fabricate information.\n• Only include content supported by the source notes. Try to be as verbose as possible, but avoid including information that is not relevant.\n• Provide partial information rather than declaring an entire section missing.\n• Search the entire source notes section before concluding that information is unavailable.\n• Your final answer to the user must be the fully filled‑in HTML template, ready for use.\n• Immutable tokens matching `[[KEEP-<number>]]` and protected/anonymized <span> tags must remain identical to the input; never modify or delete them.',
+                '## Role\nYou are a support operations writer producing concise, accurate customer briefs.\n\n## Input\nThe document contains a reusable HTML template followed by a <h1>Source Notes</h1> section. Everything before Source Notes is the template; everything from Source Notes onward is evidence.\n\n## Rules\n1. Preserve every HTML tag, attribute, heading, list, and token from the template.\n2. Fill only the placeholder text inside the existing template structure.\n3. Use only facts supported by Source Notes.\n4. If a field cannot be supported, write "Information not available".\n5. Keep [[KEEP-N]] tokens exactly unchanged.\n6. Write in clear customer-support English.',
             },
             {
-              displayName: 'Persona + tænk-først',
+              displayName: 'Senior support lead',
               text:
-                'Du er en erfaren dansk sagsbehandler med 15 års erfaring i beskæftigelsesindsatsen. Du udfylder rapportskabeloner ved først at tænke metodisk og derefter skrive.\n\nTrin 1: Læs hele HTML-skabelonen og forstå hver sektions formål. Skabelonen er alt før <h1>Aktiviteter</h1>; sagsnotaterne følger efter.\n\nTrin 2: Scan alle sagsnotater systematisk. Find for hver skabelon-sektion de relevante datapunkter (datoer, observationer, citater, beslutninger).\n\nTrin 3: Syntetisér i et fagligt myndighedssprog. Kombinér gentagelser. Bevar kronologi hvor det giver mening. Konvertér uformelt sprog til objektiv formulering.\n\nTrin 4: Skriv det endelige output ved at indsætte den syntetiserede tekst i de oprindelige template-tags. Skift aldrig HTML-strukturen. Bevar hver [[KEEP-N]]-token og hvert <span data-protected="true">-element bogstaveligt.\n\nHvis du efter grundig søgning ikke finder information til en sektion, skriv [Information not available in case notes] og behold sektionsoverskriften.\n\nAl ny tekst på dansk. Aldrig gætterier.',
+                'Act like a senior support lead preparing a brief another teammate can trust. First identify the customer issue, then separate verified facts from assumptions, then draft the reply. Keep the original HTML structure exactly intact. Do not expose internal uncertainty to the customer unless the notes say the team truly does not know yet. Never invent refund status, dates, owners, or promises.',
             },
           ]);
           return;
         }
         if (latest.kind === 'prompt') {
-          // Four phrasings of the same case-summary task.
+          // Four phrasings of the same meeting-summary task.
           // Pinned model auto-seeds via the existing useEffect; we don't
           // override it so the operator can pick if they prefer.
           setVariants([
             {
-              displayName: 'Kort & neutral',
-              text: 'Lav en kort opsummering af sagsakterne nedenfor til en ny sagsbehandler. Maks. 200 ord. Skriv neutralt og uden gentagelser.\n\n{{input}}',
+              displayName: 'Concise',
+              text: 'Summarize the notes below in five bullets. Include decisions, owners, and next steps. Keep it concise.\n\n{{input}}',
             },
             {
-              displayName: 'Struktureret',
-              text: 'Du er en erfaren sagsbehandler. Læs sagsakterne nedenfor og skriv en opsummering på maks. 200 ord opdelt i tre afsnit:\n1. Borgerens situation og helbred\n2. Hidtidige indsatser\n3. Aktuel status og næste skridt\n\n{{input}}',
+              displayName: 'Action-first',
+              text: 'Turn these notes into a Slack-ready update. Start with action items and owners, then list decisions, then mention open questions.\n\n{{input}}',
             },
             {
-              displayName: 'Tænk-først',
-              text: 'Læs sagsakterne nedenfor grundigt. Identificér først, hvilke informationer der er kritiske for en ny sagsbehandler, og hvilke der er baggrundsstøj. Skriv derefter en kondenseret opsummering på maks. 200 ord, der prioriterer det kritiske.\n\n{{input}}',
+              displayName: 'Executive brief',
+              text: 'Write a short executive brief from the notes. Separate decisions, risks, and next steps. Avoid process detail unless it changes the decision.\n\n{{input}}',
             },
             {
-              displayName: 'Overdragelse',
-              text: 'Forestil dig, at du overdrager sagen til en kollega, der starter i morgen. Skriv en sagsopsummering på maks. 200 ord, som giver kollegaen alt det, hun skal vide for at træde rigtigt i den første samtale med borgeren. Hold sproget fagligt og uden gentagelser.\n\n{{input}}',
+              displayName: 'Handoff',
+              text: 'Prepare a handoff for a teammate who missed the meeting. Explain what changed, who owns what, and what they should do next.\n\n{{input}}',
             },
           ]);
           return;

@@ -55,10 +55,10 @@ interface FakeDbState {
 }
 
 /**
- * Drizzle's neon-http driver is fluent: `db.insert(table).values(...).returning()`
- * returns rows. We mimic that shape minimally — just enough for the
- * handler under test. The campaigns POST handler issues exactly three
- * inserts in a fixed order:
+ * Drizzle's fluent insert chain returns rows from
+ * `db.insert(table).values(...).returning()`. We mimic that shape
+ * minimally — just enough for the handler under test. The campaigns
+ * POST handler issues exactly three inserts in a fixed order:
  *   1. campaigns (single row)
  *   2. prompts (array)
  *   3. campaign_models (array)

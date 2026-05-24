@@ -29,7 +29,7 @@ npm run dev            # http://localhost:3000
 
 `db:seed` prints the share slugs it created — jump straight into the participant flow at `http://localhost:3000/vote/<slug>`.
 
-**Database.** Any Postgres works. ModelArena uses the `@neondatabase/serverless` driver, which speaks plain Postgres over HTTPS; [Neon](https://neon.tech) is one option (and the Vercel Marketplace path), but a local container, Supabase, or any managed Postgres with a `postgres://` URL is fine.
+**Database.** Any normal Postgres works: local Docker, Supabase, Neon, RDS, or another managed host with a `postgres://` URL. Neon is a good Vercel-friendly option, but it is not required.
 
 **Models.** [OpenRouter](https://openrouter.ai) is the default provider — one API key, any model. $5 of credit goes a long way for evaluation work.
 
@@ -60,7 +60,7 @@ Comma-separated, matched case-insensitively against the session's `identity` fie
 
 - **Frontend.** Vite SPA in `src/` (React + TypeScript). Tailwind + a small in-repo design system; see `docs/design-system/DESIGN-SYSTEM.md`.
 - **API.** Vercel Functions in `api/`, deployable as Fluid Compute. Most routes flow through a single dispatcher.
-- **Database.** Postgres via `@neondatabase/serverless` + Drizzle ORM. Schema in `src/server/db/schema.ts`, migrations in `drizzle/`.
+- **Database.** Postgres via `postgres` + Drizzle ORM. Schema in `src/server/db/schema.ts`, migrations in `drizzle/`.
 - **Server boundary.** Domain logic, auth, OpenRouter integration, and rating math all live in `src/server/` — strictly server-only. Client code must not import from `src/server/**`. See [`src/server/README.md`](./src/server/README.md) for the contract.
 
 ## Scripts

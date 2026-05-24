@@ -9,9 +9,8 @@ import { config as loadDotenv } from 'dotenv';
 // Prefer .env.local (developer overrides), fall back to .env.
 loadDotenv({ path: '.env.local' });
 loadDotenv({ path: '.env' });
-import { drizzle } from 'drizzle-orm/neon-http';
-import { migrate } from 'drizzle-orm/neon-http/migrator';
-import { neon } from '@neondatabase/serverless';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { createDbClient } from '../src/server/db/client.js';
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -20,10 +19,14 @@ async function main() {
     process.exit(1);
   }
 
-  const db = drizzle(neon(url));
-  console.log('Applying migrations from ./drizzle...');
-  await migrate(db, { migrationsFolder: './drizzle' });
-  console.log('Migrations applied.');
+  const { db, client } = createDbClient(url);
+  try {
+    console.log('Applying migrations from ./drizzle...');
+    await migrate(db, { migrationsFolder: './drizzle' });
+    console.log('Migrations applied.');
+  } finally {
+    await client.end();
+  }
 }
 
 main().catch((err) => {

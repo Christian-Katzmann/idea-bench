@@ -33,9 +33,8 @@ loadDotenv({ path: '.env.local' });
 loadDotenv({ path: '.env' });
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
 import { eq } from 'drizzle-orm';
+import { createDbClient } from '../src/server/db/client';
 import * as schema from '../src/server/db/schema';
 
 interface StarterPersona {
@@ -116,39 +115,43 @@ async function main() {
     return;
   }
 
-  const db = drizzle(neon(url), { schema });
+  const { db, client } = createDbClient(url);
 
-  let inserted = 0;
-  let skipped = 0;
-  for (const persona of starters) {
-    const existing = await db
-      .select({ id: schema.personas.id, isStarter: schema.personas.isStarter })
-      .from(schema.personas)
-      .where(eq(schema.personas.name, persona.name))
-      .limit(1);
-    if (existing.length > 0) {
-      skipped += 1;
-      const tag = existing[0].isStarter ? 'starter' : 'operator-created';
-      console.log(`  skip   ${persona.name}  (already exists, ${tag})`);
-      continue;
+  try {
+    let inserted = 0;
+    let skipped = 0;
+    for (const persona of starters) {
+      const existing = await db
+        .select({ id: schema.personas.id, isStarter: schema.personas.isStarter })
+        .from(schema.personas)
+        .where(eq(schema.personas.name, persona.name))
+        .limit(1);
+      if (existing.length > 0) {
+        skipped += 1;
+        const tag = existing[0].isStarter ? 'starter' : 'operator-created';
+        console.log(`  skip   ${persona.name}  (already exists, ${tag})`);
+        continue;
+      }
+      await db.insert(schema.personas).values({
+        name: persona.name,
+        description: persona.description,
+        systemPrompt: persona.systemPrompt,
+        priorities: persona.priorities,
+        antiPatterns: persona.antiPatterns,
+        tags: persona.tags,
+        isStarter: true,
+      });
+      inserted += 1;
+      console.log(`  insert ${persona.name}`);
     }
-    await db.insert(schema.personas).values({
-      name: persona.name,
-      description: persona.description,
-      systemPrompt: persona.systemPrompt,
-      priorities: persona.priorities,
-      antiPatterns: persona.antiPatterns,
-      tags: persona.tags,
-      isStarter: true,
-    });
-    inserted += 1;
-    console.log(`  insert ${persona.name}`);
-  }
 
-  console.log(
-    `\nDone. Inserted ${inserted}, skipped ${skipped} of ${starters.length} ` +
-      `personas in ${dataPath}.`,
-  );
+    console.log(
+      `\nDone. Inserted ${inserted}, skipped ${skipped} of ${starters.length} ` +
+        `personas in ${dataPath}.`,
+    );
+  } finally {
+    await client.end();
+  }
 }
 
 main().catch((err) => {

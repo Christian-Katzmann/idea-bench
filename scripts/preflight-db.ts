@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
-import { neon } from '@neondatabase/serverless';
+import { createPostgresClient } from '../src/server/db/client.js';
 import { evaluateDatabasePreflight } from '../src/server/db/preflight.js';
 
 loadDotenv({ path: '.env.local' });
@@ -18,42 +18,46 @@ async function main() {
     .filter((file) => file.endsWith('.sql'))
     .sort();
 
-  const sql = neon(url);
-  const tables = await sql`
-    select table_name
-    from information_schema.tables
-    where table_schema = 'public'
-    order by table_name
-  `;
-  const migrationsTableCheck = await sql`
-    select count(*)::int as n
-    from information_schema.tables
-    where table_schema = 'drizzle'
-      and table_name = '__drizzle_migrations'
-  `;
-  const hasMigrationsTable = migrationsTableCheck[0]?.n === 1;
-  const appliedMigrationCount = hasMigrationsTable
-    ? (await sql`select count(*)::int as n from drizzle.__drizzle_migrations`)[0]?.n ?? 0
-    : 0;
+  const sql = createPostgresClient(url);
+  try {
+    const tables = await sql`
+      select table_name
+      from information_schema.tables
+      where table_schema = 'public'
+      order by table_name
+    `;
+    const migrationsTableCheck = await sql`
+      select count(*)::int as n
+      from information_schema.tables
+      where table_schema = 'drizzle'
+        and table_name = '__drizzle_migrations'
+    `;
+    const hasMigrationsTable = migrationsTableCheck[0]?.n === 1;
+    const appliedMigrationCount = hasMigrationsTable
+      ? (await sql`select count(*)::int as n from drizzle.__drizzle_migrations`)[0]?.n ?? 0
+      : 0;
 
-  const result = evaluateDatabasePreflight({
-    existingTables: tables.map((row) => String(row.table_name)),
-    hasMigrationsTable,
-    appliedMigrationCount,
-    migrationFiles,
-  });
+    const result = evaluateDatabasePreflight({
+      existingTables: tables.map((row) => String(row.table_name)),
+      hasMigrationsTable,
+      appliedMigrationCount,
+      migrationFiles,
+    });
 
-  if (!result.ok) {
-    console.error('Database deployment preflight failed:');
-    for (const message of result.messages) {
-      console.error(`- ${message}`);
+    if (!result.ok) {
+      console.error('Database deployment preflight failed:');
+      for (const message of result.messages) {
+        console.error(`- ${message}`);
+      }
+      process.exit(1);
     }
-    process.exit(1);
-  }
 
-  console.log(
-    `Database deployment preflight passed. ${migrationFiles.length} migration file${migrationFiles.length === 1 ? '' : 's'} applied.`,
-  );
+    console.log(
+      `Database deployment preflight passed. ${migrationFiles.length} migration file${migrationFiles.length === 1 ? '' : 's'} applied.`,
+    );
+  } finally {
+    await sql.end();
+  }
 }
 
 main().catch((error) => {

@@ -25,9 +25,8 @@
 import { config as loadDotenv } from 'dotenv';
 loadDotenv({ path: '.env.local' });
 loadDotenv({ path: '.env' });
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
 import { sql } from 'drizzle-orm';
+import { createDbClient } from '../src/server/db/client';
 import * as schema from '../src/server/db/schema';
 import { generateShareSlug } from '../src/lib/ids';
 import { AVAILABLE_MODELS } from '../src/lib/models';
@@ -49,7 +48,8 @@ async function main() {
     process.exit(1);
   }
 
-  const db = drizzle(neon(url), { schema });
+  const { db, client } = createDbClient(url);
+  try {
 
   console.log('Truncating tables...');
   // TRUNCATE ... CASCADE handles FKs regardless of order.
@@ -290,6 +290,9 @@ async function main() {
   console.log(`  Active:    /vote/${email.shareSlug}`);
   console.log(`  Completed: /vote/${codeReview.shareSlug}`);
   console.log(`  Draft:     /vote/${meeting.shareSlug}`);
+  } finally {
+    await client.end();
+  }
 }
 
 main().catch((err) => {

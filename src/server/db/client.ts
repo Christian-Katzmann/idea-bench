@@ -1,39 +1,49 @@
 /**
  * Drizzle client, module-scoped and memoized.
  *
- * Uses the Neon HTTP driver (not pool/WebSocket). HTTP is a better fit
- * for Vercel Functions: no connection lifecycle to manage, no cold-start
- * dial cost, and Neon handles pooling upstream.
- *
- * Tradeoff: the HTTP driver does not support multi-statement
- * transactions. None of our current operations require them. If we ever
- * need them (e.g. a reconcile job that must rewrite ratings atomically),
- * swap to `drizzle-orm/neon-serverless` with a `Pool`.
+ * Uses postgres.js instead of a provider-specific HTTP driver so the
+ * quickstart works with any normal Postgres URL: local Docker, Supabase,
+ * Neon, RDS, or another managed host. `prepare: false` keeps the client
+ * compatible with PgBouncer / transaction-pooler setups.
  */
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from './schema.js';
 
-let cached: ReturnType<typeof createDb> | undefined;
+let cached: ReturnType<typeof createDbClient> | undefined;
 
-function createDb() {
+export function createPostgresClient(url: string) {
+  return postgres(url, {
+    max: 1,
+    prepare: false,
+  });
+}
+
+export function createDbClient(url: string) {
+  const client = createPostgresClient(url);
+  return {
+    client,
+    db: drizzle(client, { schema }),
+  };
+}
+
+function createDbClientFromEnv() {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
       'DATABASE_URL is not set. Run `vercel env pull` or populate .env.local.',
     );
   }
-  return drizzle(neon(url), { schema });
+  return createDbClient(url);
 }
 
 /**
- * Returns the drizzle client. Memoized per module instance — safe to call
- * from every handler invocation; the Neon HTTP driver is cheap to
- * construct but there's no reason to rebuild it per request.
+ * Returns the drizzle client. Memoized per module instance so warm
+ * serverless invocations reuse the same tiny connection pool.
  */
 export function getDb() {
-  if (!cached) cached = createDb();
-  return cached;
+  if (!cached) cached = createDbClientFromEnv();
+  return cached.db;
 }
 
 export { schema };

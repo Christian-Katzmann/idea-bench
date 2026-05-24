@@ -4,7 +4,7 @@
 
 Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
 
-![Blind voting interface — two model generations side by side, no model names visible](./screenshots/hero-blind-vote.png)
+![Blind voting interface — two model generations side by side, no model names visible](./design/screenshots/hero-blind-vote.png)
 
 *The voting surface proves the central trust promise: voters can compare outputs without seeing the model, prompt, or contestant identity.*
 
@@ -26,9 +26,20 @@ Status: usable public alpha. The single-operator self-hosted loop is real: creat
 - **Three kinds of contestants in one engine.** Compare models against each other, compare system prompts on a fixed model, or compare prompt variants. Same blind-voting UI, same rating math.
 - **Bradley-Terry ratings + group alignment.** Pairwise votes feed a Bradley-Terry maximum-likelihood model. The campaign view shows ratings, confidence intervals, and how each voter group aligned with the overall result.
 
-![Campaign detail with the leaderboard tab — Bradley-Terry ratings, multiple models, group-alignment column](./screenshots/hero-leaderboard.png)
+![Campaign detail with the leaderboard tab — Bradley-Terry ratings, multiple models, group-alignment column](./design/screenshots/hero-leaderboard.png)
 
 *The campaign dashboard turns pairwise votes into ratings with confidence intervals and voter-group alignment, so the result can survive a real decision meeting.*
+
+## How the loop works
+
+```mermaid
+flowchart LR
+  A["Prompt + contestants"] --> B["Blind ballot"]
+  B --> C["Human or simulated votes"]
+  C --> D["Bradley-Terry rating"]
+  D --> E["Decision-ready evidence"]
+  E --> F["Reveal model identities"]
+```
 
 ## Quickstart
 

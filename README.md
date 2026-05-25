@@ -4,11 +4,11 @@
 
 Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
 
-https://github.com/user-attachments/assets/7d95630b-0afe-428d-b8cd-5db5b14a9bef
-
 ![Blind voting interface — two model generations side by side, no model names visible](./design/screenshots/hero-blind-vote.png)
 
 *The voting surface proves the central trust promise: voters can compare outputs without seeing the model, prompt, or contestant identity.*
+
+[Watch the 30-second trailer](./design/trailer/trailer.mp4) · [Reproduce the rating proof](./REPRODUCE.md) · [Read the failure modes](./docs/failure-modes.md)
 
 ## What this is not
 
@@ -16,10 +16,21 @@ https://github.com/user-attachments/assets/7d95630b-0afe-428d-b8cd-5db5b14a9bef
 - Not a replacement for human judgment. It gives you structured preference evidence; you still decide what the evidence means.
 - Not multi-tenant team software yet. One operator per deployment is the current product shape.
 
+## What is real vs. simulated
+
+| Area | Status | What is real | What is simulated or absent |
+|---|---|---|---|
+| Campaign loop | Real | Create campaigns, add contestants, activate voting links, collect votes, recompute ratings. | Demo seed data is synthetic. |
+| Blindness | Real in app/API | Voters do not receive model, prompt, or contestant identity before reveal. | Operator-provided text can still leak identity if it names the model. |
+| Ratings | Real | Pairwise votes run through the Bradley-Terry solver with confidence intervals. | Early samples can still be directional; see failure modes. |
+| Simulated personas | Real feature | Operators can run model-judged simulated votes when AI spend is enabled. | Simulated votes are not human preference evidence. |
+| Hosted/team SaaS | Out of scope | Self-hosted single-operator deployments. | Workspaces, billing, RBAC, and shared-team governance. |
+
 ## Choose your path
 
 - **Run a private model evaluation:** start with the quickstart and seed data.
-- **Check the trust model:** read the blind voting, operator auth, and AI spend sections.
+- **Check the trust model:** read the blind voting, operator auth, AI spend, and [failure modes](./docs/failure-modes.md).
+- **Verify the math:** run the deterministic [rating proof](./REPRODUCE.md).
 - **Work on the code:** read `AGENTS.md` and the command registry before changing server or database paths.
 
 ## What it does
@@ -46,7 +57,7 @@ flowchart LR
 ## Quickstart
 
 ```bash
-git clone <this repo>
+git clone https://github.com/Christian-Katzmann/idea-bench.git
 cd idea-bench
 npm install
 cp .env.example .env.local

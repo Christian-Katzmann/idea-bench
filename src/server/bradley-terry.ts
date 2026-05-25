@@ -86,6 +86,8 @@ export function computeBradleyTerry(
     N[i][j] += c.weight;
     N[j][i] += c.weight;
   }
+  const hasGames = N.map((row) => row.some((count) => count > 0));
+  const activeModelCount = hasGames.filter(Boolean).length;
 
   // Initialize strengths to 1. Models with zero games stay at 1 forever.
   const p: number[] = new Array(M).fill(1);
@@ -111,11 +113,18 @@ export function computeBradleyTerry(
       }
     }
 
-    // Normalize: sum of log p = 0 (geometric mean = 1).
-    let sumLog = 0;
-    for (let i = 0; i < M; i++) sumLog += Math.log(pNew[i]);
-    const shift = sumLog / M;
-    for (let i = 0; i < M; i++) pNew[i] = Math.exp(Math.log(pNew[i]) - shift);
+    // Normalize only models that actually appear in the comparison graph.
+    // Zero-game models stay neutral at strength=1 / rating=1000.
+    if (activeModelCount > 0) {
+      let sumLog = 0;
+      for (let i = 0; i < M; i++) {
+        if (hasGames[i]) sumLog += Math.log(pNew[i]);
+      }
+      const shift = sumLog / activeModelCount;
+      for (let i = 0; i < M; i++) {
+        pNew[i] = hasGames[i] ? Math.exp(Math.log(pNew[i]) - shift) : 1;
+      }
+    }
 
     // Convergence on max relative delta.
     let maxDelta = 0;

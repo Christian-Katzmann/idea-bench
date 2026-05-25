@@ -1,0 +1,24 @@
+# Dependencies, generated outputs, and local runtime state.
+node_modules/
+dist/
+desktop/
+assets/icons/
+.vercel/
+.playwright-mcp/
+
+# Planning, audit, and implementation receipts that reference source paths.
+campaigns/
+.adx/audit/
+.adx/implementation/
+.adx/journal.jsonl
+.adx/claims.jsonl
+**/*-planning-prompt.md
+
+# Universal shadow-code hygiene.
+**/codebase-health/
+**/archive/
+**/legacy/
+**/__generated__/
+*.generated.*
+.claude/sessions/
+.codex/sessions/

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "name": "agent-guide",
+      "path": "AGENTS.md",
+      "description": "Repo-specific operating rules, commands, boundaries, and high-risk areas for AI coding agents."
+    },
+    {
+      "name": "server-boundary",
+      "path": "src/server/README.md",
+      "description": "Strict client/server boundary and local API runtime contract."
+    },
+    {
+      "name": "design-system",
+      "path": "docs/design-system/DESIGN-SYSTEM.md",
+      "description": "Visual tokens, layout rules, and component conventions for UI work."
+    },
+    {
+      "name": "risk-register",
+      "path": ".adx/risks.json",
+      "description": "Machine-readable risk boundaries for secrets, migrations, deploys, AI spend, and generated artifacts."
+    },
+    {
+      "name": "failure-modes",
+      "path": "docs/failure-modes.md",
+      "description": "The main ways blind evaluation evidence can mislead and the current mitigations."
+    }
+  ]
+}

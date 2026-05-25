@@ -74,7 +74,7 @@ magick -size 1920x1080 xc:"$paper" \
   -draw 'polygon 1180,506 1225,524 1180,542' \
   -fill "$ink" -font Helvetica-Bold -pointsize 31 -annotate +1270+490 "Bradley-Terry rating" \
   -fill "$soft" -font Helvetica -pointsize 24 -annotate +1270+532 "confidence and alignment" \
-  -fill "$ink" -font Helvetica-Bold -pointsize 54 -annotate +110+888 "ModelArena keeps the reveal last." \
+  -fill "$ink" -font Helvetica-Bold -pointsize 54 -annotate +110+888 "ïdea Bench keeps the reveal last." \
   -fill "$soft" -font Helvetica -pointsize 30 -annotate +114+946 "The process protects the vote first, then shows which model won." \
   "$FRAME_DIR/04-loop.png"
 
@@ -88,6 +88,6 @@ ffmpeg -y \
   -loop 1 -t 6 -i "$FRAME_DIR/04-loop.png" \
   -loop 1 -t 6 -i "$FRAME_DIR/05-positioning.png" \
   -filter_complex "[0:v][1:v][2:v][3:v][4:v]concat=n=5:v=1:a=0,format=yuv420p[out]" \
-  -map "[out]" -r 30 "$OUT_DIR/trailer.mp4" >/tmp/modelarena-trailer-ffmpeg.log 2>&1
+  -map "[out]" -r 30 "$OUT_DIR/trailer.mp4" >/tmp/idea-bench-trailer-ffmpeg.log 2>&1
 
 ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$OUT_DIR/trailer.mp4"

@@ -2,6 +2,12 @@
 
 Output: `social-preview.png` at 2560x1280, the 2x form of GitHub's 1280x640 social-preview ratio.
 
+Regenerate locally with:
+
+```bash
+design/social/render-social-preview.sh
+```
+
 ## Composition
 
 - Wordmark: green slash mark plus `ïdea Bench`, set large on a dark panel.
@@ -19,7 +25,7 @@ Output: `social-preview.png` at 2560x1280, the 2x form of GitHub's 1280x640 soci
 
 Description:
 
-`Self-hosted blind LLM evaluation for teams: build a campaign, collect human or simulated votes, and ship a defensible Bradley-Terry ranking.`
+`Self-hosted blind LLM evaluation: build a campaign, collect human or simulated votes, and ship a defensible Bradley-Terry ranking.`
 
 Topics:
 

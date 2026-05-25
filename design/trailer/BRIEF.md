@@ -1,4 +1,4 @@
-# ModelArena Trailer Brief
+# ïdea Bench Trailer Brief
 
 Output target: `design/trailer/trailer.mp4`
 
@@ -22,7 +22,7 @@ Format: 1920x1080 landscape MP4, product visible from frame 0. GitHub uses the f
 
 ## Visual Rules
 
-- Use the existing ModelArena palette: `#F7F6F3`, `#1F1B16`, `#047857`, `#E8E6E1`.
+- Use the existing ïdea Bench palette: `#F7F6F3`, `#1F1B16`, `#047857`, `#E8E6E1`.
 - Use real product screenshots only. No stock AI imagery, model logos, synthetic dashboards, or feature collage.
 - Captions should describe what the viewer can trust, not what is merely pictured.
 - No audio in this first local artifact; captions carry the story.

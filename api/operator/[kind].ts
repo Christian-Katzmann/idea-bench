@@ -62,7 +62,7 @@ function getRuntimeCache(): Promise<RuntimeCache | null> {
         return null;
       }
       return (mod as { getCache: (opts: { namespace: string }) => RuntimeCache })
-        .getCache({ namespace: 'modelarena' });
+        .getCache({ namespace: 'idea-bench' });
     } catch {
       return null;
     }

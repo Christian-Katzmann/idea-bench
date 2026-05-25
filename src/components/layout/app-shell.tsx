@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
  *   - Render the fixed 256px sidebar (desktop) or a slide-in drawer (mobile).
  *   - Render the sticky topbar with breadcrumb + search trigger + avatar.
  *   - Own the command palette open state and the ⌘K keyboard shortcut.
- *   - Center-align main content up to max-w-6xl, matching GitSlip.
+ *   - Center-align main content up to max-w-6xl, matching the design system.
  *
  * Each operator page wraps its body in <AppShell breadcrumb={...}>.
  * The breadcrumb prop is required — there's no sensible default that

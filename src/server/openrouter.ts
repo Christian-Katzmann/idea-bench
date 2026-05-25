@@ -83,7 +83,7 @@ function getApiKey(): string {
 }
 
 function getReferer(): string {
-  return process.env.OPENROUTER_APP_URL || 'https://modelarena.local';
+  return process.env.OPENROUTER_APP_URL || 'https://idea-bench.local';
 }
 
 interface ChatCompletionResponse {

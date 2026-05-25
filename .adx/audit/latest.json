@@ -1,13 +1,13 @@
 {
   "timestamp": "2026-04-30T22:05:43Z",
-  "root": "/Users/christiankatzmann/Dev/ïdea.com/modelarena",
-  "source": "adx-forensic audit performed before implementation",
+  "root": ".",
+  "source": "adx-forensic audit performed before implementation; local paths scrubbed after the public repo rename",
   "repo_read": {
     "kind": "app",
     "stakes": "high",
     "maturity_before": "basic",
-    "actual_git_root": "/Users/christiankatzmann/Dev/ïdea.com/modelarena",
-    "workspace_wrapper": "/Users/christiankatzmann/Dev/ïdea.com"
+    "actual_git_root": ".",
+    "workspace_wrapper": null
   },
   "scores_before": {
     "arrive": 1,
@@ -39,7 +39,7 @@
     {
       "id": "missing-canonical-agents",
       "finding": "No canonical AGENTS.md existed at the workspace wrapper or the app Git root.",
-      "evidence": ["AGENTS.md missing", "modelarena/AGENTS.md missing", "adx_doctor output"],
+      "evidence": ["AGENTS.md missing before ADX install", "adx_doctor output"],
       "impact": "Cold Codex/default agents may not receive repo-specific operating guidance.",
       "confidence": "high",
       "recommended_artifact": "AGENTS.md"

@@ -1,6 +1,6 @@
 {
   "name": "ïdea Bench",
-  "description": "An organizational tool for finding the best AI models for specific tasks via head-to-head voting campaigns.",
+  "description": "Self-hosted blind LLM evaluation via head-to-head voting campaigns and Bradley-Terry rankings.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

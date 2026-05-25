@@ -3,7 +3,7 @@
  * campaign so ratings have enough data to look alive in the dashboard.
  *
  * Synthetic rows are identifiable by email pattern:
- *   synthetic-demo+<tag>-<i>@modelarena.local
+ *   synthetic-demo+<tag>-<i>@idea-bench.local
  *
  * The script assigns each campaign_model a "true strength" from a
  * config (defaults below). Each synthetic vote is sampled to favor
@@ -162,7 +162,7 @@ async function main() {
       .values({
         cookieId,
         campaignId: campaign.id,
-        email: `synthetic-demo+${emailTag}-${i}@modelarena.local`,
+        email: `synthetic-demo+${emailTag}-${i}@idea-bench.local`,
       })
       .returning();
     participantsInserted++;

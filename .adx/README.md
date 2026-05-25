@@ -1,7 +1,7 @@
 # ADX Operating Layer
 
 This directory is the machine-readable operating layer for AI coding agents
-working in ModelArena.
+working in ïdea Bench.
 
 Start here:
 

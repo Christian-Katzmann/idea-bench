@@ -60,7 +60,7 @@
     {
       "id": "design-system",
       "path": "docs/design-system",
-      "purpose": "Canonical visual and interaction language for ModelArena UI work.",
+      "purpose": "Canonical visual and interaction language for ïdea Bench UI work.",
       "common_changes": ["design guidance", "token decisions", "UI conventions"],
       "relevant_commands": ["git-status"],
       "risks": ["generated-and-build-artifacts"]

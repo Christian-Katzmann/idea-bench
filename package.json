@@ -2,7 +2,16 @@
   "name": "idea-bench",
   "private": true,
   "version": "0.0.0",
+  "description": "Self-hosted blind LLM evaluation for campaigns, simulated personas, and Bradley-Terry ratings.",
+  "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Christian-Katzmann/idea-bench.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "dev:api": "vercel dev",

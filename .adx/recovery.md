@@ -14,7 +14,7 @@ pwd
 git status --short
 ```
 
-Recovery: run app commands from `modelarena/`, not the parent workspace.
+Recovery: run app commands from the `idea-bench/` checkout root, not a parent workspace.
 
 ## Package Manager Confusion
 

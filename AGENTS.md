@@ -2,8 +2,8 @@
 
 ## Start Here
 
-- What this repo is: ïdea Bench, the app behind idea.com, for running blind AI model evaluation campaigns.
-- Actual repo root: `modelarena/`.
+- What this repo is: ïdea Bench, the public repo for running blind AI model evaluation campaigns.
+- Actual repo root: this checkout root (`idea-bench/`).
 - Safest first command: `git status --short`.
 - ADX manifest: `.adx/adx.json`.
 - Command registry: `.adx/commands.json`.
@@ -11,6 +11,8 @@
 - Risk register: `.adx/risks.json`.
 - Recovery notes: `.adx/recovery.md`.
 - Module map: `.adx/modules/index.json`.
+- Rating proof: `REPRODUCE.md`.
+- Evaluation failure modes: `docs/failure-modes.md`.
 
 ## Operating Rules
 
@@ -52,7 +54,7 @@ npm run test:run
 npm run build
 ```
 
-Run from `modelarena/` unless a command contract says otherwise.
+Run from the repo root unless a command contract says otherwise.
 
 ## Verification
 

@@ -152,7 +152,7 @@ export function viteApiPlugin(): Plugin {
   let projectRoot = process.cwd();
 
   return {
-    name: 'modelarena-api',
+    name: 'idea-bench-api',
     apply: 'serve', // dev only
     configureServer(_server) {
       server = _server;

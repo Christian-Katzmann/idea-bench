@@ -10,7 +10,7 @@
       "timeout_seconds": 30,
       "when_to_run": "Before and after changes.",
       "success_signal": "Exits 0 and lists changed files if any.",
-      "recovery_hint": "If this fails, confirm you are inside the modelarena Git checkout."
+      "recovery_hint": "If this fails, confirm you are inside the idea-bench Git checkout."
     },
     {
       "id": "install",

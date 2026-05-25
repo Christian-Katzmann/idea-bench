@@ -243,10 +243,10 @@ async function main() {
     },
   ]);
 
-  console.log('Inserting placeholder ratings (illustrative; Phase 4 replaces)...');
+  console.log('Inserting illustrative ratings for the seeded dashboard...');
   // These are not real B-T output — just plausible numbers so the
-  // dashboard renders with content. Phase 4 computes the real thing from
-  // the vote log.
+  // dashboard renders with content. Real campaigns recompute from the
+  // vote log.
   await db.insert(schema.ratings).values([
     {
       campaignId: email.id,

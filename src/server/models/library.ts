@@ -516,7 +516,7 @@ export function invalidateAnalyticsSnapshot(): void {
       if (typeof getCache !== 'function') return;
       const cache = (getCache as (opts: { namespace: string }) => {
         expireTag?: (tag: string) => Promise<void>;
-      })({ namespace: 'modelarena' });
+      })({ namespace: 'idea-bench' });
       await cache.expireTag?.('snapshot');
     } catch {
       /* swallow — invalidation failure is tolerable; the 30s TTL on

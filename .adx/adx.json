@@ -1,10 +1,10 @@
 {
   "version": 2,
   "repo": {
-    "name": "modelarena",
+    "name": "idea-bench",
     "kind": "app",
     "stakes": "high",
-    "summary": "ModelArena is a React 19, Vite, TypeScript, Vercel Functions, Neon Postgres, and Drizzle app for running blind AI model evaluation campaigns on idea.com. It includes operator auth, participant voting, AI generation through OpenRouter, database migrations, cron cleanup, desktop launcher scripts, and production deploy configuration."
+    "summary": "ïdea Bench is a React 19, Vite, TypeScript, Vercel Functions, Postgres, and Drizzle app for running blind LLM evaluation campaigns. It includes operator auth, participant voting, AI generation through OpenRouter, database migrations, cron cleanup, desktop launcher scripts, and production deploy configuration."
   },
   "entrypoints": {
     "canonical": "AGENTS.md",

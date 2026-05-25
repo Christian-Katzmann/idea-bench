@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils"
 /**
  * The `/` mark, rendered as text in a rounded dark tile.
  *
- * Ported from GitSlip. Kept per Q1 — ïdea Bench adopts the visual but
- * uses its own breadcrumb root, not the GitSlip wordmark.
+ * ïdea Bench uses the mark as a compact product signature beside
+ * breadcrumbs, campaign titles, and auth surfaces.
  *
  * Sizes calibrated so the `sm` variant works in list-row context (inline
  * with 14px body text) while `md` sits beside the sidebar org selector

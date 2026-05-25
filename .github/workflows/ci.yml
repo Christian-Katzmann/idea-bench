@@ -1,8 +1,7 @@
 # Continuous integration for every PR and push to main.
 #
-# The status check this workflow exposes is `CI / lint+test+build`
-# (workflow name + job name). Step 5.2 of the public-github-prep
-# campaign requires this exact name in the branch protection rule.
+# The required status-check context is `lint+test+build`; keep it aligned
+# with `.github/branch-protection-ruleset.json`.
 name: CI
 
 on:
@@ -14,6 +13,9 @@ on:
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:

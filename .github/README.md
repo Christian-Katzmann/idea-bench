@@ -24,7 +24,7 @@ The rule requires:
 ## CI workflow
 
 `.github/workflows/ci.yml` runs `npm run lint`, `npm run test:run`, and
-`npm run build` on every PR and on every push to `main`. The exposed check is
-`CI / lint+test+build` — that is the exact context name the ruleset above
-references; don't rename the workflow or the job's `name:` field without also
+`npm run build` on every PR and on every push to `main`. The required
+status-check context is `lint+test+build` — that is the exact context name the
+ruleset above references; don't rename the job's `name:` field without also
 updating the ruleset.

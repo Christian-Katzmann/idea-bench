@@ -1,7 +1,7 @@
 {
   "name": "idea-bench",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Self-hosted blind LLM evaluation for campaigns, simulated personas, and Bradley-Terry ratings.",
   "license": "Apache-2.0",
   "type": "module",

@@ -2,11 +2,12 @@
 
 ïdea Bench is a self-hosted single-operator tool for blind head-to-head evaluation of LLM outputs with real voters or simulated personas. It lets an operator create a campaign, compare models, system prompts, or prompt variants, collect blind pairwise votes, and compute Bradley-Terry ratings that can be defended in product or content decisions.
 
-Status: usable public alpha. The single-operator campaign loop, blind voting surface, simulated persona flow, OpenRouter generation path, and Bradley-Terry result view are real. Hosted SaaS operations, billing, workspaces, and multi-tenant RBAC are intentionally out of scope.
+Status: v0.1.0 — public alpha. The single-operator campaign loop, blind voting surface, simulated persona flow, OpenRouter generation path, and Bradley-Terry result view are real. Hosted SaaS operations, billing, workspaces, and multi-tenant RBAC are intentionally out of scope.
 
 ## Key Links
 
 - README: `README.md`
+- Changelog: `CHANGELOG.md`
 - Rating proof: `REPRODUCE.md`
 - Failure modes: `docs/failure-modes.md`
 - Agent guide: `AGENTS.md`

@@ -2,13 +2,13 @@
 
 **ïdea Bench** is a self-hosted tool for running blind head-to-head evaluations of LLM output with real voters or simulated personas. Build a campaign, compare models, system prompts, or prompt variants, and turn the votes into Bradley-Terry ratings you can defend in a meeting. Works with any OpenRouter-backed model.
 
-Status: usable public alpha. The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
+Status: **v0.1.0 — public alpha.** The single-operator self-hosted loop is real: create campaigns, generate or paste contestant outputs, collect blind votes, and compute ratings. Team workspaces, billing, and hosted SaaS operations are deliberately out of scope.
 
 ![Blind voting interface — two model generations side by side, no model names visible](./design/screenshots/hero-blind-vote.png)
 
 *The voting surface proves the central trust promise: voters can compare outputs without seeing the model, prompt, or contestant identity.*
 
-[Watch the 30-second trailer](./design/trailer/trailer.mp4) · [Reproduce the rating proof](./REPRODUCE.md) · [Read the failure modes](./docs/failure-modes.md)
+[Watch the 30-second trailer](./design/trailer/trailer.mp4) · [Read the changelog](./CHANGELOG.md) · [Reproduce the rating proof](./REPRODUCE.md) · [Read the failure modes](./docs/failure-modes.md)
 
 ## What this is not
 

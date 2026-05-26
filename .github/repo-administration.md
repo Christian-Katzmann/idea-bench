@@ -1,5 +1,9 @@
 # Repo administration
 
+This file is intentionally not named `README.md`; GitHub can otherwise treat
+`.github/README.md` as the repository README and hide the product-facing root
+README from the main repo page.
+
 ## Branch protection on `main`
 
 `branch-protection-ruleset.json` is the source-of-truth ruleset for `main`.

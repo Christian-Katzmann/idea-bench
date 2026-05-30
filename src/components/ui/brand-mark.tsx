@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 
 /**
- * The `/` mark, rendered as text in a rounded dark tile.
+ * The idea.com split-sphere mark.
  *
  * ïdea Bench uses the mark as a compact product signature beside
  * breadcrumbs, campaign titles, and auth surfaces.
@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils"
 type BrandMarkSize = "sm" | "md" | "lg" | "xl"
 
 const sizeMap: Record<BrandMarkSize, string> = {
-  sm: "size-5 text-[11px] rounded-[5px]",
-  md: "size-7 text-sm rounded-md",
-  lg: "size-9 text-lg rounded-lg",
-  xl: "size-12 text-2xl rounded-xl",
+  sm: "size-5",
+  md: "size-7",
+  lg: "size-9",
+  xl: "size-12",
 }
 
 export function BrandMark({
@@ -31,12 +31,17 @@ export function BrandMark({
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex shrink-0 items-center justify-center bg-primary font-mono font-bold text-primary-foreground leading-none",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden",
         sizeMap[size],
         className
       )}
     >
-      /
+      <img
+        src="/logo-brand.png"
+        alt=""
+        className="size-full object-contain"
+        draggable={false}
+      />
     </span>
   )
 }

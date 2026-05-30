@@ -6,18 +6,18 @@ A complete specification for the visual, typographic, interaction, and UX langua
 
 ## 0. Philosophy & Tone
 
-The design language is internally codenamed **"GitSlip-native"** — a warm, restrained, considered aesthetic inspired by developer-tool products (GitHub, Linear, Vercel) but warmer. It is explicitly **not**:
+The design language is **idea.com-native** — restrained, serious, and anchored by the split-sphere identity: deep ink, off-white paper, electric blue, teal, violet, coral, and warm orange. It is explicitly **not**:
 
 - Playful
-- Bright/vibrant
+- Bright everywhere
 - Neon / synthwave
 - Colorful for the sake of colorful
 - "Dashboard-y" in the Material / Bootstrap sense
 
 It **is**:
 
-- **Warm, paper-like.** Never stark white. Backgrounds carry a yellow-cream undertone.
-- **Restrained.** Color is information. Tinted chrome is forbidden. If it's not carrying meaning, it's neutral.
+- **Paper-like.** Never stark white. Backgrounds use the brand's off-white paper.
+- **Restrained.** Color is information. The gradient palette appears in marks, charts, focus, and status cues; neutral chrome stays neutral.
 - **Typographically serious.** Small uppercase labels do heavy lifting. Monospace is reserved for numbers and identifiers.
 - **Density-aware.** Prefers compact, information-rich surfaces over generous SaaS whitespace. Lines of data, not cards of marketing copy.
 - **Confident about hierarchy.** Primary actions are dark pills. Secondary actions are quiet. Destructive actions are quiet too — intent is communicated through friction (typed-name confirmation), not red paint.
@@ -43,34 +43,34 @@ All color is defined through two parallel systems:
 
 The two must stay in sync. A change to one is a bug unless the other changes with it.
 
-### 1.2 Light palette (primary target — "warm paper")
+### 1.2 Light palette (primary target — brand paper)
 
 | Token | Hex | RGB | Role |
 |---|---|---|---|
-| `--clr-bg` | `#F7F6F3` | `247 246 243` | Page background. Warm cream, never pure white. |
+| `--clr-bg` | `#FEFEF5` | `254 254 245` | Page background. Brand paper, never pure white. |
 | `--clr-surface` | `#FFFFFF` | `255 255 255` | Card surface. Elevated above `bg`. |
-| `--clr-surface-highlight` | `#F4F3F0` | `244 243 240` | Hover/active row background. Also used for subtle inset panels and the avatar letter tile. |
-| `--clr-fg` | `#1F1B16` | `31 27 22` | Primary text / dark ink. Warm near-black. Used for primary buttons. |
-| `--clr-fg-muted` | `#6E6A62` | `110 106 98` | Secondary text, icons, muted body copy. |
-| `--clr-border` | `#E8E6E1` | `232 230 225` | Default border for cards, inputs, dividers. |
-| `--clr-accent` | `#047857` | `4 120 87` | Forest green. Links, live/active status, focus ring, success state chips. |
-| `--clr-success` | `#22C55E` | — | Success chips and toasts. |
-| `--clr-warning` | `#B45309` | — | Amber. Draft/building chips, directional warnings. |
+| `--clr-surface-highlight` | `#F4F6FF` | `244 246 255` | Hover/active row background. Also used for subtle inset panels and the avatar letter tile. |
+| `--clr-fg` | `#0B0F2B` | `11 15 43` | Primary text / brand ink. Used for primary buttons. |
+| `--clr-fg-muted` | `#64697A` | `100 105 122` | Secondary text, icons, muted body copy. |
+| `--clr-border` | `#E3E6F1` | `227 230 241` | Default border for cards, inputs, dividers. |
+| `--clr-accent` | `#4361EE` | `67 97 238` | Accessible brand blue. Links, active status, focus ring. |
+| `--clr-success` | `#008F84` | — | Accessible teal for success chips and toasts. |
+| `--clr-warning` | `#B8641E` | — | Darkened brand orange for draft/building chips and directional warnings. |
 | `--clr-destructive` | `#B91C1C` | — | Deep red. **Inline error surfaces and destructive chips only — never fills a button.** |
 
 ### 1.3 Dark palette
 
 | Token | Hex | RGB | Notes |
 |---|---|---|---|
-| `--clr-bg` | `#080706` | `8 7 6` | Near-black with warm undertone. Not `#000`. |
-| `--clr-surface` | `#161512` | `22 21 18` | Card surface. |
-| `--clr-surface-highlight` | `#201E1A` | `32 30 26` | Hover state. |
-| `--clr-fg` | `#FAF9F7` | `250 249 247` | Warm off-white. Not pure `#FFF`. |
-| `--clr-fg-muted` | `#A8A49C` | `168 164 156` | |
-| `--clr-border` | `#2A2824` | `42 40 36` | |
-| `--clr-accent` | `#10B981` | `16 185 129` | Brighter green for readability on dark. |
-| `--clr-success` | `#22C55E` | — | |
-| `--clr-warning` | `#FBBF24` | — | Brighter amber. |
+| `--clr-bg` | `#070A16` | `7 10 22` | Near-black with navy undertone. Not `#000`. |
+| `--clr-surface` | `#101424` | `16 20 36` | Card surface. |
+| `--clr-surface-highlight` | `#181D31` | `24 29 49` | Hover state. |
+| `--clr-fg` | `#FEFEF5` | `254 254 245` | Brand paper. Not pure `#FFF`. |
+| `--clr-fg-muted` | `#AEB4C7` | `174 180 199` | |
+| `--clr-border` | `#252B44` | `37 43 68` | |
+| `--clr-accent` | `#00D4C4` | `0 212 196` | Brand teal for readability on dark. |
+| `--clr-success` | `#20E0A8` | — | |
+| `--clr-warning` | `#FFA66D` | — | Brand orange. |
 | `--clr-destructive` | `#F87171` | — | Softer red. |
 
 ### 1.4 Semantic map (shadcn bridge)
@@ -88,12 +88,12 @@ Tokens fed to shadcn-compatible primitives so third-party components pick up the
 --color-secondary:         var(--clr-surface-highlight);
 --color-muted:             var(--clr-surface-highlight);
 --color-muted-foreground:  var(--clr-fg-muted);
---color-accent:            var(--clr-accent);      /* forest green */
+--color-accent:            var(--clr-accent);      /* brand blue/teal */
 --color-accent-foreground: var(--clr-bg);
 --color-destructive:       var(--clr-destructive);
 --color-border:            var(--clr-border);
 --color-input:             var(--clr-border);
---color-ring:              var(--clr-accent);      /* focus ring is green */
+--color-ring:              var(--clr-accent);      /* focus ring */
 
 --color-surface:           var(--clr-surface);
 --color-surface-highlight: var(--clr-surface-highlight);
@@ -103,24 +103,24 @@ Tokens fed to shadcn-compatible primitives so third-party components pick up the
 
 ### 1.5 Chart palette
 
-Deliberately restrained. No rainbow.
+Deliberately restrained, sampled from the identity gradient. No rainbow.
 
 ```
-chart-1: var(--clr-accent)   /* green */
+chart-1: var(--clr-accent)   /* brand blue/teal */
 chart-2: var(--clr-fg)       /* ink */
-chart-3: #B4844C             /* warm ochre */
-chart-4: #8674AA             /* muted violet */
-chart-5: #6E6A62             /* warm stone */
+chart-3: #00AFA3             /* accessible teal */
+chart-4: #7B5CFF             /* violet */
+chart-5: #FF8A5C             /* warm orange */
 ```
 
 ### 1.6 Color rules
 
-1. **Primary CTA is dark ink on warm paper.** Not blue, not green, not branded. The dark pill *is* the brand cue.
-2. **Green is for state, not decoration.** Use for: active/live status, success toasts, focus ring, inline links, "top pick" labels. Never as a button fill.
+1. **Primary CTA is dark ink on brand paper.** Not blue, not teal, not gradient-filled. The dark pill *is* the brand cue.
+2. **Blue/teal is for state, not decoration.** Use for: active/live status, success toasts, focus ring, inline links, "top pick" labels. Never as a primary button fill.
 3. **Red never fills a button.** It appears only on chips (e.g. "Failed"), in inline validation error surfaces (border + 10% tint + red text), and in error toasts.
 4. **Amber is for provisional states.** Draft, directional, building, "treat with caution."
 5. **Opacity is information too.** Directional/low-confidence rows get `opacity-70`. Placeholder text and dividers use `/60`, `/40` of the tokens.
-6. **Never introduce a new hue.** If a new state is needed, it maps to one of: default (outline), success (green), warning (amber), destructive (red), muted (secondary filled), or ghost.
+6. **Never introduce a new hue.** If a new state is needed, it maps to one of: default (outline), success (teal), warning (orange), destructive (red), muted (secondary filled), or ghost.
 
 ---
 
@@ -205,7 +205,7 @@ Radii are tokenized via a single `--radius: 0.75rem` (12px) knob. The scale deri
 | Ghost / nav-row hover state | `rounded-md` |
 | Avatar (user) | `rounded-full` |
 | Entity icon (letter tile) | `rounded-md` at `sm`, `rounded-lg` at `md/lg` |
-| Brand mark `/` tile | `rounded-[5px]` at sm, `rounded-md` at md, `rounded-lg` at lg, `rounded-xl` at xl |
+| Brand mark image | n/a; the asset carries its own circular geometry |
 | Badges / chips | `rounded-full` |
 | KeyHint (kbd pill) | `rounded` (4px) |
 | Skeleton | `rounded-md` |
@@ -242,7 +242,7 @@ Shadows are tiny and warm-neutral. No colored shadows, no glows (except the dark
 | `shadow-2xl` | Dialogs (modal + mobile sidebar drawer + command palette). |
 | No shadow | Sidebar, topbar, empty states, inline cards with `shadow-none`. |
 
-**Focus ring** = `ring-2 ring-ring/30 ring-offset-0`. The ring is green (accent). Offset is zero (ring hugs the element).
+**Focus ring** = `ring-2 ring-ring/30 ring-offset-0`. The ring uses the accent color. Offset is zero (ring hugs the element).
 
 **Active ring** on inputs = `ring-2 ring-accent/20` with `border-accent/60`.
 
@@ -265,7 +265,7 @@ Shadows are tiny and warm-neutral. No colored shadows, no glows (except the dark
 
 - Topbar is 48px (`h-12`) — thinner than operator.
 - No sidebar. No command palette. No avatar menu.
-- Topbar contents: brand mark (`/`), optional divider + campaign name, optional right slot, theme toggle.
+- Topbar contents: split-sphere brand mark, optional divider + campaign name, optional right slot, theme toggle.
 - Content fills full width; sub-pages choose their own max-width.
 
 **Auth shell** (login, landing)
@@ -468,7 +468,7 @@ Special-cased destructive flow. **Do not replace with a red button.**
 ### 5.12 Toast
 
 - Fixed bottom-right, `max-w-sm`, z-index `100`.
-- Types: `success` (green-border tint), `error` (red-border tint), `info` (neutral).
+- Types: `success` (teal-border tint), `error` (red-border tint), `info` (neutral).
 - Each toast: `rounded-xl border bg-card shadow-lg p-4`, `flex items-start gap-3`.
 - Leading icon is color-matched (CheckCircle / AlertCircle / Info), `mt-0.5 size-4`.
 - Auto-dismiss after **5 seconds** (overridable).
@@ -504,24 +504,21 @@ The `1px` bottom shadow mimics a physical keycap.
 
 **Inside a primary button**, KeyHints switch to inverted tones: `border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground/80`.
 
-### 5.15 BrandMark — the `/` tile
+### 5.15 BrandMark — split-sphere mark
 
-A **dark-ink rounded square** holding a large mono `/`. This is the product mark.
+The idea.com split-sphere mark: a textured circular form with dark/teal on the left, warm coral/violet on the right, and a clean vertical split. Use the image asset, not a text fallback.
 
 Sizes:
-- `sm` — 20×20, 11px, used inline in breadcrumb-like contexts.
-- `md` — 28×28, 14px, used in the ViewSwitcher.
-- `lg` — 36×36, 18px, used in auth-card headers.
-- `xl` — 48×48, 24px, used as the hero brand on landing/login.
+- `sm` — 20×20, used inline in menu/list contexts.
+- `md` — 28×28, used in the ViewSwitcher.
+- `lg` — 36×36, used in auth-card headers.
+- `xl` — 48×48, used as the hero brand on landing/login.
 
-Class skeleton:
+Assets:
 
-```
-inline-flex items-center justify-center
-bg-primary text-primary-foreground
-font-mono font-bold leading-none
-rounded-[sizes above]
-```
+- Runtime UI mark: `/public/logo-brand.png`
+- Desktop/browser icon source: `assets/app-icon.png`
+- Identity board references: `assets/brand/idea-identity-light.png`, `assets/brand/idea-identity-dark.png`
 
 ### 5.16 EntityIcon — letter tile
 
@@ -843,13 +840,13 @@ The `ViewSwitcher` in the operator sidebar lets an operator preview the particip
 
 ## 10. Accessibility
 
-1. **Focus visible is non-negotiable.** Every interactive element has a 2px green ring with a transparent offset.
+1. **Focus visible is non-negotiable.** Every interactive element has a 2px accent ring with a transparent offset.
 2. **Color is never the only signal.** Status chips have icons. Invalid inputs get a ring *and* border color change. Errors include text.
 3. **Tap targets.** Minimum 40×40 on mobile for primary actions. Tertiary vote buttons (Tie / Both bad) step up to `h-11` on mobile and down to `h-8` on desktop.
 4. **Reduced motion.** All animations go through `animate-in` utilities and Motion — both honor `prefers-reduced-motion`.
 5. **Screen readers.**
    - Icon-only buttons always have `aria-label` or an accompanying `<span class="sr-only">`.
-   - Decorative letter tiles use `aria-hidden="true"`.
+   - Decorative brand marks and letter tiles use `aria-hidden="true"`.
    - Breadcrumb uses `<nav aria-label="Breadcrumb">`.
    - Current nav item has `aria-current="page"`.
    - Toast container is `aria-live="polite"`.
@@ -865,10 +862,10 @@ Both palettes are first-class. Neither is the default hero. Theme is persisted t
 
 Rules:
 
-- **Never use pure white or pure black.** Dark mode hero text is `#FAF9F7` (warm off-white); dark mode backgrounds are `#080706` (warm near-black).
+- **Never use pure white or pure black.** Dark mode hero text is `#FEFEF5` (brand paper); dark mode backgrounds are `#070A16` (navy near-black).
 - Every `--clr-*` and `--rgb-*` token has a dark-mode counterpart defined under `.dark`.
 - Custom utilities (`.scanline-bg`, `.text-glow`, `::selection`) have explicit dark-mode variants.
-- Accent green brightens from `#047857` → `#10B981` for dark-mode readability.
+- Accent shifts from brand blue (`#4361EE`) to brand teal (`#00D4C4`) for dark-mode readability.
 - Theme toggle is always reachable — in the avatar menu for operators, and pinned top-right for auth / participant shells.
 
 ---
@@ -961,7 +958,7 @@ src/
 
 **Don't**
 
-- Fill a button with red, green, or any color other than dark ink. Primary is always dark pill on light paper.
+- Fill a button with red, teal, gradient, or any color other than dark ink. Primary is always a dark pill on light paper.
 - Introduce a new hue outside the existing palette.
 - Use hash-based colored avatars. Letter tile stays monochrome.
 - Use shimmer skeletons. Pulse only.

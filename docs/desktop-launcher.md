@@ -45,7 +45,7 @@ The `~/Desktop/MyApps/` folder is meant to live as a Dock Stack — drag it to t
 
 Replace the source PNG (square, ≥ 1024×1024 ideal):
 
-- `assets/app-icon.png` (currently 1000×1000)
+- `assets/app-icon.png` (currently 1024×1024)
 
 Then:
 
@@ -56,6 +56,8 @@ npm run desktop:install
 ```
 
 If the Dock briefly shows a stale thumbnail after a reboot, drag the Stack out and back in to force-rebuild — the install step's automatic Dock refresh covers everything else.
+
+The in-app split-sphere mark is served from `public/logo-brand.png`. The source identity boards and extracted mark live under `assets/brand/`.
 
 ## Logs & runtime files
 

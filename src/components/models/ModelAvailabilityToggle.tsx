@@ -9,7 +9,7 @@ interface ModelAvailabilityToggleProps {
 
 /**
  * Switch for enabling/disabling a model.
- * Checked = accent (forest green). Reserved for semantic "this is enabled"
+ * Checked = accent. Reserved for semantic "this is enabled"
  * states; primary-action elsewhere stays on the dark-ink pill pattern.
  */
 export default function ModelAvailabilityToggle({

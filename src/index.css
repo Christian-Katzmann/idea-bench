@@ -7,7 +7,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------
-   Tokens — GitSlip-native warm palette.
+   Tokens — ïdea Bench palette, derived from the idea.com identity board.
 
    Tailwind 4's @theme inline expects each --color-* token to resolve
    to a complete color value so opacity modifiers (`bg-primary/80`)
@@ -26,8 +26,8 @@
     --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', Menlo, 'Courier New', monospace;
     --font-heading: var(--font-sans);
 
-    /* shadcn semantic tokens → GitSlip values.
-       Primary = dark ink (Q5). Accent = forest green (status/links).
+    /* shadcn semantic tokens → ïdea values.
+       Primary = brand ink. Accent = accessible brand blue.
        Destructive = muted red, surfaces only (Q4). */
     --color-background: var(--clr-bg);
     --color-foreground: var(--clr-fg);
@@ -49,7 +49,7 @@
     --color-input: var(--clr-border);
     --color-ring: var(--clr-accent);
 
-    /* GitSlip-native surfaces, exposed directly for bespoke components. */
+    /* ïdea surfaces, exposed directly for bespoke components. */
     --color-surface: var(--clr-surface);
     --color-surface-highlight: var(--clr-surface-highlight);
     --color-success: var(--clr-success);
@@ -65,12 +65,12 @@
     --color-sidebar-primary-foreground: var(--clr-bg);
     --color-sidebar-ring: var(--clr-accent);
 
-    /* Chart palette — restrained, derived from accent/success. */
+    /* Chart palette — restrained cuts of the identity gradient. */
     --color-chart-1: var(--clr-accent);
     --color-chart-2: var(--clr-fg);
-    --color-chart-3: #B4844C; /* warm ochre */
-    --color-chart-4: #8674AA; /* muted violet */
-    --color-chart-5: #6E6A62; /* warm stone */
+    --color-chart-3: #00AFA3; /* accessible teal */
+    --color-chart-4: #7B5CFF; /* violet */
+    --color-chart-5: #FF8A5C; /* warm orange */
 
     /* Radii — bumped so rounded-xl lands on GitSlip geometry. */
     --radius: 0.75rem;
@@ -84,52 +84,61 @@
 }
 
 /* ---------------------------------------------------------------
-   Raw palette — GitSlip warm source of truth.
+   Raw palette — idea.com identity source of truth.
    --clr-* are hex for Tailwind 4 token resolution.
    --rgb-*  are RGB triples for custom rgba() / color-mix CSS.
    Keep them in sync — both expressions of the same color.
 --------------------------------------------------------------- */
 :root {
-    /* Light — warm paper (primary target per Q3) */
-    --clr-bg: #F7F6F3;
+    /* Brand constants from the supplied identity board. */
+    --clr-brand-ink: #0B0F2B;
+    --clr-brand-blue: #4361EE;
+    --clr-brand-teal: #00D4C4;
+    --clr-brand-violet: #7B5CFF;
+    --clr-brand-coral: #FF6B8A;
+    --clr-brand-orange: #FFA66D;
+    --clr-brand-paper: #FEFEF5;
+
+    /* Light — paper, ink, and brand-blue focus. */
+    --clr-bg: #FEFEF5;
     --clr-surface: #FFFFFF;
-    --clr-surface-highlight: #F4F3F0;
-    --clr-fg: #1F1B16;
-    --clr-fg-muted: #6E6A62;
-    --clr-border: #E8E6E1;
-    --clr-accent: #047857;
-    --clr-success: #22C55E;
-    --clr-warning: #B45309;
+    --clr-surface-highlight: #F4F6FF;
+    --clr-fg: #0B0F2B;
+    --clr-fg-muted: #64697A;
+    --clr-border: #E3E6F1;
+    --clr-accent: #4361EE;
+    --clr-success: #008F84;
+    --clr-warning: #B8641E;
     --clr-destructive: #B91C1C;
 
-    --rgb-bg: 247 246 243;
+    --rgb-bg: 254 254 245;
     --rgb-surface: 255 255 255;
-    --rgb-surface-highlight: 244 243 240;
-    --rgb-fg: 31 27 22;
-    --rgb-fg-muted: 110 106 98;
-    --rgb-border: 232 230 225;
-    --rgb-accent: 4 120 87;
+    --rgb-surface-highlight: 244 246 255;
+    --rgb-fg: 11 15 43;
+    --rgb-fg-muted: 100 105 122;
+    --rgb-border: 227 230 241;
+    --rgb-accent: 67 97 238;
 }
 
 .dark {
-    --clr-bg: #080706;
-    --clr-surface: #161512;
-    --clr-surface-highlight: #201E1A;
-    --clr-fg: #FAF9F7;
-    --clr-fg-muted: #A8A49C;
-    --clr-border: #2A2824;
-    --clr-accent: #10B981;
-    --clr-success: #22C55E;
-    --clr-warning: #FBBF24;
+    --clr-bg: #070A16;
+    --clr-surface: #101424;
+    --clr-surface-highlight: #181D31;
+    --clr-fg: #FEFEF5;
+    --clr-fg-muted: #AEB4C7;
+    --clr-border: #252B44;
+    --clr-accent: #00D4C4;
+    --clr-success: #20E0A8;
+    --clr-warning: #FFA66D;
     --clr-destructive: #F87171;
 
-    --rgb-bg: 8 7 6;
-    --rgb-surface: 22 21 18;
-    --rgb-surface-highlight: 32 30 26;
-    --rgb-fg: 250 249 247;
-    --rgb-fg-muted: 168 164 156;
-    --rgb-border: 42 40 36;
-    --rgb-accent: 16 185 129;
+    --rgb-bg: 7 10 22;
+    --rgb-surface: 16 20 36;
+    --rgb-surface-highlight: 24 29 49;
+    --rgb-fg: 254 254 245;
+    --rgb-fg-muted: 174 180 199;
+    --rgb-border: 37 43 68;
+    --rgb-accent: 0 212 196;
 }
 
 /* ---------------------------------------------------------------
